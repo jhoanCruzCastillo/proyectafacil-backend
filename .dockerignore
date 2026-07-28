@@ -1,0 +1,15 @@
+.env
+.git
+.gitignore
+vendor
+writable/cache/*
+writable/logs/*
+writable/session/*
+writable/uploads/*
+!writable/cache/index.html
+!writable/logs/index.html
+!writable/session/index.html
+!writable/uploads/index.html
+tests
+phpunit.dist.xml
+README.md

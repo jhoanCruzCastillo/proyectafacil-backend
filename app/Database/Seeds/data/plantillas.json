@@ -1,0 +1,2121 @@
+[
+  {
+    "id": "plt-1",
+    "codigo": "6A",
+    "nombre": "Ficha Técnica General Simplificada",
+    "descripcion": "Formato N° 06-A — aplicable a cualquier sector, Directiva 001-2019-EF/63.01",
+    "sectorId": "sec-general",
+    "instrumento": "ficha_tecnica",
+    "cantidadSecciones": 14,
+    "cantidadEjemplos": 3,
+    "fechaActualizacion": "12/05/2026",
+    "archivoDefaultUrl": "/fichas_oficiales/general/Formato6A_directiva001_2019EF6301.xlsm",
+    "disponibleNivel0": true,
+    "secciones": [
+      {
+        "id": "sec-01",
+        "numero": "01",
+        "nombre": "Datos generales",
+        "cantidadCampos": 10,
+        "subsecciones": [
+          {
+            "id": "sub-1.01",
+            "codigo": "1.01",
+            "nombre": "INSTITUCIONALIDAD",
+            "campos": [
+              {
+                "id": "c-1.01.1",
+                "identificador": "1.01.1",
+                "etiqueta": "Nivel de gobierno",
+                "tipo": "catalogo_simple",
+                "editable": true,
+                "descripcion": "Nivel de gobierno responsable de la inversión.",
+                "fuenteCatalogo": "Niveles de gobierno (MEF)",
+                "valorEjemplo": "Gobierno Regional"
+              },
+              {
+                "id": "c-1.01.2",
+                "identificador": "1.01.2",
+                "etiqueta": "Entidad",
+                "tipo": "texto_corto",
+                "editable": true,
+                "requerido": true,
+                "descripcion": "Entidad responsable del proyecto.",
+                "valorEjemplo": "Gobierno Regional de Cusco"
+              },
+              {
+                "id": "c-1.01.3",
+                "identificador": "1.01.3",
+                "etiqueta": "Nombre de la UF",
+                "tipo": "texto_corto",
+                "editable": true,
+                "requerido": true,
+                "descripcion": "Unidad Formuladora responsable.",
+                "valorEjemplo": "UF — Gerencia Regional de Educación Cusco"
+              },
+              {
+                "id": "c-1.01.4",
+                "identificador": "1.01.4",
+                "etiqueta": "Responsable de la UF",
+                "tipo": "texto_corto",
+                "editable": true,
+                "descripcion": "Persona responsable de la Unidad Formuladora.",
+                "valorEjemplo": "Ing. María Quispe Huamán"
+              }
+            ]
+          },
+          {
+            "id": "sub-1.02",
+            "codigo": "1.02",
+            "nombre": "RESPONSABILIDAD FUNCIONAL",
+            "campos": [
+              {
+                "id": "c-1.02",
+                "identificador": "1.02",
+                "etiqueta": "Cadena funcional",
+                "tipo": "catalogo_encadenado",
+                "editable": true,
+                "descripcion": "Clasificación funcional programática del proyecto.",
+                "cadena": [
+                  "Función",
+                  "División funcional",
+                  "Grupo funcional",
+                  "Sector responsable",
+                  "Tipología"
+                ],
+                "valorEjemplo": "22 Educación → 047 Educación básica → 0104 Educación inicial → Educación → Mejoramiento de servicios"
+              }
+            ]
+          },
+          {
+            "id": "sub-1.03",
+            "codigo": "1.03",
+            "nombre": "NOMBRE DEL PROYECTO",
+            "campos": [
+              {
+                "id": "c-1.03.1",
+                "identificador": "1.03.1",
+                "etiqueta": "Naturaleza de intervención",
+                "tipo": "catalogo_simple",
+                "editable": true,
+                "fuenteCatalogo": "Naturalezas de intervención",
+                "valorEjemplo": "Mejoramiento"
+              },
+              {
+                "id": "c-1.03.2",
+                "identificador": "1.03.2",
+                "etiqueta": "Objeto de la intervención",
+                "tipo": "texto_corto",
+                "editable": true,
+                "requerido": true,
+                "valorEjemplo": "Servicio educativo de nivel inicial"
+              },
+              {
+                "id": "c-1.03.3",
+                "identificador": "1.03.3",
+                "etiqueta": "Localización",
+                "tipo": "texto_corto",
+                "editable": true,
+                "valorEjemplo": "I.E. N° 50123, distrito de Wanchaq, provincia de Cusco"
+              },
+              {
+                "id": "c-1.03.4",
+                "identificador": "1.03.4",
+                "etiqueta": "Nombre completo del PI",
+                "tipo": "calculado",
+                "editable": false,
+                "descripcion": "Se genera automáticamente a partir de naturaleza + objeto + localización.",
+                "valorEjemplo": "Mejoramiento del Servicio educativo de nivel inicial en la I.E. N° 50123, distrito de Wanchaq, provincia de Cusco"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "sec-02",
+        "numero": "02",
+        "nombre": "Diagnóstico del área de estudio",
+        "cantidadCampos": 7,
+        "subsecciones": [
+          {
+            "id": "sub-2.01",
+            "codigo": "2.01",
+            "nombre": "ÁREA DE ESTUDIO",
+            "campos": [
+              {
+                "id": "c-2.01.1",
+                "identificador": "2.01",
+                "etiqueta": "Localización del área de influencia del proyecto",
+                "tipo": "tabla",
+                "editable": true,
+                "descripcion": "Si el área de influencia abarca más de una localización, se podrán añadir más localizaciones.",
+                "configTabla": {
+                  "subtipo": "filas_dinamicas",
+                  "filasIniciales": 3,
+                  "columnas": [
+                    {
+                      "id": "col-n",
+                      "nombre": "N°",
+                      "tipo": "auto_numerico",
+                      "ancho": 8
+                    },
+                    {
+                      "id": "col-dep",
+                      "nombre": "Departamento",
+                      "tipo": "catalogo_encadenado",
+                      "fuenteCatalogo": "UBIGEO — Departamentos",
+                      "encadenaA": "col-prov",
+                      "requerido": true
+                    },
+                    {
+                      "id": "col-prov",
+                      "nombre": "Provincia",
+                      "tipo": "catalogo_encadenado",
+                      "fuenteCatalogo": "UBIGEO — Provincias",
+                      "encadenaA": "col-dist",
+                      "requerido": true
+                    },
+                    {
+                      "id": "col-dist",
+                      "nombre": "Distrito",
+                      "tipo": "catalogo_encadenado",
+                      "fuenteCatalogo": "UBIGEO — Distritos",
+                      "requerido": true
+                    },
+                    {
+                      "id": "col-loc",
+                      "nombre": "Localidad / Centro poblado",
+                      "tipo": "texto_corto"
+                    },
+                    {
+                      "id": "col-ubi",
+                      "nombre": "Ubigeo",
+                      "tipo": "calculado",
+                      "formula": "Código UBIGEO del distrito seleccionado"
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "c-2.01.2",
+                "identificador": "2.01.2",
+                "etiqueta": "Descripción del área",
+                "tipo": "texto_largo",
+                "editable": true,
+                "valorEjemplo": "Zona urbana del distrito de Wanchaq con acceso a servicios básicos."
+              },
+              {
+                "id": "c-2.01.3",
+                "identificador": "2.01.3",
+                "etiqueta": "Coordenadas del área de influencia",
+                "tipo": "mapa_coordenadas",
+                "editable": true,
+                "descripcion": "Ubicación geográfica central del área de influencia. Selecciona el punto en el mapa.",
+                "valorEjemplo": "{\"lat\":-13.5318,\"lng\":-71.9675}"
+              }
+            ]
+          },
+          {
+            "id": "sub-2.02",
+            "codigo": "2.02",
+            "nombre": "DIAGNÓSTICO DE SERVICIOS",
+            "campos": [
+              {
+                "id": "c-2.02.1",
+                "identificador": "2.02.1",
+                "etiqueta": "Situación actual del servicio",
+                "tipo": "texto_largo",
+                "editable": true,
+                "valorEjemplo": "El servicio educativo presenta condiciones inadecuadas de infraestructura."
+              },
+              {
+                "id": "c-2.02.2",
+                "identificador": "2.02.2",
+                "etiqueta": "Población afectada",
+                "tipo": "numero",
+                "editable": true,
+                "valorEjemplo": "365"
+              },
+              {
+                "id": "c-2.02.3",
+                "identificador": "2.02.3",
+                "etiqueta": "Imagen referencial",
+                "tipo": "imagen",
+                "editable": true,
+                "valorEjemplo": "foto_fachada_ie50123.jpg"
+              },
+              {
+                "id": "c-2.02.4",
+                "identificador": "2.02.4",
+                "etiqueta": "Fecha de diagnóstico",
+                "tipo": "fecha",
+                "editable": true,
+                "valorEjemplo": "15/03/2026"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "sec-03",
+        "numero": "03",
+        "nombre": "Diagnóstico de la unidad productora",
+        "cantidadCampos": 6,
+        "subsecciones": [
+          {
+            "id": "sub-3.01",
+            "codigo": "3.01",
+            "nombre": "UNIDAD PRODUCTORA",
+            "campos": [
+              {
+                "id": "c-3.01.1",
+                "identificador": "3.01.1",
+                "etiqueta": "Nombre de la UP",
+                "tipo": "texto_corto",
+                "editable": true,
+                "valorEjemplo": "I.E. N° 50123"
+              },
+              {
+                "id": "c-3.01.2",
+                "identificador": "3.01.2",
+                "etiqueta": "Código modular",
+                "tipo": "texto_corto",
+                "editable": true,
+                "valorEjemplo": "0234567"
+              },
+              {
+                "id": "c-3.01.3",
+                "identificador": "3.01.3",
+                "etiqueta": "Capacidad actual",
+                "tipo": "numero",
+                "editable": true,
+                "valorEjemplo": "280"
+              },
+              {
+                "id": "c-3.01.4",
+                "identificador": "3.01.4",
+                "etiqueta": "Estado de infraestructura",
+                "tipo": "seleccion",
+                "editable": true,
+                "valorEjemplo": "Regular"
+              },
+              {
+                "id": "c-3.01.5",
+                "identificador": "3.01.5",
+                "etiqueta": "Antigüedad (años)",
+                "tipo": "numero",
+                "editable": true,
+                "valorEjemplo": "35"
+              },
+              {
+                "id": "c-3.01.6",
+                "identificador": "3.01.6",
+                "etiqueta": "Croquis de ubicación",
+                "tipo": "imagen",
+                "editable": true,
+                "valorEjemplo": "croquis_ie50123.png"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "sec-04",
+        "numero": "04",
+        "nombre": "Problema y objetivo",
+        "cantidadCampos": 5,
+        "subsecciones": [
+          {
+            "id": "sub-4.01",
+            "codigo": "4.01",
+            "nombre": "PROBLEMA CENTRAL",
+            "campos": [
+              {
+                "id": "c-4.01.1",
+                "identificador": "4.01.1",
+                "etiqueta": "Problema central",
+                "tipo": "texto_largo",
+                "editable": true,
+                "valorEjemplo": "Inadecuadas condiciones del servicio educativo de nivel inicial"
+              },
+              {
+                "id": "c-4.01.2",
+                "identificador": "4.01.2",
+                "etiqueta": "Causa directa",
+                "tipo": "texto_largo",
+                "editable": true,
+                "valorEjemplo": "Infraestructura en mal estado"
+              },
+              {
+                "id": "c-4.01.3",
+                "identificador": "4.01.3",
+                "etiqueta": "Objetivo central",
+                "tipo": "calculado",
+                "editable": false,
+                "valorEjemplo": "Adecuadas condiciones del servicio educativo de nivel inicial"
+              },
+              {
+                "id": "c-4.01.4",
+                "identificador": "4.01.4",
+                "etiqueta": "Indicador de resultado",
+                "tipo": "texto_corto",
+                "editable": true,
+                "valorEjemplo": "% de ambientes en condiciones adecuadas"
+              },
+              {
+                "id": "c-4.01.5",
+                "identificador": "4.01.5",
+                "etiqueta": "Meta del indicador",
+                "tipo": "numero",
+                "editable": true,
+                "valorEjemplo": "100"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "sec-05",
+        "numero": "05",
+        "nombre": "Horizonte de evaluación",
+        "cantidadCampos": 3,
+        "subsecciones": [
+          {
+            "id": "sub-5.01",
+            "codigo": "5.01",
+            "nombre": "HORIZONTE",
+            "campos": [
+              {
+                "id": "c-5.01.1",
+                "identificador": "5.01.1",
+                "etiqueta": "Horizonte de evaluación (años)",
+                "tipo": "numero",
+                "editable": true,
+                "valorEjemplo": "10"
+              },
+              {
+                "id": "c-5.01.2",
+                "identificador": "5.01.2",
+                "etiqueta": "Fase de ejecución (meses)",
+                "tipo": "numero",
+                "editable": true,
+                "valorEjemplo": "18"
+              },
+              {
+                "id": "c-5.01.3",
+                "identificador": "5.01.3",
+                "etiqueta": "Fecha estimada de inicio",
+                "tipo": "fecha",
+                "editable": true,
+                "valorEjemplo": "01/01/2027"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "sec-06",
+        "numero": "06",
+        "nombre": "Brecha de servicio",
+        "cantidadCampos": 4,
+        "subsecciones": [
+          {
+            "id": "sub-6.01",
+            "codigo": "6.01",
+            "nombre": "ANÁLISIS DE BRECHA",
+            "campos": [
+              {
+                "id": "c-6.01.1",
+                "identificador": "6.01.1",
+                "etiqueta": "Oferta actual",
+                "tipo": "numero",
+                "editable": true,
+                "valorEjemplo": "280"
+              },
+              {
+                "id": "c-6.01.2",
+                "identificador": "6.01.2",
+                "etiqueta": "Demanda proyectada",
+                "tipo": "numero",
+                "editable": true,
+                "valorEjemplo": "420"
+              },
+              {
+                "id": "c-6.01.3",
+                "identificador": "6.01.3",
+                "etiqueta": "Brecha",
+                "tipo": "calculado",
+                "editable": false,
+                "valorEjemplo": "-140"
+              },
+              {
+                "id": "c-6.01.4",
+                "identificador": "6.01.4",
+                "etiqueta": "Descripción de la brecha",
+                "tipo": "texto_largo",
+                "editable": true,
+                "valorEjemplo": "Déficit de 140 plazas para atención del servicio educativo."
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "sec-07",
+        "numero": "07",
+        "nombre": "Análisis técnico",
+        "cantidadCampos": 4,
+        "subsecciones": [
+          {
+            "id": "sub-7.01",
+            "codigo": "7.01",
+            "nombre": "ALTERNATIVA TÉCNICA",
+            "campos": [
+              {
+                "id": "c-7.01.1",
+                "identificador": "7.01.1",
+                "etiqueta": "Descripción técnica",
+                "tipo": "texto_largo",
+                "editable": true,
+                "valorEjemplo": "Construcción de nueva infraestructura con sistema aporticado."
+              },
+              {
+                "id": "c-7.01.2",
+                "identificador": "7.01.2",
+                "etiqueta": "Área de terreno (m²)",
+                "tipo": "numero",
+                "editable": true,
+                "valorEjemplo": "2500"
+              },
+              {
+                "id": "c-7.01.3",
+                "identificador": "7.01.3",
+                "etiqueta": "Área construida (m²)",
+                "tipo": "numero",
+                "editable": true,
+                "valorEjemplo": "1800"
+              },
+              {
+                "id": "c-7.01.4",
+                "identificador": "7.01.4",
+                "etiqueta": "Plano de distribución",
+                "tipo": "imagen",
+                "editable": true,
+                "valorEjemplo": "plano_distribucion.pdf"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "sec-08",
+        "numero": "08",
+        "nombre": "Costos del proyecto",
+        "cantidadCampos": 5,
+        "subsecciones": [
+          {
+            "id": "sub-8.01",
+            "codigo": "8.01",
+            "nombre": "PRESUPUESTO",
+            "campos": [
+              {
+                "id": "c-8.01.1",
+                "identificador": "8.01.1",
+                "etiqueta": "Cuadro de costos",
+                "tipo": "tabla",
+                "editable": true,
+                "valorEjemplo": "Ver tabla de costos"
+              },
+              {
+                "id": "c-8.01.2",
+                "identificador": "8.01.2",
+                "etiqueta": "Costo total de inversión",
+                "tipo": "calculado",
+                "editable": false,
+                "valorEjemplo": "S/ 4,250,000.00"
+              },
+              {
+                "id": "c-8.01.3",
+                "identificador": "8.01.3",
+                "etiqueta": "Costo de operación y mantenimiento",
+                "tipo": "numero",
+                "editable": true,
+                "valorEjemplo": "180000"
+              },
+              {
+                "id": "c-8.01.4",
+                "identificador": "8.01.4",
+                "etiqueta": "Fuente de financiamiento",
+                "tipo": "catalogo_simple",
+                "editable": true,
+                "fuenteCatalogo": "Fuentes de financiamiento",
+                "valorEjemplo": "Recursos Ordinarios"
+              },
+              {
+                "id": "c-8.01.5",
+                "identificador": "8.01.5",
+                "etiqueta": "Cronograma de inversión",
+                "tipo": "tabla",
+                "editable": true,
+                "valorEjemplo": "Ver cronograma"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "sec-09",
+        "numero": "09",
+        "nombre": "Evaluación social",
+        "cantidadCampos": 4,
+        "subsecciones": [
+          {
+            "id": "sub-9.01",
+            "codigo": "9.01",
+            "nombre": "INDICADORES",
+            "campos": [
+              {
+                "id": "c-9.01.1",
+                "identificador": "9.01.1",
+                "etiqueta": "Metodología de evaluación",
+                "tipo": "seleccion",
+                "editable": true,
+                "valorEjemplo": "Costo-Efectividad"
+              },
+              {
+                "id": "c-9.01.2",
+                "identificador": "9.01.2",
+                "etiqueta": "Ratio C/E",
+                "tipo": "calculado",
+                "editable": false,
+                "valorEjemplo": "10,119.05"
+              },
+              {
+                "id": "c-9.01.3",
+                "identificador": "9.01.3",
+                "etiqueta": "Línea de corte",
+                "tipo": "numero",
+                "editable": true,
+                "valorEjemplo": "25000"
+              },
+              {
+                "id": "c-9.01.4",
+                "identificador": "9.01.4",
+                "etiqueta": "Resultado de evaluación",
+                "tipo": "texto_corto",
+                "editable": true,
+                "valorEjemplo": "Viable — ratio por debajo de la línea de corte"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "sec-10",
+        "numero": "10",
+        "nombre": "Sostenibilidad",
+        "cantidadCampos": 3,
+        "subsecciones": [
+          {
+            "id": "sub-10.01",
+            "codigo": "10.01",
+            "nombre": "SOSTENIBILIDAD",
+            "campos": [
+              {
+                "id": "c-10.01.1",
+                "identificador": "10.01.1",
+                "etiqueta": "Capacidad de gestión",
+                "tipo": "texto_largo",
+                "editable": true,
+                "valorEjemplo": "La UGEL Cusco cuenta con capacidad operativa para la gestión."
+              },
+              {
+                "id": "c-10.01.2",
+                "identificador": "10.01.2",
+                "etiqueta": "Disponibilidad de recursos",
+                "tipo": "texto_largo",
+                "editable": true,
+                "valorEjemplo": "Se cuenta con presupuesto institucional para O&M."
+              },
+              {
+                "id": "c-10.01.3",
+                "identificador": "10.01.3",
+                "etiqueta": "Gestión de riesgos",
+                "tipo": "texto_largo",
+                "editable": true,
+                "valorEjemplo": "Se han identificado riesgos sísmicos y se han incorporado medidas de mitigación."
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "sec-11",
+        "numero": "11",
+        "nombre": "Gestión del proyecto",
+        "cantidadCampos": 4,
+        "subsecciones": [
+          {
+            "id": "sub-11.01",
+            "codigo": "11.01",
+            "nombre": "GESTIÓN",
+            "campos": [
+              {
+                "id": "c-11.01.1",
+                "identificador": "11.01.1",
+                "etiqueta": "Modalidad de ejecución",
+                "tipo": "seleccion",
+                "editable": true,
+                "valorEjemplo": "Contrata"
+              },
+              {
+                "id": "c-11.01.2",
+                "identificador": "11.01.2",
+                "etiqueta": "Organigrama del proyecto",
+                "tipo": "imagen",
+                "editable": true,
+                "valorEjemplo": "organigrama.png"
+              },
+              {
+                "id": "c-11.01.3",
+                "identificador": "11.01.3",
+                "etiqueta": "Condiciones previas",
+                "tipo": "texto_largo",
+                "editable": true,
+                "valorEjemplo": "Saneamiento físico legal del terreno completado."
+              },
+              {
+                "id": "c-11.01.4",
+                "identificador": "11.01.4",
+                "etiqueta": "Plan de implementación",
+                "tipo": "tabla",
+                "editable": true,
+                "valorEjemplo": "Ver plan de implementación"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "sec-12",
+        "numero": "12",
+        "nombre": "Impacto ambiental",
+        "cantidadCampos": 3,
+        "subsecciones": [
+          {
+            "id": "sub-12.01",
+            "codigo": "12.01",
+            "nombre": "IMPACTO AMBIENTAL",
+            "campos": [
+              {
+                "id": "c-12.01.1",
+                "identificador": "12.01.1",
+                "etiqueta": "Categoría ambiental",
+                "tipo": "seleccion",
+                "editable": true,
+                "valorEjemplo": "Categoría I — DIA"
+              },
+              {
+                "id": "c-12.01.2",
+                "identificador": "12.01.2",
+                "etiqueta": "Medidas de mitigación",
+                "tipo": "texto_largo",
+                "editable": true,
+                "valorEjemplo": "Control de polvo, manejo de residuos de construcción."
+              },
+              {
+                "id": "c-12.01.3",
+                "identificador": "12.01.3",
+                "etiqueta": "Costo ambiental",
+                "tipo": "numero",
+                "editable": true,
+                "valorEjemplo": "45000"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "sec-13",
+        "numero": "13",
+        "nombre": "Conclusiones",
+        "cantidadCampos": 2,
+        "subsecciones": [
+          {
+            "id": "sub-13.01",
+            "codigo": "13.01",
+            "nombre": "CONCLUSIONES Y RECOMENDACIONES",
+            "campos": [
+              {
+                "id": "c-13.01.1",
+                "identificador": "13.01.1",
+                "etiqueta": "Conclusiones",
+                "tipo": "texto_largo",
+                "editable": true,
+                "valorEjemplo": "El proyecto es viable técnica, económica y socialmente."
+              },
+              {
+                "id": "c-13.01.2",
+                "identificador": "13.01.2",
+                "etiqueta": "Recomendaciones",
+                "tipo": "texto_largo",
+                "editable": true,
+                "valorEjemplo": "Se recomienda la aprobación del proyecto para su ejecución."
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "sec-14",
+        "numero": "14",
+        "nombre": "Firmas",
+        "cantidadCampos": 3,
+        "subsecciones": [
+          {
+            "id": "sub-14.01",
+            "codigo": "14.01",
+            "nombre": "FIRMAS DE RESPONSABLES",
+            "campos": [
+              {
+                "id": "c-14.01.1",
+                "identificador": "14.01.1",
+                "etiqueta": "Firma del formulador",
+                "tipo": "firma",
+                "editable": true,
+                "valorEjemplo": "Ing. María Quispe Huamán"
+              },
+              {
+                "id": "c-14.01.2",
+                "identificador": "14.01.2",
+                "etiqueta": "Firma del responsable de la UF",
+                "tipo": "firma",
+                "editable": true,
+                "valorEjemplo": "Arq. Carlos Mendoza"
+              },
+              {
+                "id": "c-14.01.3",
+                "identificador": "14.01.3",
+                "etiqueta": "Firma del responsable de la OPMI",
+                "tipo": "firma",
+                "editable": true,
+                "valorEjemplo": "Econ. Rosa Vargas"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "plt-2",
+    "codigo": "6B",
+    "nombre": "Ficha Técnica General para Proyectos de inversión de baja y mediana complejidad",
+    "descripcion": "Formato N° 06-B — aplicable a cualquier sector, Directiva 001-2019-EF/63.01",
+    "sectorId": "sec-general",
+    "instrumento": "ficha_tecnica",
+    "cantidadSecciones": 12,
+    "cantidadEjemplos": 1,
+    "fechaActualizacion": "28/04/2026",
+    "archivoDefaultUrl": "/fichas_oficiales/general/Formato6B_directiva001_2019EF6301.xlsm",
+    "secciones": []
+  },
+  {
+    "id": "plt-fmt-5a",
+    "codigo": "5A",
+    "nombre": "Registro de idea de Proyecto o Programa de Inversión",
+    "descripcion": "Formato 05-A — Fase de Programación Multianual",
+    "sectorId": "sec-general",
+    "instrumento": "formato",
+    "cantidadSecciones": 3,
+    "cantidadEjemplos": 0,
+    "fechaActualizacion": "15/06/2026",
+    "secciones": []
+  },
+  {
+    "id": "plt-fmt-5b",
+    "codigo": "5B",
+    "nombre": "Registro agregado de ideas de IOARR",
+    "descripcion": "Formato 05-B — Fase de Programación Multianual",
+    "sectorId": "sec-general",
+    "instrumento": "formato",
+    "cantidadSecciones": 2,
+    "cantidadEjemplos": 0,
+    "fechaActualizacion": "15/06/2026",
+    "secciones": []
+  },
+  {
+    "id": "plt-fmt-7a",
+    "codigo": "7A",
+    "nombre": "Registro de Proyecto de Inversión",
+    "descripcion": "Formato 07-A — Fase de Formulación y Evaluación",
+    "sectorId": "sec-general",
+    "instrumento": "formato",
+    "cantidadSecciones": 5,
+    "cantidadEjemplos": 0,
+    "fechaActualizacion": "20/06/2026",
+    "secciones": []
+  },
+  {
+    "id": "plt-ioarr-07c",
+    "codigo": "7C",
+    "nombre": "Registro de IOARR",
+    "descripcion": "Formato 07-C — régimen general. Cubre optimización, ampliación marginal, reposición y rehabilitación como secciones propias (E.1–E.4)",
+    "sectorId": "sec-general",
+    "instrumento": "ioarr",
+    "tipologiasIoarr": [
+      "optimizacion",
+      "ampliacion_marginal",
+      "reposicion",
+      "rehabilitacion"
+    ],
+    "cantidadSecciones": 5,
+    "cantidadEjemplos": 0,
+    "fechaActualizacion": "22/06/2026",
+    "archivoDefaultUrl": "/fichas_oficiales/general/Formato7C_directiva001_2019EF6301.xlsx",
+    "secciones": []
+  },
+  {
+    "id": "plt-ioarr-07d",
+    "codigo": "7D",
+    "nombre": "Registro de IOARR — Estado de Emergencia",
+    "descripcion": "Formato 07-D — mismo alcance que el 07-C (las 4 tipologías), adaptado al régimen de estado de emergencia",
+    "sectorId": "sec-general",
+    "instrumento": "ioarr",
+    "tipologiasIoarr": [
+      "optimizacion",
+      "ampliacion_marginal",
+      "reposicion",
+      "rehabilitacion"
+    ],
+    "cantidadSecciones": 5,
+    "cantidadEjemplos": 0,
+    "fechaActualizacion": "25/06/2026",
+    "archivoDefaultUrl": "/fichas_oficiales/general/Formato7D.xlsx",
+    "secciones": []
+  },
+  {
+    "id": "plt-ioarr-07e",
+    "codigo": "7E",
+    "nombre": "Registro de Rehabilitación y Reposición de Emergencia",
+    "descripcion": "Formato 07-E — variante de emergencia acotada solo a reposición y rehabilitación (sin optimización ni ampliación marginal)",
+    "sectorId": "sec-general",
+    "instrumento": "ioarr",
+    "tipologiasIoarr": [
+      "reposicion",
+      "rehabilitacion"
+    ],
+    "cantidadSecciones": 3,
+    "cantidadEjemplos": 0,
+    "fechaActualizacion": "25/06/2026",
+    "archivoDefaultUrl": "/fichas_oficiales/general/Formato7E.xlsx",
+    "secciones": []
+  },
+  {
+    "id": "plt-sal-puerta-entrada",
+    "codigo": "FTE-PE-SAL",
+    "nombre": "FTE para establecimientos de salud de 12 horas con Rol Puerta de Entrada",
+    "descripcion": "Ficha Técnica Estándar para la formulación de proyectos de inversión en establecimientos de salud de 12 horas",
+    "sectorId": "sec-1",
+    "instrumento": "ficha_tecnica",
+    "cantidadSecciones": 0,
+    "cantidadEjemplos": 0,
+    "fechaActualizacion": "13/07/2026",
+    "archivoDefaultUrl": "/fichas_oficiales/salud/01_FTE_ES_Puerta_de_Entrada_Salud.xlsm",
+    "secciones": []
+  },
+  {
+    "id": "plt-sal-csmc",
+    "codigo": "FTE-CSMC",
+    "nombre": "FTE para proyectos de Centros de Salud Mental Comunitaria",
+    "descripcion": "Ficha Técnica Estándar para la formulación de proyectos de inversión de Centros de Salud Mental Comunitaria",
+    "sectorId": "sec-1",
+    "instrumento": "ficha_tecnica",
+    "cantidadSecciones": 0,
+    "cantidadEjemplos": 0,
+    "fechaActualizacion": "13/07/2026",
+    "archivoDefaultUrl": "/fichas_oficiales/salud/02_FTE_Centro_Salud_Comunitaria.xlsm",
+    "secciones": []
+  },
+  {
+    "id": "plt-edu-fte-ebr",
+    "codigo": "FTE-EBR-V03",
+    "nombre": "FTE para Educación Inicial, Primaria y Secundaria — V03",
+    "descripcion": "Ficha Técnica Estándar para el mejoramiento, ampliación y/o recuperación de los servicios de Educación Inicial, Primaria y Secundaria — Versión 03",
+    "sectorId": "sec-2",
+    "instrumento": "ficha_tecnica",
+    "cantidadSecciones": 0,
+    "cantidadEjemplos": 0,
+    "fechaActualizacion": "13/07/2026",
+    "archivoDefaultUrl": "/fichas_oficiales/educacion/1_FORMATO_FTE_EBR_MINEDU_2.xlsx",
+    "secciones": []
+  },
+  {
+    "id": "plt-edu-fs-inicial",
+    "codigo": "FS-EDU-INICIAL",
+    "nombre": "Ficha Simplificada — Instituciones Educativas de Nivel Inicial (≤15 niños)",
+    "descripcion": "Ficha Técnica Simplificada para proyectos de mejoramiento, recuperación o ampliación en Instituciones Educativas de Nivel Inicial que presten servicio a un número referencial de 15 niños",
+    "sectorId": "sec-2",
+    "instrumento": "ficha_tecnica",
+    "cantidadSecciones": 0,
+    "cantidadEjemplos": 0,
+    "fechaActualizacion": "13/07/2026",
+    "secciones": []
+  },
+  {
+    "id": "plt-tyc-simplificada",
+    "codigo": "FTS-MTC",
+    "nombre": "Ficha Técnica Simplificada — proyectos ≤750 UIT (Transportes)",
+    "descripcion": "Ficha Técnica Simplificada para la formulación de proyectos menores o iguales a 750 UIT del sector Transportes y Comunicaciones",
+    "sectorId": "sec-3",
+    "instrumento": "ficha_tecnica",
+    "cantidadSecciones": 0,
+    "cantidadEjemplos": 0,
+    "fechaActualizacion": "13/07/2026",
+    "archivoDefaultUrl": "/fichas_oficiales/transporte/FTS-MTC.XLSX",
+    "secciones": []
+  },
+  {
+    "id": "plt-tyc-carreteras",
+    "codigo": "FTE-CARRETERAS",
+    "nombre": "FTE — Carreteras Interurbanas",
+    "descripcion": "Ficha Técnica Estándar para la Formulación y Evaluación de Proyectos de Inversión en Carreteras Interurbanas",
+    "sectorId": "sec-3",
+    "instrumento": "ficha_tecnica",
+    "cantidadSecciones": 0,
+    "cantidadEjemplos": 0,
+    "fechaActualizacion": "13/07/2026",
+    "archivoDefaultUrl": "/fichas_oficiales/transporte/Ficha_Tecnica_Estandar_carretera_.xls",
+    "secciones": []
+  },
+  {
+    "id": "plt-tyc-embarcaderos",
+    "codigo": "FTE-EMBARCADEROS",
+    "nombre": "FTE — Embarcaderos Fluviales",
+    "descripcion": "Ficha Técnica Estándar para Embarcaderos Fluviales",
+    "sectorId": "sec-3",
+    "instrumento": "ficha_tecnica",
+    "cantidadSecciones": 0,
+    "cantidadEjemplos": 0,
+    "fechaActualizacion": "13/07/2026",
+    "secciones": []
+  },
+  {
+    "id": "plt-vys-rural",
+    "codigo": "FTE-SAN-RURAL",
+    "nombre": "FTE — Saneamiento en el ámbito rural",
+    "descripcion": "Ficha Técnica Estándar para la formulación y evaluación de proyectos de inversión de saneamiento en el ámbito rural",
+    "sectorId": "sec-4",
+    "instrumento": "ficha_tecnica",
+    "cantidadSecciones": 0,
+    "cantidadEjemplos": 0,
+    "fechaActualizacion": "13/07/2026",
+    "archivoDefaultUrl": "/fichas_oficiales/vivienda-saneamiento/01_FTE_saneamiento_Rural_2.xlsm",
+    "secciones": []
+  },
+  {
+    "id": "plt-vys-urbano",
+    "codigo": "FTE-SAN-URBANO",
+    "nombre": "FTE — Saneamiento en el ámbito urbano",
+    "descripcion": "Ficha Técnica Estándar para la formulación y evaluación de proyectos de inversión de saneamiento en el ámbito urbano",
+    "sectorId": "sec-4",
+    "instrumento": "ficha_tecnica",
+    "cantidadSecciones": 0,
+    "cantidadEjemplos": 0,
+    "fechaActualizacion": "13/07/2026",
+    "archivoDefaultUrl": "/fichas_oficiales/vivienda-saneamiento/01_FTE_saneamiento_Urbano_2.xlsm",
+    "secciones": []
+  },
+  {
+    "id": "plt-vys-movilidad",
+    "codigo": "FTE-MOVILIDAD",
+    "nombre": "FTE — Servicio de Movilidad Urbana en Vías Locales",
+    "descripcion": "Ficha Técnica Estándar del servicio de Movilidad Urbana en Vías Locales",
+    "sectorId": "sec-4",
+    "instrumento": "ficha_tecnica",
+    "cantidadSecciones": 0,
+    "cantidadEjemplos": 0,
+    "fechaActualizacion": "13/07/2026",
+    "secciones": []
+  },
+  {
+    "id": "plt-dis-cuidado-diurno",
+    "codigo": "FTE-CUIDADO-DIURNO",
+    "nombre": "FTE — Servicios de Cuidado Diurno",
+    "descripcion": "Ficha Técnica Estándar para el mejoramiento, ampliación y/o recuperación de los Servicios de Cuidado Diurno",
+    "sectorId": "sec-5",
+    "instrumento": "ficha_tecnica",
+    "cantidadSecciones": 0,
+    "cantidadEjemplos": 0,
+    "fechaActualizacion": "13/07/2026",
+    "archivoDefaultUrl": "/fichas_oficiales/desarrollo-inclusion-social/1_plantilla_electronica.xlsx",
+    "secciones": []
+  },
+  {
+    "id": "plt-agr-riego-tecnificado",
+    "codigo": "FS-RIEGO-TEC",
+    "nombre": "Ficha Simplificada — Riego tecnificado (sistema parcelario)",
+    "descripcion": "Ficha Técnica Simplificada para proyectos de mejoramiento del sistema de riego parcelario (riego tecnificado)",
+    "sectorId": "sec-6",
+    "instrumento": "ficha_tecnica",
+    "cantidadSecciones": 0,
+    "cantidadEjemplos": 0,
+    "fechaActualizacion": "13/07/2026",
+    "archivoDefaultUrl": "/fichas_oficiales/agricultura-riego/FTES_Riego_Tecnificado.xlsm",
+    "secciones": []
+  },
+  {
+    "id": "plt-agr-infraestructura-riego",
+    "codigo": "FTE-INFRA-RIEGO",
+    "nombre": "FTE — Mejoramiento de Infraestructura de Riego",
+    "descripcion": "Ficha Técnica Estándar para la formulación y evaluación de proyectos de inversión de Mejoramiento de Infraestructura de Riego",
+    "sectorId": "sec-6",
+    "instrumento": "ficha_tecnica",
+    "cantidadSecciones": 0,
+    "cantidadEjemplos": 0,
+    "fechaActualizacion": "13/07/2026",
+    "archivoDefaultUrl": "/fichas_oficiales/agricultura-riego/Ficha_Estandar_Infraestructura_de_Riego.xlsm",
+    "secciones": []
+  },
+  {
+    "id": "plt-agr-desarrollo-productivo",
+    "codigo": "FTE-DESARROLLO-PROD",
+    "nombre": "FTE — Apoyo al Desarrollo Productivo Agropecuario y Forestal Sostenible",
+    "descripcion": "Ficha Técnica Estándar para la formulación y evaluación de proyectos de inversión de apoyo al desarrollo productivo agropecuario y forestal sostenible",
+    "sectorId": "sec-6",
+    "instrumento": "ficha_tecnica",
+    "cantidadSecciones": 0,
+    "cantidadEjemplos": 0,
+    "fechaActualizacion": "13/07/2026",
+    "archivoDefaultUrl": "/fichas_oficiales/agricultura-riego/1_FTE_Apoyo_Desarrollo_Productivo_Agropecuario-Forestal_Sostenible.xlsm",
+    "secciones": []
+  },
+  {
+    "id": "plt-int-comisarias",
+    "codigo": "FTE-COMISARIAS",
+    "nombre": "FTE — Mejoramiento y ampliación de servicios policiales en comisarías",
+    "descripcion": "Ficha Técnica Estándar para mejoramiento y ampliación de servicios policiales en comisarías",
+    "sectorId": "sec-7",
+    "instrumento": "ficha_tecnica",
+    "cantidadSecciones": 0,
+    "cantidadEjemplos": 0,
+    "fechaActualizacion": "13/07/2026",
+    "archivoDefaultUrl": "/fichas_oficiales/interior/FICHA_ESTANDAR.XLSM",
+    "secciones": []
+  },
+  {
+    "id": "plt-amb-areas-degradadas",
+    "codigo": "FTE-AREAS-DEGRADADAS",
+    "nombre": "FTE — Recuperación de áreas degradadas por residuos sólidos",
+    "descripcion": "Ficha Técnica Estándar para proyectos de recuperación de áreas degradadas por residuos sólidos (también válida como Ficha Técnica Simplificada)",
+    "sectorId": "sec-8",
+    "instrumento": "ficha_tecnica",
+    "cantidadSecciones": 0,
+    "cantidadEjemplos": 0,
+    "fechaActualizacion": "13/07/2026",
+    "secciones": []
+  },
+  {
+    "id": "plt-amb-ecosistemas-andinos",
+    "codigo": "FTE-ECOSIST-ANDINOS",
+    "nombre": "FTE — Recuperación de ecosistemas andinos",
+    "descripcion": "Ficha Técnica Estándar para proyectos de recuperación de ecosistemas andinos (también válida como Ficha Técnica Simplificada)",
+    "sectorId": "sec-8",
+    "instrumento": "ficha_tecnica",
+    "cantidadSecciones": 0,
+    "cantidadEjemplos": 0,
+    "fechaActualizacion": "13/07/2026",
+    "secciones": []
+  },
+  {
+    "id": "plt-amb-limpieza-publica",
+    "codigo": "FTE-LIMPIEZA-PUBLICA",
+    "nombre": "FTE — Servicio de limpieza pública",
+    "descripcion": "Ficha Técnica Estándar para proyectos de mejoramiento, ampliación y/o recuperación del servicio de limpieza pública (también válida como Ficha Técnica Simplificada)",
+    "sectorId": "sec-8",
+    "instrumento": "ficha_tecnica",
+    "cantidadSecciones": 0,
+    "cantidadEjemplos": 0,
+    "fechaActualizacion": "13/07/2026",
+    "archivoDefaultUrl": "/fichas_oficiales/ambiente/ficha_tecnica_estandar_limpieza_publica.xlsm",
+    "secciones": []
+  },
+  {
+    "id": "plt-amb-regulacion-hidrica",
+    "codigo": "FS-REGULACION-HIDRICA",
+    "nombre": "Ficha Simplificada — Recuperación del Servicio Ecosistémico de Regulación Hídrica",
+    "descripcion": "Ficha Técnica Simplificada de Proyectos de Inversión de Recuperación del Servicio Ecosistémico de Regulación Hídrica",
+    "sectorId": "sec-8",
+    "instrumento": "ficha_tecnica",
+    "cantidadSecciones": 0,
+    "cantidadEjemplos": 0,
+    "fechaActualizacion": "13/07/2026",
+    "secciones": []
+  },
+  {
+    "id": "plt-def-riesgo-desastres",
+    "codigo": "FS-RIESGO-DESASTRES",
+    "nombre": "Ficha Simplificada — Servicios de Información sobre el Riesgo de Desastres (≤750 UIT)",
+    "descripcion": "Ficha Técnica Simplificada para proyectos de creación, mejoramiento y/o ampliación de Servicios de Información sobre el Riesgo de Desastres, montos ≤ 750 UIT",
+    "sectorId": "sec-9",
+    "instrumento": "ficha_tecnica",
+    "cantidadSecciones": 0,
+    "cantidadEjemplos": 0,
+    "fechaActualizacion": "13/07/2026",
+    "archivoDefaultUrl": "/fichas_oficiales/defensa/Ficha_Simplificada.xlsx",
+    "secciones": []
+  },
+  {
+    "id": "plt-pcm-defensa-riberena",
+    "codigo": "FTE-DEFENSA-RIBERENA",
+    "nombre": "FTE — Protección en riberas de río (v1.2)",
+    "descripcion": "Ficha Técnica Estándar para proyectos de \"Creación o Recuperación de servicio de protección en riberas de río vulnerables ante el peligro de inundación/socavación\" — versión 1.2",
+    "sectorId": "sec-10",
+    "instrumento": "ficha_tecnica",
+    "cantidadSecciones": 0,
+    "cantidadEjemplos": 0,
+    "fechaActualizacion": "13/07/2026",
+    "archivoDefaultUrl": "/fichas_oficiales/pcm/1_Ficha_Estandar_Defensa_Riberena_V1_2.xlsm",
+    "secciones": []
+  },
+  {
+    "id": "plt-pcm-alerta-temprana",
+    "codigo": "FS-ALERTA-TEMPRANA",
+    "nombre": "Ficha Simplificada — Servicio de Alerta Temprana (≤750 UIT)",
+    "descripcion": "Ficha Técnica Simplificada para proyectos de Creación, Mejoramiento, Ampliación o Recuperación del Servicio de Alerta Temprana, montos ≤ 750 UIT",
+    "sectorId": "sec-10",
+    "instrumento": "ficha_tecnica",
+    "cantidadSecciones": 0,
+    "cantidadEjemplos": 0,
+    "fechaActualizacion": "13/07/2026",
+    "secciones": []
+  },
+  {
+    "id": "plt-cul-parques-bicentenarios",
+    "codigo": "FTE-PARQUES-BICENTENARIOS",
+    "nombre": "FTE — Parques Culturales Bicentenarios",
+    "descripcion": "Ficha Técnica Estándar para la Formulación y Evaluación de Proyectos de Parques Culturales Bicentenarios",
+    "sectorId": "sec-11",
+    "instrumento": "ficha_tecnica",
+    "cantidadSecciones": 0,
+    "cantidadEjemplos": 0,
+    "fechaActualizacion": "13/07/2026",
+    "secciones": []
+  },
+  {
+    "id": "plt-cet-servicios-turisticos",
+    "codigo": "FS-SERV-TURISTICOS",
+    "nombre": "Ficha Simplificada — Servicios turísticos públicos en recursos turísticos",
+    "descripcion": "Ficha Técnica Simplificada para la creación, mejoramiento, ampliación y recuperación de servicios turísticos públicos en recursos turísticos",
+    "sectorId": "sec-12",
+    "instrumento": "ficha_tecnica",
+    "cantidadSecciones": 0,
+    "cantidadEjemplos": 0,
+    "fechaActualizacion": "13/07/2026",
+    "secciones": []
+  },
+  {
+    "id": "plt-perfil-1",
+    "codigo": "PERFIL-PI",
+    "nombre": "Estudio de Preinversión a Nivel de Perfil",
+    "descripcion": "Instrumento para proyectos de alta complejidad — Anexo 07 Directiva 001-2019-EF/63.01",
+    "sectorId": "sec-2",
+    "instrumento": "perfil",
+    "cantidadSecciones": 9,
+    "cantidadEjemplos": 1,
+    "fechaActualizacion": "01/07/2026",
+    "secciones": [
+      {
+        "id": "sp-0",
+        "numero": "0",
+        "nombre": "Resumen Ejecutivo",
+        "cantidadCampos": 9,
+        "subsecciones": [
+          {
+            "id": "sp-0-sub",
+            "codigo": "0",
+            "nombre": "APÉNDICE — ORIENTACIONES",
+            "campos": [
+              {
+                "id": "sp-0-A",
+                "identificador": "A",
+                "etiqueta": "A. Información general del proyecto",
+                "tipo": "texto_largo",
+                "editable": true,
+                "descripcion": "Nombre del proyecto (naturaleza, objeto y localización), Unidad Formuladora, UEI recomendada, localización geográfica (georreferenciación), duración de ejecución, fecha estimada de inicio e inversión total. Indicar el servicio público con brecha identificada y priorizada."
+              },
+              {
+                "id": "sp-0-B",
+                "identificador": "B",
+                "etiqueta": "B. Planteamiento del proyecto",
+                "tipo": "texto_largo",
+                "editable": true,
+                "descripcion": "Objetivos y medios fundamentales del proyecto. Detallar las alternativas de solución evaluadas y las acciones que incluye cada una."
+              },
+              {
+                "id": "sp-0-C",
+                "identificador": "C",
+                "etiqueta": "C. Determinación de la brecha oferta y demanda",
+                "tipo": "tabla",
+                "editable": true,
+                "descripcion": "Tabla de balance de oferta y demanda proyectado en el horizonte de evaluación. Enfoque metodológico, parámetros y supuestos. Número de beneficiarios directos."
+              },
+              {
+                "id": "sp-0-D",
+                "identificador": "D",
+                "etiqueta": "D. Análisis técnico del Proyecto",
+                "tipo": "texto_largo",
+                "editable": true,
+                "descripcion": "Alternativas de localización, tamaño y tecnología evaluadas. Factores condicionantes considerados y sustento de la selección."
+              },
+              {
+                "id": "sp-0-E",
+                "identificador": "E",
+                "etiqueta": "E. Costos del Proyecto",
+                "tipo": "texto_largo",
+                "editable": true,
+                "descripcion": "Cronograma y estructura de costos de inversión (incluyendo medidas de reducción de riesgos y mitigación ambiental), reinversiones y costos de O&M. Metodología utilizada."
+              },
+              {
+                "id": "sp-0-F",
+                "identificador": "F",
+                "etiqueta": "F. Beneficios del Proyecto",
+                "tipo": "texto_largo",
+                "editable": true,
+                "descripcion": "Descripción de los beneficios generados por el proyecto, identificando el tipo y metodología de valoración."
+              },
+              {
+                "id": "sp-0-G",
+                "identificador": "G",
+                "etiqueta": "G. Resultados de la evaluación social",
+                "tipo": "texto_largo",
+                "editable": true,
+                "descripcion": "Metodología, parámetros y supuestos para la estimación. Indicadores de rentabilidad social y ranking de alternativas (VAN social o CE). Variables más sensibles y rangos de variación."
+              },
+              {
+                "id": "sp-0-H",
+                "identificador": "H",
+                "etiqueta": "H. Sostenibilidad del Proyecto",
+                "tipo": "texto_largo",
+                "editable": true,
+                "descripcion": "Riesgos identificados sobre la sostenibilidad y medidas adoptadas. Porcentaje de cobertura del financiamiento de costos de O&M."
+              },
+              {
+                "id": "sp-0-I",
+                "identificador": "I",
+                "etiqueta": "I. Marco Lógico",
+                "tipo": "tabla",
+                "editable": true,
+                "descripcion": "Marco lógico de la alternativa seleccionada, a nivel de propósito, componentes y fines directos, con indicadores y metas."
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "sp-2",
+        "numero": "2",
+        "nombre": "Identificación",
+        "cantidadCampos": 6,
+        "subsecciones": [
+          {
+            "id": "sp-2-1",
+            "codigo": "2.1",
+            "nombre": "DIAGNÓSTICO",
+            "campos": [
+              {
+                "id": "sp-2-1-1",
+                "identificador": "2.1.1",
+                "etiqueta": "La población afectada",
+                "tipo": "texto_largo",
+                "editable": true,
+                "descripcion": "Diagnosticar la población afectada: aspectos demográficos, económicos, sociales y culturales, problemas y efectos percibidos. Si no existe el servicio, describir las formas alternativas que usa la población. Incluir género, interculturalidad, estilos de vida, condiciones especiales y riesgos climáticos."
+              },
+              {
+                "id": "sp-2-1-2",
+                "identificador": "2.1.2",
+                "etiqueta": "El territorio",
+                "tipo": "texto_largo",
+                "editable": true,
+                "descripcion": "Definir el área de estudio (espacio de referencia para contextualizar el problema) y el área de influencia (donde el proyecto genera impacto). Precisar criterios de delimitación. Incluir análisis de peligros, vulnerabilidad y exposición al riesgo."
+              },
+              {
+                "id": "sp-2-1-3",
+                "identificador": "2.1.3",
+                "etiqueta": "La Unidad Productora (si existe)",
+                "tipo": "texto_largo",
+                "editable": true,
+                "descripcion": "Diagnóstico de la UP existente: infraestructura, equipos, mobiliario, capacidad de gestión, percepción de usuarios, exposición a peligros e impactos ambientales. Estimar oferta actual e identificar restricciones. Determinar oferta optimizada y proyectarla."
+              },
+              {
+                "id": "sp-2-1-4",
+                "identificador": "2.1.4",
+                "etiqueta": "Otros agentes involucrados",
+                "tipo": "texto_largo",
+                "editable": true,
+                "descripcion": "Identificar grupos sociales involucrados y entidades que apoyarían la ejecución y operación. Analizar su posición respecto al proyecto y estrategias para abordar conflictos potenciales."
+              }
+            ]
+          },
+          {
+            "id": "sp-2-2",
+            "codigo": "2.2",
+            "nombre": "DEFINICIÓN DEL PROBLEMA, CAUSAS Y EFECTOS",
+            "campos": [
+              {
+                "id": "sp-2-2-1",
+                "identificador": "2.2",
+                "etiqueta": "Problema central, causas y efectos",
+                "tipo": "texto_largo",
+                "editable": true,
+                "descripcion": "Definir el problema central que el proyecto resolverá. Identificar y sustentar con evidencias las causas directas e indirectas y los efectos directos e indirectos basados en el diagnóstico. Sistematizar en el árbol de causas-problema-efectos."
+              }
+            ]
+          },
+          {
+            "id": "sp-2-3",
+            "codigo": "2.3",
+            "nombre": "PLANTEAMIENTO DEL PROYECTO",
+            "campos": [
+              {
+                "id": "sp-2-3-1",
+                "identificador": "2.3.1",
+                "etiqueta": "Objetivo del proyecto",
+                "tipo": "texto_largo",
+                "editable": true,
+                "descripcion": "Especificar el objetivo central o propósito y los objetivos específicos o medios (de primer nivel y fundamentales). Deben reflejar los cambios esperados. Sistematizar en el árbol de medios-objetivo-fines."
+              },
+              {
+                "id": "sp-2-3-2",
+                "identificador": "2.3.2",
+                "etiqueta": "Planteamiento de alternativas de solución",
+                "tipo": "texto_largo",
+                "editable": true,
+                "descripcion": "Plantear las alternativas de solución sobre la base del análisis de las acciones que concretarán los medios fundamentales. Deben ser técnicamente posibles, pertinentes y comparables."
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "sp-3",
+        "numero": "3",
+        "nombre": "Formulación",
+        "cantidadCampos": 8,
+        "subsecciones": [
+          {
+            "id": "sp-3-1",
+            "codigo": "3.1",
+            "nombre": "HORIZONTE DE EVALUACIÓN",
+            "campos": [
+              {
+                "id": "sp-3-1-1",
+                "identificador": "3.1",
+                "etiqueta": "Horizonte de evaluación del proyecto",
+                "tipo": "texto_largo",
+                "editable": true,
+                "descripcion": "Fundamentar y establecer el horizonte de evaluación: período de ejecución del proyecto y período en que se estimarán los costos de O&M y los beneficios sociales para la evaluación."
+              }
+            ]
+          },
+          {
+            "id": "sp-3-2",
+            "codigo": "3.2",
+            "nombre": "ANÁLISIS DEL MERCADO DEL SERVICIO",
+            "campos": [
+              {
+                "id": "sp-3-2-1",
+                "identificador": "3.2.1",
+                "etiqueta": "Análisis de la demanda del servicio",
+                "tipo": "texto_largo",
+                "editable": true,
+                "descripcion": "Estimar la demanda actual y proyecciones: identificar bienes/servicios intervenidos, definir población demandante potencial/efectiva/objetivo, estimar demanda actual con fuentes primaria y secundaria, y proyectar en la situación \"con proyecto\". Sustentar supuestos."
+              },
+              {
+                "id": "sp-3-2-2",
+                "identificador": "3.2.2",
+                "etiqueta": "Determinación de la brecha oferta-demanda",
+                "tipo": "tabla",
+                "editable": true,
+                "descripcion": "Comparar la demanda proyectada con la oferta optimizada (o la oferta sin proyecto cuando no sea posible optimizarla). Presentar el balance de oferta y demanda en el horizonte de evaluación."
+              }
+            ]
+          },
+          {
+            "id": "sp-3-3",
+            "codigo": "3.3",
+            "nombre": "ANÁLISIS TÉCNICO",
+            "campos": [
+              {
+                "id": "sp-3-3-1",
+                "identificador": "3.3.1",
+                "etiqueta": "Aspectos técnicos (tamaño, localización, tecnología)",
+                "tipo": "texto_largo",
+                "editable": true,
+                "descripcion": "Configurar técnicamente las alternativas propuestas: tamaño (capacidad de producción), localización (ubicación que maximice beneficio social) y tecnología (proceso de producción). Derivar en requerimientos de recursos para inversión y O&M."
+              },
+              {
+                "id": "sp-3-3-2",
+                "identificador": "3.3.2",
+                "etiqueta": "Diseño preliminar",
+                "tipo": "imagen",
+                "editable": true,
+                "descripcion": "Representación gráfica o esquemática del proyecto con las características físicas principales de las alternativas técnicas factibles (ATF). Nivel de ingeniería conceptual en primera etapa e ingeniería básica para la alternativa seleccionada en segunda etapa."
+              },
+              {
+                "id": "sp-3-3-3",
+                "identificador": "3.3.3",
+                "etiqueta": "Metas físicas",
+                "tipo": "tabla",
+                "editable": true,
+                "descripcion": "Establecer las metas físicas de la fase de Ejecución, incluyendo las de gestión del riesgo y mitigación ambiental. Identificar y cuantificar recursos e insumos para la fase de Funcionamiento."
+              }
+            ]
+          },
+          {
+            "id": "sp-3-4",
+            "codigo": "3.4",
+            "nombre": "GESTIÓN DEL PROYECTO",
+            "campos": [
+              {
+                "id": "sp-3-4-1",
+                "identificador": "3.4.1",
+                "etiqueta": "Gestión en la fase de ejecución",
+                "tipo": "texto_largo",
+                "editable": true,
+                "descripcion": "Plantear la organización a adoptar, especificar la UEI designada y sus capacidades, modalidad de ejecución (administración directa o contrata), cronograma de ejecución con el plazo de cada componente/acción."
+              },
+              {
+                "id": "sp-3-4-2",
+                "identificador": "3.4.2",
+                "etiqueta": "Gestión en la fase de funcionamiento",
+                "tipo": "texto_largo",
+                "editable": true,
+                "descripcion": "Descripción de la organización que asumirá la operación y mantenimiento, indicando sus capacidades técnicas y financieras, los arreglos institucionales y las condiciones de sostenibilidad."
+              }
+            ]
+          },
+          {
+            "id": "sp-3-5",
+            "codigo": "3.5",
+            "nombre": "COSTOS DEL PROYECTO",
+            "campos": [
+              {
+                "id": "sp-3-5-1",
+                "identificador": "3.5.1",
+                "etiqueta": "Estimación de los costos de inversión",
+                "tipo": "tabla",
+                "editable": true,
+                "descripcion": "Cronograma y estructura de costos de inversión (incluyendo gestión del proyecto, elaboración de ET/ED, supervisión y liquidación). Incluir costos de medidas de reducción de riesgos y mitigación ambiental. Sustentar con nivel de ingeniería conceptual."
+              },
+              {
+                "id": "sp-3-5-2",
+                "identificador": "3.5.2",
+                "etiqueta": "Costos de inversión en la fase de funcionamiento (reinversiones)",
+                "tipo": "tabla",
+                "editable": true,
+                "descripcion": "Especificar el flujo de requerimientos de reposición o reemplazo de activos durante la fase de funcionamiento y estimar los costos correspondientes."
+              },
+              {
+                "id": "sp-3-5-3",
+                "identificador": "3.5.3",
+                "etiqueta": "Costos de Operación y Mantenimiento incrementales",
+                "tipo": "tabla",
+                "editable": true,
+                "descripcion": "Estimar costos detallados de O&M incrementales (situación con proyecto menos sin proyecto). Describir supuestos y parámetros. Presentar flujos a precios de mercado. Sustentar con el diseño operacional cumpliendo normas de seguridad y estándares de calidad."
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "sp-4",
+        "numero": "4",
+        "nombre": "Evaluación",
+        "cantidadCampos": 6,
+        "subsecciones": [
+          {
+            "id": "sp-4-1",
+            "codigo": "4.1",
+            "nombre": "EVALUACIÓN SOCIAL",
+            "campos": [
+              {
+                "id": "sp-4-1-1",
+                "identificador": "4.1.1",
+                "etiqueta": "Beneficios sociales",
+                "tipo": "texto_largo",
+                "editable": true,
+                "descripcion": "Identificar, medir y valorar los beneficios directos (liberación de recursos, aumento del consumo), indirectos, externalidades positivas e intangibles. Cuantificar beneficios por alternativa en la situación \"con proyecto\" y estimar en la situación \"sin proyecto\". Determinar flujos de beneficios sociales incrementales."
+              },
+              {
+                "id": "sp-4-1-2",
+                "identificador": "4.1.2",
+                "etiqueta": "Costos sociales",
+                "tipo": "tabla",
+                "editable": true,
+                "descripcion": "Elaborar flujos de costos sociales (a precios sociales). Incluir costos de inversión, reinversiones y O&M incrementales convertidos a precios sociales mediante factores de corrección."
+              },
+              {
+                "id": "sp-4-1-3",
+                "identificador": "4.1.3",
+                "etiqueta": "Criterios de decisión e indicadores de rentabilidad",
+                "tipo": "tabla",
+                "editable": true,
+                "descripcion": "Aplicar Costo-Beneficio (VAN Social, TIR Social, VAE) o Costo-Eficiencia/Eficacia/Efectividad según corresponda. Presentar ranking de alternativas. Comparar con líneas de corte sectoriales cuando existan."
+              },
+              {
+                "id": "sp-4-1-4",
+                "identificador": "4.1.4",
+                "etiqueta": "Análisis de incertidumbre",
+                "tipo": "texto_largo",
+                "editable": true,
+                "descripcion": "Análisis de sensibilidad: variables clave cuyas variaciones afecten la rentabilidad social o la selección de alternativas, con rangos de variación. Análisis de riesgo probabilístico: valor esperado del VAN social o CE mediante simulación."
+              }
+            ]
+          },
+          {
+            "id": "sp-4-2",
+            "codigo": "4.2",
+            "nombre": "EVALUACIÓN PRIVADA",
+            "campos": [
+              {
+                "id": "sp-4-2-1",
+                "identificador": "4.2",
+                "etiqueta": "Evaluación privada",
+                "tipo": "texto_largo",
+                "editable": true,
+                "descripcion": "Cuando el proyecto genere ingresos o cuando haya un privado que cofinancie, evaluar la rentabilidad privada del proyecto. Verificar en qué medida los ingresos pueden cubrir los costos de O&M."
+              }
+            ]
+          },
+          {
+            "id": "sp-4-3",
+            "codigo": "4.3",
+            "nombre": "ANÁLISIS DE SOSTENIBILIDAD",
+            "campos": [
+              {
+                "id": "sp-4-3-1",
+                "identificador": "4.3",
+                "etiqueta": "Análisis de sostenibilidad",
+                "tipo": "texto_largo",
+                "editable": true,
+                "descripcion": "Analizar la capacidad institucional del operador, la disponibilidad de recursos para O&M, los arreglos institucionales para la fase de funcionamiento. Identificar riesgos operacionales, de mercado y financieros con su probabilidad e impacto."
+              }
+            ]
+          },
+          {
+            "id": "sp-4-4",
+            "codigo": "4.4",
+            "nombre": "FINANCIAMIENTO",
+            "campos": [
+              {
+                "id": "sp-4-4-1",
+                "identificador": "4.4",
+                "etiqueta": "Financiamiento de la inversión",
+                "tipo": "texto_largo",
+                "editable": true,
+                "descripcion": "Plantear la estructura de financiamiento de la inversión: fuentes de financiamiento, participación relativa y rubros de costos a los que se aplicará cada fuente."
+              }
+            ]
+          },
+          {
+            "id": "sp-4-5",
+            "codigo": "4.5",
+            "nombre": "MATRIZ DE MARCO LÓGICO",
+            "campos": [
+              {
+                "id": "sp-4-5-1",
+                "identificador": "4.5",
+                "etiqueta": "Matriz de marco lógico para la alternativa seleccionada",
+                "tipo": "tabla",
+                "editable": true,
+                "descripcion": "Presentar la matriz del marco lógico de la alternativa seleccionada con indicadores relevantes y sus valores en el año base y esperados, para el seguimiento y evaluación ex post."
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "sp-5",
+        "numero": "5",
+        "nombre": "Conclusiones",
+        "cantidadCampos": 1,
+        "subsecciones": [
+          {
+            "id": "sp-5-sub",
+            "codigo": "5",
+            "nombre": "CONCLUSIONES",
+            "campos": [
+              {
+                "id": "sp-5-1",
+                "identificador": "5",
+                "etiqueta": "Conclusiones",
+                "tipo": "texto_largo",
+                "editable": true,
+                "descripcion": "Indicar el resultado (viable o no viable) del proceso de formulación y evaluación. Fundamentar: razones técnicas/económicas de selección de la alternativa, cumplimiento de los tres atributos de viabilidad, y juicio técnico sobre la calidad y profundización de la información empleada."
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "sp-6",
+        "numero": "6",
+        "nombre": "Recomendaciones",
+        "cantidadCampos": 1,
+        "subsecciones": [
+          {
+            "id": "sp-6-sub",
+            "codigo": "6",
+            "nombre": "RECOMENDACIONES",
+            "campos": [
+              {
+                "id": "sp-6-1",
+                "identificador": "6",
+                "etiqueta": "Recomendaciones técnicas",
+                "tipo": "texto_largo",
+                "editable": true,
+                "descripcion": "Recomendaciones técnicas para la UEI que asumirá la ejecución y posterior O&M. Incluir: acciones críticas previas a la ejecución, condiciones que afecten la sostenibilidad, y alertas sobre riesgos de deterioro acelerado de activos por mantenimiento insuficiente."
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "sp-7",
+        "numero": "7",
+        "nombre": "Anexos",
+        "cantidadCampos": 1,
+        "subsecciones": [
+          {
+            "id": "sp-7-sub",
+            "codigo": "7",
+            "nombre": "ANEXOS",
+            "campos": [
+              {
+                "id": "sp-7-1",
+                "identificador": "7",
+                "etiqueta": "Información de sustento",
+                "tipo": "texto_largo",
+                "editable": true,
+                "descripcion": "Incluir como anexos la información que sustente o detalle los temas analizados en el perfil: estudios de campo, estadísticas, planos, fotografías, análisis especializados, etc."
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "plt-perfil-sal-1",
+    "codigo": "PERFIL-SAL",
+    "nombre": "Estudio de Preinversión a Nivel de Perfil",
+    "descripcion": "Instrumento para proyectos de alta complejidad — Anexo 07 Directiva 001-2019-EF/63.01",
+    "sectorId": "sec-1",
+    "instrumento": "perfil",
+    "cantidadSecciones": 8,
+    "cantidadEjemplos": 1,
+    "fechaActualizacion": "05/07/2026",
+    "disponibleNivel0": true,
+    "secciones": [
+      {
+        "id": "sp-sal-1",
+        "numero": "1",
+        "nombre": "Resumen Ejecutivo",
+        "cantidadCampos": 1,
+        "subsecciones": [
+          {
+            "id": "sp-sal-1-sub",
+            "codigo": "1",
+            "nombre": "RESUMEN EJECUTIVO",
+            "campos": [
+              {
+                "id": "sp-sal-c1",
+                "identificador": "1",
+                "etiqueta": "Resumen Ejecutivo",
+                "tipo": "texto_largo",
+                "editable": true,
+                "descripcion": "Síntesis del estudio. Debe reflejar la información empleada y los resultados más relevantes del proceso de elaboración. Es el documento que evidenciará las condiciones en las cuales se declara viable el proyecto.\n\nSub-estructura sugerida (ver Apéndice): (A) Información general del proyecto, (B) Planteamiento del proyecto, (C) Brecha oferta-demanda, (D) Análisis técnico, (E) Costos del proyecto, (F) Beneficios del proyecto, (G) Resultados de la evaluación social, (H) Sostenibilidad, (I) Marco lógico."
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "sp-sal-2",
+        "numero": "2",
+        "nombre": "Identificación",
+        "cantidadCampos": 7,
+        "subsecciones": [
+          {
+            "id": "sp-sal-2-1",
+            "codigo": "2.1",
+            "nombre": "DIAGNÓSTICO",
+            "campos": [
+              {
+                "id": "sp-sal-c211",
+                "identificador": "2.1.1",
+                "etiqueta": "La población afectada",
+                "tipo": "texto_largo",
+                "editable": true,
+                "descripcion": "Diagnóstico de la población afectada por la situación negativa: aspectos demográficos, económicos, sociales, culturales, problemas y efectos percibidos. Formas alternativas de obtener el servicio si no existe. Considerar género, interculturalidad, discapacidad y riesgos de cambio climático."
+              },
+              {
+                "id": "sp-sal-c212",
+                "identificador": "2.1.2",
+                "etiqueta": "El territorio",
+                "tipo": "texto_largo",
+                "editable": true,
+                "descripcion": "Definir el área de estudio como el espacio geográfico de referencia para contextualizar el problema. Precisar los parámetros y criterios para delimitar el área de influencia del proyecto."
+              },
+              {
+                "id": "sp-sal-c213",
+                "identificador": "2.1.3",
+                "etiqueta": "La Unidad Productora (UP)",
+                "tipo": "texto_largo",
+                "editable": true,
+                "descripcion": "Diagnóstico de la UP existente, si aplica: capacidades instaladas, procesos de producción del servicio, factores de producción (infraestructura, equipamiento, RRHH), restricciones y estado actual."
+              },
+              {
+                "id": "sp-sal-c214",
+                "identificador": "2.1.4",
+                "etiqueta": "Otros agentes involucrados",
+                "tipo": "texto_largo",
+                "editable": true,
+                "descripcion": "Análisis de los grupos involucrados: entidades que apoyarán la ejecución y operación, beneficiarios, grupos afectados. Sus percepciones, intereses, estrategias y expectativas respecto al proyecto."
+              }
+            ]
+          },
+          {
+            "id": "sp-sal-2-2",
+            "codigo": "2.2",
+            "nombre": "DEFINICIÓN DEL PROBLEMA",
+            "campos": [
+              {
+                "id": "sp-sal-c22",
+                "identificador": "2.2",
+                "etiqueta": "Definición del problema central, sus causas y efectos",
+                "tipo": "texto_largo",
+                "editable": true,
+                "descripcion": "Especificar con precisión el problema central identificado a partir del diagnóstico. Analizar y determinar las principales causas que lo generan y los efectos que produce. Sistematizar en el árbol de causas–problema–efectos."
+              }
+            ]
+          },
+          {
+            "id": "sp-sal-2-3",
+            "codigo": "2.3",
+            "nombre": "PLANTEAMIENTO DEL PROYECTO",
+            "campos": [
+              {
+                "id": "sp-sal-c231",
+                "identificador": "2.3.1",
+                "etiqueta": "Objetivo del proyecto",
+                "tipo": "texto_largo",
+                "editable": true,
+                "descripcion": "Especificar el objetivo central o propósito, y los objetivos específicos o medios (de primer nivel y fundamentales), reflejando los cambios esperados. Sistematizar en el árbol de medios–objetivo–fines."
+              },
+              {
+                "id": "sp-sal-c232",
+                "identificador": "2.3.2",
+                "etiqueta": "Planteamiento de alternativas de solución",
+                "tipo": "texto_largo",
+                "editable": true,
+                "descripcion": "Plantear las alternativas de solución al problema, sobre la base del análisis de los medios fundamentales. Las alternativas deben ser técnicamente posibles, pertinentes y comparables entre sí."
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "sp-sal-3",
+        "numero": "3",
+        "nombre": "Formulación",
+        "cantidadCampos": 9,
+        "subsecciones": [
+          {
+            "id": "sp-sal-3-1",
+            "codigo": "3.1",
+            "nombre": "HORIZONTE DE EVALUACIÓN",
+            "campos": [
+              {
+                "id": "sp-sal-c31",
+                "identificador": "3.1",
+                "etiqueta": "Horizonte de evaluación del proyecto",
+                "tipo": "texto_largo",
+                "editable": true,
+                "descripcion": "Fundamentar y establecer el horizonte de evaluación: período de ejecución del proyecto más el período en el que se estimarán los costos de O&M y los beneficios sociales para la evaluación. Justificar con la vida útil de los activos principales."
+              }
+            ]
+          },
+          {
+            "id": "sp-sal-3-2",
+            "codigo": "3.2",
+            "nombre": "ANÁLISIS DEL MERCADO DEL SERVICIO",
+            "campos": [
+              {
+                "id": "sp-sal-c321",
+                "identificador": "3.2.1",
+                "etiqueta": "Análisis de la demanda",
+                "tipo": "texto_largo",
+                "editable": true,
+                "descripcion": "Estimaciones de la demanda actual y sus proyecciones: identificar los bienes/servicios a intervenir, definir la población demandante potencial, efectiva y objetivo, estimar la demanda actual con fuentes primaria y secundaria, proyectar la demanda en la situación \"con proyecto\"."
+              },
+              {
+                "id": "sp-sal-c322",
+                "identificador": "3.2.2",
+                "etiqueta": "Determinación de la brecha oferta-demanda",
+                "tipo": "texto_largo",
+                "editable": true,
+                "descripcion": "Determinar la oferta optimizada (o la oferta sin proyecto cuando no sea posible optimizarla). Calcular la brecha como la diferencia entre la demanda proyectada y la oferta optimizada. Presentar el balance en el horizonte de evaluación."
+              }
+            ]
+          },
+          {
+            "id": "sp-sal-3-3",
+            "codigo": "3.3",
+            "nombre": "ANÁLISIS TÉCNICO",
+            "campos": [
+              {
+                "id": "sp-sal-c331",
+                "identificador": "3.3.1",
+                "etiqueta": "Aspectos técnicos",
+                "tipo": "texto_largo",
+                "editable": true,
+                "descripcion": "Análisis de las alternativas de localización, tamaño y tecnología. Factores condicionantes y criterios de selección para cada alternativa. Derivar los requerimientos de recursos para las fases de inversión y de O&M."
+              },
+              {
+                "id": "sp-sal-c332",
+                "identificador": "3.3.2",
+                "etiqueta": "Diseño preliminar",
+                "tipo": "imagen",
+                "editable": true,
+                "descripcion": "Representación gráfica o esquemática del proyecto con las características físicas principales de las alternativas técnicas factibles. Nivel de ingeniería conceptual en primera etapa e ingeniería básica para la alternativa seleccionada."
+              },
+              {
+                "id": "sp-sal-c333",
+                "identificador": "3.3.3",
+                "etiqueta": "Metas físicas",
+                "tipo": "texto_largo",
+                "editable": true,
+                "descripcion": "Definición de las metas de producto (unidades físicas a entregar) en la fase de ejecución. Identificar y cuantificar los recursos e insumos requeridos para la fase de funcionamiento."
+              }
+            ]
+          },
+          {
+            "id": "sp-sal-3-4",
+            "codigo": "3.4",
+            "nombre": "GESTIÓN DEL PROYECTO",
+            "campos": [
+              {
+                "id": "sp-sal-c341",
+                "identificador": "3.4.1",
+                "etiqueta": "Gestión en la fase de ejecución",
+                "tipo": "texto_largo",
+                "editable": true,
+                "descripcion": "Organización a adoptar para la ejecución: Unidad Ejecutora de Inversiones designada y sus capacidades técnicas/financieras, modalidad de ejecución (administración directa o contrata), plan de implementación y cronograma por componente."
+              },
+              {
+                "id": "sp-sal-c342",
+                "identificador": "3.4.2",
+                "etiqueta": "Gestión en la fase de funcionamiento",
+                "tipo": "texto_largo",
+                "editable": true,
+                "descripcion": "Organización y recursos para la operación y mantenimiento del activo: entidad responsable, capacidades técnicas y financieras, arreglos institucionales necesarios y condiciones de sostenibilidad del servicio."
+              }
+            ]
+          },
+          {
+            "id": "sp-sal-3-5",
+            "codigo": "3.5",
+            "nombre": "COSTOS DEL PROYECTO",
+            "campos": [
+              {
+                "id": "sp-sal-c35",
+                "identificador": "3.5",
+                "etiqueta": "Costos del proyecto",
+                "tipo": "texto_largo",
+                "editable": true,
+                "descripcion": "Estimar los costos de inversión (incluyendo gestión del proyecto, elaboración de ET/ED, supervisión y liquidación), costos de reposición y costos incrementales de O&M (con y sin proyecto), a precios de mercado. Cronograma de inversión por componente. Sustento con nivel de ingeniería conceptual."
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "sp-sal-4",
+        "numero": "4",
+        "nombre": "Evaluación",
+        "cantidadCampos": 5,
+        "subsecciones": [
+          {
+            "id": "sp-sal-4-1",
+            "codigo": "4.1",
+            "nombre": "EVALUACIÓN SOCIAL",
+            "campos": [
+              {
+                "id": "sp-sal-c41",
+                "identificador": "4.1",
+                "etiqueta": "Evaluación Social",
+                "tipo": "texto_largo",
+                "editable": true,
+                "descripcion": "Evaluación social de cada alternativa: identificar, medir y valorar los beneficios sociales; elaborar flujos de costos sociales; calcular indicadores de rentabilidad social (VAN social, TIR social o Ratio C/E en costo-eficiencia); análisis de sensibilidad e incertidumbre."
+              }
+            ]
+          },
+          {
+            "id": "sp-sal-4-2",
+            "codigo": "4.2",
+            "nombre": "EVALUACIÓN PRIVADA",
+            "campos": [
+              {
+                "id": "sp-sal-c42",
+                "identificador": "4.2",
+                "etiqueta": "Evaluación privada",
+                "tipo": "texto_largo",
+                "editable": true,
+                "descripcion": "Cuando corresponda (proyectos con potencial de generar ingresos o con cofinanciamiento privado), efectuar la evaluación privada del proyecto. Verificar en qué medida los ingresos cubren los costos de O&M."
+              }
+            ]
+          },
+          {
+            "id": "sp-sal-4-3",
+            "codigo": "4.3",
+            "nombre": "ANÁLISIS DE SOSTENIBILIDAD",
+            "campos": [
+              {
+                "id": "sp-sal-c43",
+                "identificador": "4.3",
+                "etiqueta": "Análisis de Sostenibilidad",
+                "tipo": "texto_largo",
+                "editable": true,
+                "descripcion": "Especificar las medidas para garantizar que el proyecto generará los resultados previstos a lo largo de su vida útil: disponibilidad de recursos para O&M, capacidad institucional del operador, arreglos institucionales y gestión de riesgos operacionales, de mercado y financieros."
+              }
+            ]
+          },
+          {
+            "id": "sp-sal-4-4",
+            "codigo": "4.4",
+            "nombre": "FINANCIAMIENTO",
+            "campos": [
+              {
+                "id": "sp-sal-c44",
+                "identificador": "4.4",
+                "etiqueta": "Financiamiento de la inversión del proyecto",
+                "tipo": "texto_largo",
+                "editable": true,
+                "descripcion": "Especificar las fuentes de financiamiento y la estructura de financiamiento de la inversión: participación relativa de cada fuente (recursos ordinarios, canon, endeudamiento, cofinanciamiento, etc.) y rubros de costos a los que se aplicará."
+              }
+            ]
+          },
+          {
+            "id": "sp-sal-4-5",
+            "codigo": "4.5",
+            "nombre": "MARCO LÓGICO",
+            "campos": [
+              {
+                "id": "sp-sal-c45",
+                "identificador": "4.5",
+                "etiqueta": "Matriz de marco lógico para la alternativa seleccionada",
+                "tipo": "tabla",
+                "editable": true,
+                "descripcion": "Presentar la matriz del marco lógico de la alternativa seleccionada, con indicadores relevantes y sus valores en el año base y esperados al final del horizonte de evaluación, para el seguimiento y evaluación ex post."
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "sp-sal-5",
+        "numero": "5",
+        "nombre": "Conclusiones",
+        "cantidadCampos": 1,
+        "subsecciones": [
+          {
+            "id": "sp-sal-5-sub",
+            "codigo": "5",
+            "nombre": "CONCLUSIONES",
+            "campos": [
+              {
+                "id": "sp-sal-c5",
+                "identificador": "5",
+                "etiqueta": "Conclusiones",
+                "tipo": "texto_largo",
+                "editable": true,
+                "descripcion": "Indicar el resultado del proceso de formulación y evaluación (viable o no viable). Sintetizar los aspectos que sustentan la decisión: razones técnicas/económicas de selección de la alternativa, cumplimiento de los atributos de viabilidad y juicio técnico sobre la calidad de la información empleada."
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "sp-sal-6",
+        "numero": "6",
+        "nombre": "Recomendaciones",
+        "cantidadCampos": 1,
+        "subsecciones": [
+          {
+            "id": "sp-sal-6-sub",
+            "codigo": "6",
+            "nombre": "RECOMENDACIONES",
+            "campos": [
+              {
+                "id": "sp-sal-c6",
+                "identificador": "6",
+                "etiqueta": "Recomendaciones",
+                "tipo": "texto_largo",
+                "editable": true,
+                "descripcion": "Recomendaciones para la fase de ejecución (acciones previas, condiciones críticas, aspectos de contratación) y para la fase de funcionamiento (arreglos institucionales, financiamiento de O&M, monitoreo). Alertar sobre riesgos de deterioro acelerado de activos por mantenimiento insuficiente."
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "sp-sal-7",
+        "numero": "7",
+        "nombre": "Anexos",
+        "cantidadCampos": 1,
+        "subsecciones": [
+          {
+            "id": "sp-sal-7-sub",
+            "codigo": "7",
+            "nombre": "ANEXOS",
+            "campos": [
+              {
+                "id": "sp-sal-c7",
+                "identificador": "7",
+                "etiqueta": "Información de respaldo",
+                "tipo": "texto_largo",
+                "editable": true,
+                "descripcion": "Información de respaldo que sustente o detalle los temas analizados en el perfil: estudios de campo, estadísticas, planos, fotografías, análisis especializados, cotizaciones, documentos legales, etc."
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "sp-sal-ap",
+        "numero": "Ap",
+        "nombre": "Apéndice — Orientaciones para el RE",
+        "cantidadCampos": 1,
+        "subsecciones": [
+          {
+            "id": "sp-sal-ap-sub",
+            "codigo": "Ap",
+            "nombre": "APÉNDICE",
+            "campos": [
+              {
+                "id": "sp-sal-cap",
+                "identificador": "Ap",
+                "etiqueta": "Orientaciones para el Resumen Ejecutivo (A–I)",
+                "tipo": "texto_largo",
+                "editable": true,
+                "descripcion": "Guía detallada de los sub-puntos que debe contener el Resumen Ejecutivo:\n(A) Información general del proyecto: nombre, UF, UEI recomendada, localización, duración, inversión total, servicio con brecha.\n(B) Planteamiento: objetivos, medios fundamentales, alternativas evaluadas.\n(C) Brecha oferta-demanda: balance proyectado, metodología, supuestos, beneficiarios.\n(D) Análisis técnico: alternativas de localización, tamaño y tecnología; selección justificada.\n(E) Costos: cronograma y estructura de inversión, reinversiones, O&M.\n(F) Beneficios del proyecto: descripción, tipo y metodología de valoración.\n(G) Evaluación social: indicadores de rentabilidad, ranking de alternativas, sensibilidad.\n(H) Sostenibilidad: riesgos sobre la sostenibilidad y medidas adoptadas, cobertura de O&M.\n(I) Marco lógico de la alternativa seleccionada: propósito, componentes, fines, indicadores y metas."
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+]
