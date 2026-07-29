@@ -15,13 +15,14 @@ class PermisosCatalogoSeeder extends Seeder
             'plantillas.ver', 'plantillas.gestionar', 'plantillas.importar_json',
             'estructura.editar',
             'ejemplos.gestionar', 'excel.asignar', 'json.ver',
-            'usuarios.gestionar_clientes', 'usuarios.gestionar_administradores', 'usuarios.gestionar_superusuarios',
+            'usuarios.gestionar', 'roles.gestionar',
             'fichas.crear', 'fichas.compartir', 'fichas.ver_historial',
             'colaboradores.gestionar',
-            'mentorias.acceder', 'mentorias.preguntas_respuestas',
             'ia.mejora_texto', 'ia.asesor',
             'facturacion.gestionar',
-            'asesoria.solicitar', 'asesoria.atender',
+            'asesoria.solicitar', 'asesoria.atender_chat', 'asesoria.atender_video',
+            'asesoria.marcar_disponibilidad', 'asesoria.autorizar_pagos', 'asesoria.configurar_sla',
+            'asesoria.tickets_gestionar', 'asesoria.cobertura_horarios', 'asesoria.matchmaking',
         ];
 
         foreach ($claves as $clave) {

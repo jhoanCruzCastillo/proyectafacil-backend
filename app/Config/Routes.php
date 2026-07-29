@@ -52,12 +52,16 @@ $routes->group('api', ['filter' => 'auth'], static function (RouteCollection $ro
     $routes->put('tipos-usuario/(:num)', 'TiposUsuarioController::update/$1');
     $routes->delete('tipos-usuario/(:num)', 'TiposUsuarioController::delete/$1');
 
+    $routes->get('roles-permisos', 'RolesPermisosController::index');
+    $routes->put('roles-permisos/(:segment)', 'RolesPermisosController::update/$1');
+
     $routes->get('facturacion/(:num)', 'FacturacionController::get/$1');
     $routes->put('facturacion/(:num)', 'FacturacionController::update/$1');
 
-    $routes->get('mentorias', 'MentoriasController::index');
-    $routes->post('mentorias/(:num)/inscribirse', 'MentoriasController::inscribirse/$1');
-    $routes->post('mentorias/(:num)/preguntas', 'MentoriasController::enviarPregunta/$1');
+    $routes->get('tickets-consulta/(:num)', 'TicketsConsultaController::index/$1');
+
+    $routes->get('especialidades-asesor/(:num)', 'EspecialidadesAsesorController::index/$1');
+    $routes->put('especialidades-asesor/(:num)', 'EspecialidadesAsesorController::guardar/$1');
 
     $routes->get('actividad', 'ActividadController::index');
     $routes->post('actividad', 'ActividadController::push');
@@ -67,13 +71,29 @@ $routes->group('api', ['filter' => 'auth'], static function (RouteCollection $ro
     $routes->post('historial-cambios', 'HistorialCambiosController::registrar');
 
     $routes->get('docentes', 'DocentesController::index');
+    $routes->get('docentes/admin', 'DocentesController::indexAdmin');
     $routes->put('docentes/(:num)/horario', 'DocentesController::actualizarHorario/$1');
+    $routes->get('disponibilidad-horarios', 'DocentesController::disponibilidadAgregada');
 
     $routes->get('asesoria/solicitudes', 'AsesoriaController::misSolicitudes');
     $routes->post('asesoria/solicitudes', 'AsesoriaController::crear');
     $routes->post('asesoria/solicitudes/(:num)/aceptar', 'AsesoriaController::aceptar/$1');
-    $routes->post('asesoria/solicitudes/(:num)/rechazar', 'AsesoriaController::rechazar/$1');
     $routes->post('asesoria/solicitudes/(:num)/finalizar', 'AsesoriaController::finalizar/$1');
+    $routes->post('asesoria/solicitudes/(:num)/cancelar', 'AsesoriaController::cancelarPropia/$1');
+    $routes->post('asesoria/solicitudes/(:num)/calificar', 'AsesoriaController::calificar/$1');
+
+    $routes->get('asesoria/dashboard', 'TicketsAsesoriaController::dashboard');
+    $routes->get('asesoria/tickets', 'TicketsAsesoriaController::index');
+    $routes->get('asesoria/tickets-mismo-horario', 'TicketsAsesoriaController::mismoHorario');
+    $routes->get('asesoria/tickets/(:num)', 'TicketsAsesoriaController::detalle/$1');
+    $routes->get('asesoria/tickets/(:num)/docentes-disponibles', 'TicketsAsesoriaController::docentesDisponibles/$1');
+    $routes->post('asesoria/tickets/(:num)/asignar', 'TicketsAsesoriaController::asignar/$1');
+    $routes->post('asesoria/tickets/(:num)/en-espera', 'TicketsAsesoriaController::marcarEnEspera/$1');
+    $routes->post('asesoria/tickets/(:num)/reabrir-horario', 'TicketsAsesoriaController::reabrirHorario/$1');
+    $routes->post('asesoria/tickets/(:num)/cancelar', 'TicketsAsesoriaController::cancelar/$1');
+    $routes->get('asesoria/cobertura-horarios', 'TicketsAsesoriaController::coberturaHorarios');
+    $routes->get('asesoria/liquidaciones', 'TicketsAsesoriaController::liquidaciones');
+    $routes->post('asesoria/liquidaciones/autorizar', 'TicketsAsesoriaController::autorizarPago');
     $routes->get('asesoria/solicitudes/(:num)/mensajes', 'AsesoriaController::mensajes/$1');
     $routes->post('asesoria/solicitudes/(:num)/mensajes', 'AsesoriaController::enviarMensaje/$1');
 

@@ -12,6 +12,6 @@ class PlanModel extends Model
 
     protected $allowedFields = [
         'numero_nivel', 'nombre', 'precio', 'periodicidad',
-        'limite_fichas_base', 'limite_usuarios_base',
+        'limite_fichas_base', 'limite_consultas_base', 'limite_usuarios_base',
     ];
 }

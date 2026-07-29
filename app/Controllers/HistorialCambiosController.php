@@ -62,7 +62,7 @@ class HistorialCambiosController extends BaseController
             'id'        => (string) $fila['id'],
             'ejemploId' => (string) $fila['ejemplo_id'],
             'usuarioId' => (string) $fila['usuario_id'],
-            'fecha'     => str_replace(' ', 'T', $fila['fecha']),
+            'fecha'     => str_replace(' ', 'T', $fila['fecha']) . 'Z',
             'campos'    => array_map(static fn (array $c) => [
                 'identificador' => $c['identificador'],
                 'etiqueta'      => $c['etiqueta'],

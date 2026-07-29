@@ -4,8 +4,8 @@ namespace App\Controllers;
 
 use CodeIgniter\HTTP\ResponseInterface;
 
-// Lista de docentes (rol='docente', activos) con su horario semanal de referencia — usada por el
-// cliente para elegir a quién solicitarle asesoría — y el endpoint con el que un docente reemplaza
+// Lista de asesores (rol='asesor', activos) con su horario semanal de referencia — usada por el
+// cliente para elegir a quién solicitarle asesoría — y el endpoint con el que un asesor reemplaza
 // su propio horario completo. `dia_semana` es 1=lunes .. 7=domingo.
 class DocentesController extends BaseController
 {
@@ -14,8 +14,8 @@ class DocentesController extends BaseController
         $db = db_connect();
 
         $docentes = $db->table('usuarios')
-            ->select('id, nombre')
-            ->where('rol', 'docente')
+            ->select('id, nombre, foto_url')
+            ->where('rol', 'asesor')
             ->where('estado', 'activo')
             ->orderBy('nombre', 'ASC')
             ->get()->getResultArray();
@@ -30,6 +30,75 @@ class DocentesController extends BaseController
             fn (array $d) => $this->toDtoDocente($d, $horarios),
             $docentes,
         ));
+    }
+
+    // Gestión de solo lectura para el Administrativo de Asesorías (Módulo 5, docs §5 "06 Docentes"):
+    // incluye inactivos (para poder reactivarlos) — activar/desactivar reutiliza PUT /usuarios/:id
+    // ya existente (campo 'estado'), no hace falta un endpoint nuevo para esa acción.
+    public function indexAdmin(): ResponseInterface
+    {
+        $db = db_connect();
+
+        $docentes = $db->table('usuarios')
+            ->select('id, nombre, correo, foto_url, disponible, estado')
+            ->where('rol', 'asesor')
+            ->orderBy('nombre', 'ASC')
+            ->get()->getResultArray();
+
+        $especialidades = $db->table('asesor_especialidades ae')
+            ->select('ae.usuario_id, s.id as sector_id, s.nombre as sector_nombre')
+            ->join('sectores s', 's.id = ae.sector_id')
+            ->get()->getResultArray();
+
+        $inicioMes = date('Y-m-01 00:00:00');
+        $consultas = $db->table('solicitudes_asesoria')
+            ->select('docente_id, COUNT(*) as total')
+            ->where('estado', 'completado')
+            ->where('updated_at >=', $inicioMes)
+            ->groupBy('docente_id')
+            ->get()->getResultArray();
+        $consultasPorDocente = [];
+        foreach ($consultas as $c) {
+            $consultasPorDocente[(int) $c['docente_id']] = (int) $c['total'];
+        }
+
+        return $this->response->setJSON(array_map(function (array $d) use ($especialidades, $consultasPorDocente) {
+            $propias = array_values(array_filter($especialidades, static fn (array $e) => (int) $e['usuario_id'] === (int) $d['id']));
+
+            return [
+                'id'                    => (string) $d['id'],
+                'nombre'                => $d['nombre'],
+                'correo'                => $d['correo'],
+                'fotoUrl'               => $d['foto_url'] ?? null,
+                'disponible'            => (bool) $d['disponible'],
+                'estado'                => $d['estado'],
+                'especialidades'        => array_map(static fn (array $e) => ['id' => (string) $e['sector_id'], 'nombre' => $e['sector_nombre']], $propias),
+                'consultasAtendidasMes' => $consultasPorDocente[(int) $d['id']] ?? 0,
+            ];
+        }, $docentes));
+    }
+
+    // Unión de disponibilidad de TODOS los asesores activos (toggle 'disponible'), sin nombres —
+    // usada por la grilla de horario del alumno en la solicitud guiada de videollamada (docs
+    // §4 Fase 1: "no verás qué docente te atenderá hasta que se confirme tu cita").
+    public function disponibilidadAgregada(): ResponseInterface
+    {
+        $filas = db_connect()->table('horarios_docente hd')
+            ->distinct()
+            ->select('hd.dia_semana, hd.hora_inicio, hd.hora_fin')
+            ->join('usuarios u', 'u.id = hd.usuario_id')
+            ->where('u.rol', 'asesor')
+            ->where('u.estado', 'activo')
+            ->where('u.disponible', 1)
+            ->orderBy('hd.dia_semana', 'ASC')
+            ->orderBy('hd.hora_inicio', 'ASC')
+            ->get()->getResultArray();
+
+        return $this->response->setJSON(array_map(static fn (array $h) => [
+            'diaSemana'  => (int) $h['dia_semana'],
+            'horaInicio' => substr((string) $h['hora_inicio'], 0, 5),
+            'horaFin'    => substr((string) $h['hora_fin'], 0, 5),
+        ], $filas));
     }
 
     public function actualizarHorario($docenteId = null): ResponseInterface
@@ -62,6 +131,7 @@ class DocentesController extends BaseController
         return [
             'id'      => (string) $d['id'],
             'nombre'  => $d['nombre'],
+            'fotoUrl' => $d['foto_url'] ?? null,
             'horario' => array_map([$this, 'toDtoBloque'], $propios),
         ];
     }

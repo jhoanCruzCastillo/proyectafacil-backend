@@ -43,8 +43,10 @@ class NotificacionesController extends BaseController
         ];
     }
 
+    // Ver AsesoriaController/Support/SolicitudAsesoriaHelpersTrait::datetimeAIso — el sufijo 'Z' es
+    // necesario para que el navegador interprete estas fechas como UTC y no como hora local.
     private function datetimeAIso(string $valor): string
     {
-        return str_replace(' ', 'T', $valor);
+        return str_replace(' ', 'T', $valor) . 'Z';
     }
 }

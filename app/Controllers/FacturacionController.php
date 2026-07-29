@@ -71,6 +71,9 @@ class FacturacionController extends BaseController
         if ($cambios !== []) {
             $model->update($usuarioId, $cambios);
         }
+        if (isset($cambios['plan_id'])) {
+            TicketsConsultaController::emitirTicketsDePlan($usuarioId, (int) $cambios['plan_id']);
+        }
 
         if (array_key_exists('addons', $dto)) {
             $this->sincronizarAddons($usuarioId, (array) $dto['addons']);
@@ -95,6 +98,7 @@ class FacturacionController extends BaseController
             'tarjeta_marca'     => 'Visa',
             'tarjeta_ultimos4'  => '4242',
         ]);
+        TicketsConsultaController::emitirTicketsDePlan($usuarioId, (int) $planBase['id']);
     }
 
     private function toDto(int $usuarioId): ?array
@@ -176,6 +180,10 @@ class FacturacionController extends BaseController
                 'add_on_id'              => $addOn['id'],
                 'cantidad'               => (int) $cantidad,
             ]);
+
+            if ($slug === 'consultoria-1a1') {
+                TicketsConsultaController::emitirTicketsDeAddon($usuarioId, (int) $cantidad);
+            }
         }
     }
 
