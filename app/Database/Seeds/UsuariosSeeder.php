@@ -12,9 +12,18 @@ class UsuariosSeeder extends Seeder
 {
     public function run(): void
     {
+        // El usuario admin/administrador de muestra pasó de usuario 'admin' a 'administrador' para
+        // no chocar con el username 'admin' que suelen usar los superusuarios reales en producción
+        // (ver SuperusuarioProduccionSeeder). Si ya corrió esta seeder antes con el nombre viejo,
+        // renombrar la fila existente en vez de crear un duplicado.
+        $viejoAdmin = $this->db->table('usuarios')->where('usuario', 'admin')->where('rol', 'administrador')->get()->getRowArray();
+        if ($viejoAdmin !== null) {
+            $this->db->table('usuarios')->where('id', $viejoAdmin['id'])->update(['usuario' => 'administrador']);
+        }
+
         $usuarios = [
             ['nombre' => 'Carlos Núñez', 'usuario' => 'superuser', 'password' => 'Super#2026', 'rol' => 'superusuario', 'origen' => null],
-            ['nombre' => 'María Quispe', 'usuario' => 'admin', 'password' => 'Admin#2026', 'rol' => 'administrador', 'origen' => null],
+            ['nombre' => 'María Quispe', 'usuario' => 'administrador', 'password' => 'Admin#2026', 'rol' => 'administrador', 'origen' => null],
             ['nombre' => 'Roberto Salas', 'usuario' => 'coord.asesorias', 'password' => 'Asesorias#2026', 'rol' => 'administrativo_asesorias', 'origen' => null],
             ['nombre' => 'Juan Pérez', 'usuario' => 'cliente', 'password' => 'Cliente#2026', 'rol' => 'cliente', 'origen' => 'alumno'],
             ['nombre' => 'Ana Gómez', 'usuario' => 'cliente2', 'password' => 'Cliente#2026', 'rol' => 'cliente', 'origen' => 'externo'],
