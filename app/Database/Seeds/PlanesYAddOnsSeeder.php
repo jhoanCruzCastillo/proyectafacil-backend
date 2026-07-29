@@ -14,7 +14,7 @@ class PlanesYAddOnsSeeder extends Seeder
         $planes = [
             [
                 'numero_nivel' => 0, 'nombre' => 'Pedagógico', 'precio' => 50, 'periodicidad' => 'Único',
-                'limite_fichas_base' => 2, 'limite_usuarios_base' => 1,
+                'limite_fichas_base' => 2, 'limite_consultas_base' => 1, 'limite_usuarios_base' => 1,
                 'features' => [
                     'Uso para entrenar el llenado de las plantillas',
                     'Limitado a pruebas concretas y ejercicios ya diseñados',
@@ -24,26 +24,24 @@ class PlanesYAddOnsSeeder extends Seeder
             ],
             [
                 'numero_nivel' => 1, 'nombre' => 'Profesional', 'precio' => 150, 'periodicidad' => 'Mensual',
-                'limite_fichas_base' => 3, 'limite_usuarios_base' => 1,
+                'limite_fichas_base' => 3, 'limite_consultas_base' => 3, 'limite_usuarios_base' => 1,
                 'features' => [
                     'Llenado de plantillas con proyectos reales',
                     'Ayuda de la inteligencia artificial para mejorar títulos y textos',
                     'Asistencia de dónde encontrar referencias de llenado en el curso',
                     'Asesor de IA 24/7 para llenado de las plantillas',
                     'Límite de 1 usuario y hasta 3 plantillas simultáneas',
-                    'Acceso a mentorías grupales en línea',
                     'Incluye todos los formatos',
                 ],
             ],
             [
                 'numero_nivel' => 2, 'nombre' => 'Premium', 'precio' => 250, 'periodicidad' => 'Mensual',
-                'limite_fichas_base' => 10, 'limite_usuarios_base' => 3,
+                'limite_fichas_base' => 10, 'limite_consultas_base' => 6, 'limite_usuarios_base' => 3,
                 'features' => [
                     'Hasta 3 usuarios colaborativos',
                     'Hasta 10 plantillas simultáneas',
                     'Histórico de cambio en las plantillas llenadas',
                     'Sugerencias inteligentes de IA',
-                    'Acceso a sección de preguntas y respuestas en las mentorías grupales',
                 ],
             ],
         ];
