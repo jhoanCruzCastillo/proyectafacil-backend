@@ -31,6 +31,10 @@ class UsuariosDemoProduccionSeeder extends Seeder
             ['nombre' => 'Juan Pérez', 'usuario' => 'cliente', 'password' => 'Cliente#2026', 'rol' => 'cliente', 'origen' => 'alumno'],
             ['nombre' => 'Ana Gómez', 'usuario' => 'cliente2', 'password' => 'Cliente#2026', 'rol' => 'cliente', 'origen' => 'externo'],
             ['nombre' => 'Pedro Ríos', 'usuario' => 'asesor1', 'password' => 'Asesor#2026', 'rol' => 'asesor', 'origen' => null],
+            // No aparece en el desplegable de acceso rápido del login, pero AsesoriasDemoSeeder
+            // depende de que 'asesor2' exista (lo referencia en varias solicitudes de ejemplo) —
+            // se siembra igual para que ese seeder no falle por una FK inválida.
+            ['nombre' => 'Laura Medina', 'usuario' => 'asesor2', 'password' => 'Asesor#2026', 'rol' => 'asesor', 'origen' => null],
         ];
 
         $ahora = date('Y-m-d H:i:s');
