@@ -19,6 +19,9 @@ class UsuariosController extends BaseController
     {
         $filas = (new UsuarioModel())->orderBy('id')->findAll();
 
+        // DEBUG TEMPORAL — quitar cuando se resuelva el issue de producción devolviendo datos mock.
+        error_log('[DEBUG usuarios.index] host=' . ($_SERVER['HTTP_HOST'] ?? '?') . ' filas_en_bd=' . count($filas) . ' usuario_id_en_sesion=' . (session()->get('usuario_id') ?? 'null'));
+
         return $this->response->setJSON(array_map([$this, 'toDto'], $filas));
     }
 
