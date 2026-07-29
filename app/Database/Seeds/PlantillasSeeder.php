@@ -36,6 +36,13 @@ class PlantillasSeeder extends Seeder
                 continue;
             }
 
+            // Idempotente: si ya existe una plantilla con este código (re-ejecución tras un corte a
+            // medias, o correr el seeder dos veces), se salta en vez de fallar por unique constraint.
+            $yaExiste = $this->db->table('plantillas')->where('codigo', $p['codigo'])->countAllResults() > 0;
+            if ($yaExiste) {
+                continue;
+            }
+
             $this->db->table('plantillas')->insert([
                 'sector_id'           => $sectorId,
                 'codigo'              => $p['codigo'],
