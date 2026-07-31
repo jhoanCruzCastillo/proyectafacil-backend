@@ -73,6 +73,8 @@ $routes->group('api', ['filter' => 'auth'], static function (RouteCollection $ro
     $routes->get('docentes', 'DocentesController::index');
     $routes->get('docentes/admin', 'DocentesController::indexAdmin');
     $routes->put('docentes/(:num)/horario', 'DocentesController::actualizarHorario/$1');
+    $routes->get('docentes/(:num)/excepciones', 'DocentesController::excepciones/$1');
+    $routes->put('docentes/(:num)/excepciones', 'DocentesController::actualizarExcepciones/$1');
     $routes->get('disponibilidad-horarios', 'DocentesController::disponibilidadAgregada');
 
     $routes->get('asesoria/solicitudes', 'AsesoriaController::misSolicitudes');
