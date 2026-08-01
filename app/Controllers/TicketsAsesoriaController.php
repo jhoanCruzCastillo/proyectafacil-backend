@@ -347,19 +347,27 @@ class TicketsAsesoriaController extends BaseController
     // Honorario = valor fijo del ticket × N.º de tickets completados en el periodo, sin importar
     // si el ticket vino de plan o add-on (docs §4 Fase 5 punto 3). Se agrupa por asesor porque la
     // autorización de pago es en bloque, no ticket por ticket.
-    private const HONORARIO_POR_TICKET = 550;
+    // El valor vive en Config\Asesoria porque la pantalla "Mi Liquidación" del asesor tiene que
+    // mostrar exactamente el mismo número que calcula acá el administrativo.
+    private function honorarioPorTicket(): int
+    {
+        return config('Asesoria')->honorarioPorTicket;
+    }
 
     public function liquidaciones(): ResponseInterface
     {
         $periodo = (string) ($this->request->getGet('periodo') ?? date('Y-m'));
         [$inicio, $fin] = $this->rangoDelPeriodo($periodo);
+        $honorario = $this->honorarioPorTicket();
 
+        // COALESCE: `completado_en` es la fecha real de cierre, pero las filas anteriores a esa
+        // columna podrían no tenerla — se cae a updated_at como antes para no perderlas.
         $filas = db_connect()->table('solicitudes_asesoria sa')
             ->select('sa.docente_id, u.nombre as docente_nombre, u.foto_url as docente_foto_url, sa.pago_autorizado_en')
             ->join('usuarios u', 'u.id = sa.docente_id')
             ->where('sa.estado', 'completado')
-            ->where('sa.updated_at >=', $inicio)
-            ->where('sa.updated_at <', $fin)
+            ->where('COALESCE(sa.completado_en, sa.updated_at) >=', $inicio)
+            ->where('COALESCE(sa.completado_en, sa.updated_at) <', $fin)
             ->get()->getResultArray();
 
         $porAsesor = [];
@@ -374,7 +382,7 @@ class TicketsAsesoriaController extends BaseController
             }
         }
 
-        $asesores = array_map(static function (array $a) {
+        $asesores = array_map(static function (array $a) use ($honorario) {
             $pendientes = $a['completados'] - $a['pagados'];
 
             return [
@@ -383,8 +391,8 @@ class TicketsAsesoriaController extends BaseController
                 'asesorFotoUrl'      => $a['fotoUrl'],
                 'ticketsCompletados' => $a['completados'],
                 'ticketsPendientes'  => $pendientes,
-                'honorarioTotal'     => $a['completados'] * self::HONORARIO_POR_TICKET,
-                'honorarioPendiente' => $pendientes * self::HONORARIO_POR_TICKET,
+                'honorarioTotal'     => $a['completados'] * $honorario,
+                'honorarioPendiente' => $pendientes * $honorario,
                 'todoPagado'         => $pendientes === 0,
             ];
         }, array_values($porAsesor));
@@ -393,7 +401,7 @@ class TicketsAsesoriaController extends BaseController
 
         return $this->response->setJSON([
             'periodo'           => $periodo,
-            'honorarioPorTicket' => self::HONORARIO_POR_TICKET,
+            'honorarioPorTicket' => $honorario,
             'asesores'          => $asesores,
         ]);
     }

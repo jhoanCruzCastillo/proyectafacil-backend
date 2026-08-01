@@ -124,6 +124,52 @@ class DocentesController extends BaseController
         return $this->response->setJSON($this->toDtoHorario($docenteId));
     }
 
+    // Excepciones puntuales por FECHA real sobre el horario recurrente — pedido explícito del
+    // usuario: el docente puede marcar una fecha específica como "ocupado" aunque ese día de la
+    // semana normalmente esté disponible. Mismo patrón "reemplazar todo" que actualizarHorario().
+    public function excepciones($docenteId = null): ResponseInterface
+    {
+        return $this->response->setJSON($this->toDtoExcepciones((int) $docenteId));
+    }
+
+    public function actualizarExcepciones($docenteId = null): ResponseInterface
+    {
+        $docenteId   = (int) $docenteId;
+        $dto         = $this->request->getJSON(true) ?? [];
+        $excepciones = is_array($dto['excepciones'] ?? null) ? $dto['excepciones'] : [];
+
+        $db = db_connect();
+        $db->transStart();
+        $db->table('horario_excepciones_docente')->where('usuario_id', $docenteId)->delete();
+        foreach ($excepciones as $e) {
+            $db->table('horario_excepciones_docente')->insert([
+                'usuario_id'  => $docenteId,
+                'fecha'       => (string) ($e['fecha'] ?? date('Y-m-d')),
+                'hora_inicio' => $this->conSegundos((string) ($e['horaInicio'] ?? '00:00')),
+                'hora_fin'    => $this->conSegundos((string) ($e['horaFin'] ?? '00:00')),
+                'created_at'  => date('Y-m-d H:i:s'),
+            ]);
+        }
+        $db->transComplete();
+
+        return $this->response->setJSON($this->toDtoExcepciones($docenteId));
+    }
+
+    private function toDtoExcepciones(int $docenteId): array
+    {
+        $filas = db_connect()->table('horario_excepciones_docente')
+            ->where('usuario_id', $docenteId)
+            ->orderBy('fecha', 'ASC')->orderBy('hora_inicio', 'ASC')
+            ->get()->getResultArray();
+
+        return array_map(static fn (array $e) => [
+            'id'         => (string) $e['id'],
+            'fecha'      => substr((string) $e['fecha'], 0, 10),
+            'horaInicio' => substr((string) $e['hora_inicio'], 0, 5),
+            'horaFin'    => substr((string) $e['hora_fin'], 0, 5),
+        ], $filas);
+    }
+
     private function toDtoDocente(array $d, array $todosHorarios): array
     {
         $propios = array_values(array_filter($todosHorarios, static fn (array $h) => (int) $h['usuario_id'] === (int) $d['id']));

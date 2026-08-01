@@ -63,6 +63,10 @@ $routes->group('api', ['filter' => 'auth'], static function (RouteCollection $ro
     $routes->get('especialidades-asesor/(:num)', 'EspecialidadesAsesorController::index/$1');
     $routes->put('especialidades-asesor/(:num)', 'EspecialidadesAsesorController::guardar/$1');
 
+    $routes->get('subtemas-especialidad', 'SubtemasEspecialidadController::index');
+    $routes->get('subtemas-asesor/(:num)', 'SubtemasEspecialidadController::delAsesor/$1');
+    $routes->put('subtemas-asesor/(:num)', 'SubtemasEspecialidadController::guardarDelAsesor/$1');
+
     $routes->get('actividad', 'ActividadController::index');
     $routes->post('actividad', 'ActividadController::push');
 
@@ -73,9 +77,16 @@ $routes->group('api', ['filter' => 'auth'], static function (RouteCollection $ro
     $routes->get('docentes', 'DocentesController::index');
     $routes->get('docentes/admin', 'DocentesController::indexAdmin');
     $routes->put('docentes/(:num)/horario', 'DocentesController::actualizarHorario/$1');
+    $routes->get('docentes/(:num)/excepciones', 'DocentesController::excepciones/$1');
+    $routes->put('docentes/(:num)/excepciones', 'DocentesController::actualizarExcepciones/$1');
     $routes->get('disponibilidad-horarios', 'DocentesController::disponibilidadAgregada');
 
     $routes->get('asesoria/solicitudes', 'AsesoriaController::misSolicitudes');
+    $routes->get('asesoria/no-atendidas', 'AsesoriaController::noAtendidas');
+
+    $routes->get('mi-liquidacion/historico', 'MiLiquidacionController::historico');
+    $routes->get('mi-liquidacion/pendiente', 'MiLiquidacionController::pendiente');
+    $routes->get('mi-liquidacion/mes', 'MiLiquidacionController::mes');
     $routes->post('asesoria/solicitudes', 'AsesoriaController::crear');
     $routes->post('asesoria/solicitudes/(:num)/aceptar', 'AsesoriaController::aceptar/$1');
     $routes->post('asesoria/solicitudes/(:num)/finalizar', 'AsesoriaController::finalizar/$1');

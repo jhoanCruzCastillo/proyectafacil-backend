@@ -21,7 +21,17 @@ use CodeIgniter\Database\Seeder;
 //                              vacíos.
 // 4. CoberturaHorariosDemoSeeder — franjas adicionales de horario para que el mapa de calor de
 //                              Cobertura de horarios tenga más variedad.
-// 5. ChatsActivosPruebaJuanSeeder — rellena con una conversación de ejemplo los chats de Juan que
+// 5. AsesoriasDemoAsesor1Seeder — le da a asesor1 (Pedro Ríos) sus sectores de especialidad y un
+//                              lote de consultas en varios estados. AsesoriasDemoSeeder solo cubre
+//                              a los docentes demo 12-14, no a asesor1.
+// 6. SubtemasEspecialidadSeeder — catálogo de subtemas por sector, y marca algunos para asesor1.
+//                              Va DESPUÉS del paso 5: para elegir qué subtemas marcarle necesita
+//                              que ya tenga sectores asignados.
+// 7. CronogramaDemoAsesor1Seeder / NoAtendidasDemoAsesor1Seeder / LiquidacionDemoAsesor1Seeder —
+//                              el resto de pantallas del asesor demo: citas del cronograma,
+//                              consultas perdidas e historial de liquidación. El de liquidación
+//                              necesita los subtemas del paso 6.
+// 7. ChatsActivosPruebaJuanSeeder — rellena con una conversación de ejemplo los chats de Juan que
 //                              ya quedaron en estado "asignado" por el paso 3.
 //
 // Deliberadamente NO incluye TicketsPruebaJuanSeeder — ese es una herramienta de prueba puntual
@@ -42,6 +52,11 @@ class DeployDemoCompletoSeeder extends Seeder
             UsuariosDemoProduccionSeeder::class,
             AsesoriasDemoSeeder::class,
             CoberturaHorariosDemoSeeder::class,
+            AsesoriasDemoAsesor1Seeder::class,
+            SubtemasEspecialidadSeeder::class,
+            CronogramaDemoAsesor1Seeder::class,
+            NoAtendidasDemoAsesor1Seeder::class,
+            LiquidacionDemoAsesor1Seeder::class,
             ChatsActivosPruebaJuanSeeder::class,
         ];
 
