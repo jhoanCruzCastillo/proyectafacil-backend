@@ -235,10 +235,15 @@ class AsesoriaController extends BaseController
 
     public function finalizar($id = null): ResponseInterface
     {
-        $id = (int) $id;
+        $id    = (int) $id;
+        $ahora = date('Y-m-d H:i:s');
+        // `completado_en` se escribe una sola vez y no se vuelve a tocar — es la fecha sobre la que
+        // se calculan las liquidaciones, y no puede moverse por ediciones posteriores de la fila
+        // (calificación del alumno, autorización de pago) como sí le pasa a `updated_at`.
         db_connect()->table('solicitudes_asesoria')->where('id', $id)->update([
-            'estado'     => 'completado',
-            'updated_at' => date('Y-m-d H:i:s'),
+            'estado'        => 'completado',
+            'completado_en' => $ahora,
+            'updated_at'    => $ahora,
         ]);
         $this->consumirTicket($id);
 

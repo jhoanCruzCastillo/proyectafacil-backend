@@ -83,6 +83,10 @@ $routes->group('api', ['filter' => 'auth'], static function (RouteCollection $ro
 
     $routes->get('asesoria/solicitudes', 'AsesoriaController::misSolicitudes');
     $routes->get('asesoria/no-atendidas', 'AsesoriaController::noAtendidas');
+
+    $routes->get('mi-liquidacion/historico', 'MiLiquidacionController::historico');
+    $routes->get('mi-liquidacion/pendiente', 'MiLiquidacionController::pendiente');
+    $routes->get('mi-liquidacion/mes', 'MiLiquidacionController::mes');
     $routes->post('asesoria/solicitudes', 'AsesoriaController::crear');
     $routes->post('asesoria/solicitudes/(:num)/aceptar', 'AsesoriaController::aceptar/$1');
     $routes->post('asesoria/solicitudes/(:num)/finalizar', 'AsesoriaController::finalizar/$1');
