@@ -82,6 +82,7 @@ $routes->group('api', ['filter' => 'auth'], static function (RouteCollection $ro
     $routes->get('disponibilidad-horarios', 'DocentesController::disponibilidadAgregada');
 
     $routes->get('asesoria/solicitudes', 'AsesoriaController::misSolicitudes');
+    $routes->get('asesoria/no-atendidas', 'AsesoriaController::noAtendidas');
     $routes->post('asesoria/solicitudes', 'AsesoriaController::crear');
     $routes->post('asesoria/solicitudes/(:num)/aceptar', 'AsesoriaController::aceptar/$1');
     $routes->post('asesoria/solicitudes/(:num)/finalizar', 'AsesoriaController::finalizar/$1');

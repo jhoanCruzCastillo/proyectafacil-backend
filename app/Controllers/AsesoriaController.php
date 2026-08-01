@@ -52,6 +52,85 @@ class AsesoriaController extends BaseController
         return $this->response->setJSON(array_map([$this, 'toDtoSolicitud'], $filas));
     }
 
+    // Pantalla "No atendidas / reasignadas" del asesor — dos listas que le muestran lo que dejó
+    // pasar, para que dimensione cuánto trabajo está perdiendo:
+    //  - noAceptadas: le llegaron por broadcast pero terminaron en manos de otro asesor, vencieron
+    //    sin que nadie respondiera, o el alumno las canceló mientras esperaba.
+    //  - agendadasNoAtendidas: eran suyas y con hora fijada, pero la hora ya pasó y nunca se
+    //    cerraron como completadas.
+    public function noAtendidas(): ResponseInterface
+    {
+        $usuarioId = (int) ($this->request->getGet('usuarioId') ?? 0);
+        $db        = db_connect();
+
+        $notificadas = $db->table('solicitud_notificaciones')->select('solicitud_id')->where('asesor_id', $usuarioId)->get()->getResultArray();
+        $ids         = array_map(static fn (array $n) => (int) $n['solicitud_id'], $notificadas);
+
+        $noAceptadas = [];
+        if ($ids !== []) {
+            $filas = $this->builderSolicitudes($db)
+                ->whereIn('sa.id', $ids)
+                ->groupStart()
+                    ->where('sa.docente_id IS NULL', null, false)
+                    ->orWhere('sa.docente_id !=', $usuarioId)
+                ->groupEnd()
+                ->orderBy('sa.created_at', 'DESC')
+                ->get()->getResultArray();
+
+            $noAceptadas = array_map(function (array $s): array {
+                $dto = $this->toDtoSolicitud($s);
+                $dto['motivo'] = $this->motivoNoAceptada($s);
+
+                return $dto;
+            }, $filas);
+        }
+
+        // El filtro "ya pasó la hora" se hace en PHP y no en SQL a propósito: sumar fecha + hora
+        // en la consulta obliga a sintaxis distinta por motor (Postgres/MySQL) y el volumen por
+        // asesor es chico.
+        $agendadas = $this->builderSolicitudes($db)
+            ->where('sa.docente_id', $usuarioId)
+            ->where('sa.estado', 'agendado')
+            ->where('sa.horario_fecha IS NOT NULL', null, false)
+            ->orderBy('sa.horario_fecha', 'DESC')
+            ->get()->getResultArray();
+
+        $ahora = time();
+        $agendadasNoAtendidas = [];
+        foreach ($agendadas as $s) {
+            $fin = strtotime($s['horario_fecha'] . ' ' . ($s['horario_hora_fin'] ?? '23:59:59'));
+            if ($fin !== false && $fin < $ahora) {
+                $agendadasNoAtendidas[] = $this->toDtoSolicitud($s);
+            }
+        }
+
+        return $this->response->setJSON([
+            'noAceptadas'          => $noAceptadas,
+            'agendadasNoAtendidas' => $agendadasNoAtendidas,
+        ]);
+    }
+
+    private function builderSolicitudes(\CodeIgniter\Database\BaseConnection $db)
+    {
+        return $db->table('solicitudes_asesoria sa')
+            ->select('sa.*, c.nombre as cliente_nombre, c.foto_url as cliente_foto_url, d.nombre as docente_nombre, d.foto_url as docente_foto_url, s.nombre as sector_nombre')
+            ->join('usuarios c', 'c.id = sa.cliente_id')
+            ->join('usuarios d', 'd.id = sa.docente_id', 'left')
+            ->join('sectores s', 's.id = sa.sector_id', 'left');
+    }
+
+    private function motivoNoAceptada(array $s): string
+    {
+        if ($s['docente_id'] !== null) {
+            return 'tomada_por_otro';
+        }
+        if ($s['estado'] === 'cancelado') {
+            return 'cancelada_por_alumno';
+        }
+
+        return 'vencida_sin_respuesta';
+    }
+
     public function crear(): ResponseInterface
     {
         $dto               = $this->request->getJSON(true) ?? [];
