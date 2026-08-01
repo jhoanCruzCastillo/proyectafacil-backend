@@ -17,15 +17,11 @@ class AsesoriasDemoAsesor1Seeder extends Seeder
 {
     private const MARCADOR = 'Necesito ayuda con el diagnóstico de la unidad productora (demo asesor1).';
 
+    /** Sectores MEF que atiende el asesor demo — es lo que abre marcado en "Temas de especialidad". */
+    private const SECTORES_PROPIOS = ['SAL', 'VYS', 'DIS'];
+
     public function run(): void
     {
-        $yaExiste = $this->db->table('solicitudes_asesoria')->where('mensaje_inicial', self::MARCADOR)->countAllResults() > 0;
-        if ($yaExiste) {
-            echo "Ya sembrado antes — no se hace nada.\n";
-
-            return;
-        }
-
         $pedro = $this->db->table('usuarios')->where('usuario', 'asesor1')->get()->getRowArray();
         if ($pedro === null) {
             echo "No existe el usuario 'asesor1' — corre UsuariosSeeder o UsuariosDemoProduccionSeeder primero.\n";
@@ -35,6 +31,20 @@ class AsesoriasDemoAsesor1Seeder extends Seeder
         $pedroId = (int) $pedro['id'];
 
         $sectorId = $this->sectorIdsPorCodigo();
+
+        // Va ANTES del corte de idempotencia: AsesoriasDemoSeeder solo le da especialidades a los
+        // docentes demo (usuarios 12-14), no a asesor1, así que sin esto su pantalla "Temas de
+        // especialidad" arranca vacía en una BD recién sembrada — y sin sectores tampoco hay
+        // subtemas que marcarle después.
+        $this->asignarEspecialidades($pedroId, $sectorId);
+
+        $yaExiste = $this->db->table('solicitudes_asesoria')->where('mensaje_inicial', self::MARCADOR)->countAllResults() > 0;
+        if ($yaExiste) {
+            echo "Solicitudes ya sembradas antes — solo se verificaron las especialidades.\n";
+
+            return;
+        }
+
         $alumnos = $this->alumnosDisponibles();
         if (count($alumnos) < 4) {
             echo "No hay suficientes alumnos demo (cliente/cliente2/alumno.*) — corre AsesoriasDemoSeeder primero.\n";
@@ -105,6 +115,28 @@ class AsesoriasDemoAsesor1Seeder extends Seeder
         }
 
         echo "Listo — 4 solicitudes demo nuevas para asesor1 (Pedro Ríos): 2 por agendar, 2 agendadas.\n";
+    }
+
+    private function asignarEspecialidades(int $pedroId, array $sectorId): void
+    {
+        $nuevas = 0;
+        foreach (self::SECTORES_PROPIOS as $codigo) {
+            if (! isset($sectorId[$codigo])) {
+                continue;
+            }
+            $yaTiene = $this->db->table('asesor_especialidades')
+                ->where('usuario_id', $pedroId)
+                ->where('sector_id', $sectorId[$codigo])
+                ->countAllResults() > 0;
+            if ($yaTiene) {
+                continue;
+            }
+            $this->db->table('asesor_especialidades')->insert(['usuario_id' => $pedroId, 'sector_id' => $sectorId[$codigo]]);
+            $nuevas++;
+        }
+        if ($nuevas > 0) {
+            echo "Listo — {$nuevas} especialidades asignadas a asesor1 (Pedro Ríos).\n";
+        }
     }
 
     private function sectorIdsPorCodigo(): array
