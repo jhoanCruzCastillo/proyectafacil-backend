@@ -63,6 +63,10 @@ $routes->group('api', ['filter' => 'auth'], static function (RouteCollection $ro
     $routes->get('especialidades-asesor/(:num)', 'EspecialidadesAsesorController::index/$1');
     $routes->put('especialidades-asesor/(:num)', 'EspecialidadesAsesorController::guardar/$1');
 
+    $routes->get('subtemas-especialidad', 'SubtemasEspecialidadController::index');
+    $routes->get('subtemas-asesor/(:num)', 'SubtemasEspecialidadController::delAsesor/$1');
+    $routes->put('subtemas-asesor/(:num)', 'SubtemasEspecialidadController::guardarDelAsesor/$1');
+
     $routes->get('actividad', 'ActividadController::index');
     $routes->post('actividad', 'ActividadController::push');
 
