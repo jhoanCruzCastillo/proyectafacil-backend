@@ -32,6 +32,10 @@ $routes->group('api', ['filter' => 'auth'], static function (RouteCollection $ro
     $routes->delete('plantillas/(:num)/archivos/(:num)', 'ArchivosController::deleteArchivo/$1/$2');
     $routes->post('plantillas/(:num)/archivos/(:num)/asignar', 'ArchivosController::asignarArchivo/$1/$2');
 
+    // Imágenes de campos tipo `imagen`: el binario se sube a Cloudinary y en el JSON se guarda su URL.
+    $routes->post('imagenes', 'ImagenesController::subir');
+    $routes->get('imagenes/capacidades', 'ImagenesController::capacidades');
+
     $routes->get('ejemplos', 'EjemplosController::index');
     $routes->get('ejemplos/(:num)', 'EjemplosController::show/$1');
     $routes->post('ejemplos', 'EjemplosController::create');
