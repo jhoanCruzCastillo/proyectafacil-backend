@@ -55,4 +55,25 @@ class CloudinaryUploader
 
         return (string) $resultado['secure_url'];
     }
+
+    /**
+     * Sube una imagen (resource_type=image, a diferencia de subirExcel): así Cloudinary la sirve
+     * como imagen real y quedan disponibles sus transformaciones de entrega (ancho, formato, etc.).
+     * Acepta las mismas fuentes que subirExcel — en la práctica llega un data URI, porque el
+     * frontend extrae el binario del .xlsx y no tiene un archivo en disco que ofrecer.
+     *
+     * @return string URL segura (https) de la imagen subida
+     */
+    public function subirImagen(string $fuente, string $nombreOriginal): string
+    {
+        $resultado = $this->uploadApi->upload($fuente, [
+            'resource_type'     => 'image',
+            'folder'            => 'proyecta-facil/imagenes',
+            'use_filename'      => true,
+            'unique_filename'   => true,
+            'filename_override' => $nombreOriginal,
+        ]);
+
+        return (string) $resultado['secure_url'];
+    }
 }

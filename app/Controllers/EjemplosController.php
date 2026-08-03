@@ -8,11 +8,13 @@ use CodeIgniter\HTTP\ResponseInterface;
 
 // Espejo de `Ejemplo` en frontend/src/types/index.ts. `valores` ya no es una columna propia (ni la
 // vieja valores_campo de v1) — vive en archivos.contenido_json, en la fila propietario_tipo='ejemplo'
-// asociada a este ejemplo (creada aparte por ExcelEjemplosController cuando se copia el Excel). Si
-// el ejemplo todavía no tiene esa fila (por ejemplo recién creado, antes de copiar el Excel),
-// `valores` es `{}` y los intentos de guardarlo se ignoran silenciosamente — así es como ya se
-// comporta hoy el flujo real (usePlantillaEditor.ts: se crea el ejemplo con valores:{} y recién
-// después se copia el Excel).
+// asociada a este ejemplo.
+//
+// Esa fila la puede crear cualquiera de los dos caminos, el que llegue primero: copiar el Excel
+// (ExcelEjemplosController::set) o guardar valores (update, más abajo). Antes solo la creaba el
+// primero, y guardar valores en un ejemplo recién creado devolvía 200 sin persistir nada.
+// Cuando la crea `update`, va con `url` vacía: la fila es solo el contenedor de los valores y para
+// el cliente el ejemplo sigue sin Excel propio.
 class EjemplosController extends BaseController
 {
     private array $tipologias = ['optimizacion', 'ampliacion_marginal', 'reposicion', 'rehabilitacion'];
@@ -62,13 +64,28 @@ class EjemplosController extends BaseController
         $dto = $this->request->getJSON(true) ?? [];
 
         if (array_key_exists('valores', $dto)) {
-            $archivo = (new ArchivoModel())->where('propietario_tipo', 'ejemplo')->where('ejemplo_id', $id)->first();
+            $archivoModel = new ArchivoModel();
+            $archivo      = $archivoModel->where('propietario_tipo', 'ejemplo')->where('ejemplo_id', $id)->first();
+            $contenido    = json_encode(['valores' => $dto['valores']], JSON_UNESCAPED_UNICODE);
+
             if ($archivo) {
-                (new ArchivoModel())->update($archivo['id'], [
-                    'contenido_json' => json_encode(['valores' => $dto['valores']], JSON_UNESCAPED_UNICODE),
+                $archivoModel->update($archivo['id'], ['contenido_json' => $contenido]);
+            } else {
+                // Antes esto se descartaba en silencio, asumiendo que un ejemplo siempre copiaba su
+                // Excel antes de tener valores. Ya no es cierto: se crea el ejemplo con "Nuevo" y se
+                // llenan (o se vuelcan desde un Excel) sin copiar nada — y todo se perdía devolviendo
+                // un 200. La fila se crea ahora bajo demanda, solo como contenedor de los valores:
+                // `url` vacía significa "sin Excel propio todavía" (ver ExcelEjemplosController::get).
+                $archivoModel->insert([
+                    'propietario_tipo' => 'ejemplo',
+                    'ejemplo_id'       => (int) $id,
+                    'plantilla_id'     => null,
+                    'nombre'           => '',
+                    'url'              => '',
+                    'contenido_json'   => $contenido,
+                    'fecha_subida'     => date('Y-m-d H:i:s'),
                 ]);
             }
-            // Sin archivo todavía: se ignora (ver nota de clase) — no es un error del cliente.
         }
 
         $cambios = $this->fromDto($dto, soloProvistos: true);

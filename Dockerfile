@@ -11,6 +11,12 @@ RUN apt-get update && apt-get install -y \
     && a2enmod rewrite \
     && rm -rf /var/lib/apt/lists/*
 
+# NOTA: aquí estuvo `libreoffice-draw` para convertir EMF/WMF a PNG al volcar imágenes desde el
+# Excel. Se quitó por decisión del usuario: traer esas imágenes al JSON no es necesario, y la
+# dependencia costaba ~400 MB de imagen. El código que la usaba (App\Libraries\ConversorImagen)
+# se conserva y se degrada solo: sin el binario, el volcado reporta esas imágenes como omitidas
+# en vez de fallar. Para reactivarlo basta reponer esta capa.
+
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 WORKDIR /var/www/html

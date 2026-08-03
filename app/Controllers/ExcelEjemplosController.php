@@ -17,7 +17,9 @@ class ExcelEjemplosController extends BaseController
     public function get($ejemploId = null): ResponseInterface
     {
         $archivo = (new ArchivoModel())->where('propietario_tipo', 'ejemplo')->where('ejemplo_id', $ejemploId)->first();
-        if (! $archivo) {
+        // `url` vacía = la fila existe solo para guardar los valores del ejemplo, no hay Excel
+        // copiado (ver EjemplosController::update). Para el cliente equivale a no tener archivo.
+        if (! $archivo || ($archivo['url'] ?? '') === '') {
             return $this->response->setJSON(null);
         }
 
