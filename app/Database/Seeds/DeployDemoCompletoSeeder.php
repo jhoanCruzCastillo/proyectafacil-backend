@@ -54,6 +54,7 @@ class DeployDemoCompletoSeeder extends Seeder
             CoberturaHorariosDemoSeeder::class,
             AsesoriasDemoAsesor1Seeder::class,
             SubtemasEspecialidadSeeder::class,
+            ContextosIAGlobalesSeeder::class,
             CronogramaDemoAsesor1Seeder::class,
             NoAtendidasDemoAsesor1Seeder::class,
             LiquidacionDemoAsesor1Seeder::class,
