@@ -23,6 +23,7 @@ class LimpiarBaseDatosSeeder extends Seeder
         'plantilla_tipologia_ioarr', 'ejemplo_tipologia_ioarr', 'archivos', 'ejemplos', 'plantillas',
         'plan_features', 'add_on_niveles_disponibles', 'facturacion_addons', 'facturas', 'facturaciones', 'add_ons', 'planes',
         'actividad_reciente', 'historial_cambio_campos', 'historial_cambios',
+        'contexto_seccion_globales', 'contextos_ia_seccion', 'contextos_ia_globales',
         'horarios_docente', 'horario_excepciones_docente', 'asesor_especialidades', 'asesor_subtemas',
         'subtemas_especialidad', 'mensajes_asesoria', 'solicitud_notificaciones',
         'notificaciones', 'tickets_consulta', 'solicitudes_asesoria', 'configuracion_sla',

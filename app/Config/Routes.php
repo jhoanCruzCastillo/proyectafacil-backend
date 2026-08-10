@@ -88,6 +88,15 @@ $routes->group('api', ['filter' => 'auth'], static function (RouteCollection $ro
     $routes->get('asesoria/solicitudes', 'AsesoriaController::misSolicitudes');
     $routes->get('asesoria/no-atendidas', 'AsesoriaController::noAtendidas');
 
+    $routes->get('plantillas/(:num)/contextos-ia', 'ContextosIAController::index/$1');
+    $routes->put('plantillas/(:num)/contextos-ia/(:segment)', 'ContextosIAController::guardar/$1/$2');
+    $routes->delete('plantillas/(:num)/contextos-ia/(:segment)', 'ContextosIAController::eliminar/$1/$2');
+    $routes->get('contextos-ia/globales', 'ContextosIAController::indexGlobales');
+    $routes->post('contextos-ia/globales', 'ContextosIAController::guardarGlobal');
+    $routes->put('contextos-ia/globales/(:num)', 'ContextosIAController::guardarGlobal/$1');
+
+    $routes->post('asistente-ia/consultar', 'AsistenteIAController::consultar');
+
     $routes->get('mi-liquidacion/historico', 'MiLiquidacionController::historico');
     $routes->get('mi-liquidacion/pendiente', 'MiLiquidacionController::pendiente');
     $routes->get('mi-liquidacion/mes', 'MiLiquidacionController::mes');
