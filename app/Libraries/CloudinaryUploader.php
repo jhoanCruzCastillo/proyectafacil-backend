@@ -76,4 +76,25 @@ class CloudinaryUploader
 
         return (string) $resultado['secure_url'];
     }
+
+    /**
+     * Sube texto plano (Markdown) como archivo .md — mismo patrón que subirExcel/subirImagen, pero
+     * la fuente no llega desde el navegador como data URI: se arma acá a partir del string.
+     * Usado por los contextos IA (por sección, generales de una ficha, y globales).
+     *
+     * @return string URL segura (https) del archivo subido
+     */
+    public function subirMarkdown(string $markdown, string $nombreOriginal): string
+    {
+        $fuente    = 'data:text/markdown;base64,' . base64_encode($markdown);
+        $resultado = $this->uploadApi->upload($fuente, [
+            'resource_type'      => 'raw',
+            'folder'             => 'proyecta-facil/contextos-ia',
+            'use_filename'       => true,
+            'unique_filename'    => true,
+            'filename_override'  => $nombreOriginal,
+        ]);
+
+        return (string) $resultado['secure_url'];
+    }
 }

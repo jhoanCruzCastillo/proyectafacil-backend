@@ -89,11 +89,18 @@ $routes->group('api', ['filter' => 'auth'], static function (RouteCollection $ro
     $routes->get('asesoria/no-atendidas', 'AsesoriaController::noAtendidas');
 
     $routes->get('plantillas/(:num)/contextos-ia', 'ContextosIAController::index/$1');
+    // Rutas de "generales" van ANTES que el (:segment) genérico de sección: si no, "generales" se
+    // interpretaría como un seccionId y nunca llegaría a estos métodos.
+    $routes->get('plantillas/(:num)/contextos-ia/generales', 'ContextosIAController::indexGenerales/$1');
+    $routes->post('plantillas/(:num)/contextos-ia/generales', 'ContextosIAController::guardarGeneral/$1');
+    $routes->put('plantillas/(:num)/contextos-ia/generales/(:num)', 'ContextosIAController::guardarGeneral/$1/$2');
+    $routes->delete('plantillas/(:num)/contextos-ia/generales/(:num)', 'ContextosIAController::eliminarGeneral/$1/$2');
     $routes->put('plantillas/(:num)/contextos-ia/(:segment)', 'ContextosIAController::guardar/$1/$2');
     $routes->delete('plantillas/(:num)/contextos-ia/(:segment)', 'ContextosIAController::eliminar/$1/$2');
     $routes->get('contextos-ia/globales', 'ContextosIAController::indexGlobales');
     $routes->post('contextos-ia/globales', 'ContextosIAController::guardarGlobal');
     $routes->put('contextos-ia/globales/(:num)', 'ContextosIAController::guardarGlobal/$1');
+    $routes->delete('contextos-ia/globales/(:num)', 'ContextosIAController::eliminarGlobal/$1');
 
     $routes->post('asistente-ia/consultar', 'AsistenteIAController::consultar');
 
