@@ -23,7 +23,7 @@ class LlenadoIAController extends BaseController
 
     public function llenarFicha($ejemploId = null): ResponseInterface
     {
-        set_time_limit(600); // 20 secciones × 1 llamada c/u — puede tardar varios minutos.
+        set_time_limit(180); // 1 sección por petición (el cliente itera); margen para OpenAI + contexto.
         $ejemploId = (int) $ejemploId;
 
         $config = config('Ia');
