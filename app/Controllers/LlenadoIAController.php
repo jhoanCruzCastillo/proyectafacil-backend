@@ -68,6 +68,8 @@ class LlenadoIAController extends BaseController
         $generales = $this->contextosGeneralesDe($plantillaId);
 
         $valoresFinal      = [];
+        $estadosFinal      = [];
+        $confianzaFinal    = [];
         $resumenPorSeccion = [];
         $idsAfectados      = [];
 
@@ -83,21 +85,27 @@ class LlenadoIAController extends BaseController
 
             $contextoSeccion = $this->contextoDeSeccion($plantillaId, (string) $seccion['id']);
             $sistema = $this->construirSistema($reglas, $generales, $contextoSeccion, $fuenteVerdad);
-            $usuario = $this->construirPromptSeccion((string) $seccion['nombre'], $campos);
+            $usuario = $this->construirPromptSeccion((string) $seccion['id'], (string) $seccion['nombre'], $campos);
 
             $propuesta = $this->llamarOpenAIJson($config, $sistema, $usuario);
             $aceptados = 0;
             if ($propuesta !== null) {
                 $idsValidos = array_column($campos, 'identificador');
-                foreach ($propuesta as $identificador => $valor) {
+                foreach ($propuesta['valores'] as $identificador => $texto) {
                     if (! in_array($identificador, $idsValidos, true)) {
                         continue; // la IA no puede inventar identificadores que no le pasamos
                     }
-                    $texto = trim((string) $valor);
+                    $texto = trim((string) $texto);
                     if ($texto === '') {
                         continue;
                     }
                     $valoresFinal[$identificador] = $texto;
+                    if (isset($propuesta['estados'][$identificador])) {
+                        $estadosFinal[$identificador] = $propuesta['estados'][$identificador];
+                    }
+                    if (isset($propuesta['confianza'][$identificador])) {
+                        $confianzaFinal[$identificador] = $propuesta['confianza'][$identificador];
+                    }
                     $aceptados++;
                 }
             }
@@ -113,8 +121,10 @@ class LlenadoIAController extends BaseController
         $this->guardarValores($ejemploId, $valoresFinal, $parcial ? array_keys($idsAfectados) : null);
 
         return $this->response->setJSON([
-            'valores'   => (object) $valoresFinal,
-            'secciones' => $resumenPorSeccion,
+            'valores'    => (object) $valoresFinal,
+            'estados'    => (object) $estadosFinal,
+            'confianza'  => (object) $confianzaFinal,
+            'secciones'  => $resumenPorSeccion,
         ]);
     }
 
@@ -226,8 +236,11 @@ class LlenadoIAController extends BaseController
     {
         $partes = [
             'Eres un asistente experto en formulación de proyectos de inversión pública del Perú (Invierte.pe) que llena fichas técnicas oficiales del MEF a partir de la información real de un proyecto.',
-            'Respondes SIEMPRE con un único objeto JSON plano: { "identificador_del_campo": "valor en texto", ... }. Nada de texto fuera del JSON, nada de explicaciones.',
-            'Omite del JSON cualquier campo para el que la fuente de la verdad no tenga información — no lo incluyas con un valor vacío ni inventado, simplemente no lo menciones.',
+            'Respondes SIEMPRE con un único objeto JSON válido (sin markdown). Contrato de salida de ESTA llamada:',
+            '{"seccion_id":"<id>","campos":[{"id":"<identificador>","valor_propuesto":"<texto o null>","estado":"extraido|inferido|requiere_confirmacion|no_encontrado|conflictivo","confianza":0.0,"fuente":"...","evidencia":"..."}]}',
+            'Usa exactamente los identificadores de campo que te pasan en el mensaje de usuario. No inventes ids.',
+            'Si un campo no tiene evidencia en la fuente de la verdad: estado "no_encontrado" y valor_propuesto null. No inventes datos.',
+            'Si la evidencia es explícita en los documentos (p. ej. "Nivel de gobierno: Gobierno Local"), marca estado "extraido" y copia el valor.',
         ];
         if ($reglas !== '') {
             $partes[] = "Reglas de llenado automático:\n{$reglas}";
@@ -243,9 +256,13 @@ class LlenadoIAController extends BaseController
         return implode("\n\n", $partes);
     }
 
-    private function construirPromptSeccion(string $nombreSeccion, array $campos): string
+    private function construirPromptSeccion(string $seccionId, string $nombreSeccion, array $campos): string
     {
-        $lineas = ["Llena los campos de la sección \"{$nombreSeccion}\" según la fuente de la verdad. Campos disponibles:"];
+        $lineas = [
+            "Llena los campos de la sección \"{$nombreSeccion}\" (seccion_id: {$seccionId}) según la fuente de la verdad.",
+            'Devuelve el JSON con el arreglo "campos" usando los identificadores listados abajo.',
+            'Campos disponibles:',
+        ];
         foreach ($campos as $c) {
             $linea = "- {$c['identificador']} — \"{$c['etiqueta']}\" (tipo: {$c['tipo']})";
             $opciones = $c['opciones'] ?? null;
@@ -323,7 +340,9 @@ class LlenadoIAController extends BaseController
         return ($cuerpo !== false && $estado >= 200 && $estado < 300) ? trim((string) $cuerpo) : '';
     }
 
-    /** @return array<string,string>|null mapa identificador => valor propuesto, o null si la llamada falló */
+    /**
+     * @return array{valores: array<string,string>, estados: array<string,string>, confianza: array<string,float>}|null
+     */
     private function llamarOpenAIJson(object $config, string $sistema, string $usuario): ?array
     {
         $ch = curl_init($config->openaiEndpoint);
@@ -332,7 +351,7 @@ class LlenadoIAController extends BaseController
             CURLOPT_POST           => true,
             CURLOPT_POSTFIELDS     => json_encode([
                 'model'                 => $config->openaiModelo,
-                'max_completion_tokens' => 4000,
+                'max_completion_tokens' => 8000,
                 'response_format'       => ['type' => 'json_object'],
                 'messages'              => [
                     ['role' => 'system', 'content' => $sistema],
@@ -364,6 +383,111 @@ class LlenadoIAController extends BaseController
         $texto   = (string) ($json['choices'][0]['message']['content'] ?? '');
         $valores = json_decode($texto, true);
 
-        return is_array($valores) ? $valores : null;
+        if (! is_array($valores)) {
+            log_message('error', '[llenado-ia] OpenAI devolvió JSON no parseable: {texto}', [
+                'texto' => substr($texto, 0, 500),
+            ]);
+
+            return null;
+        }
+
+        return $this->normalizarPropuesta($valores);
+    }
+
+    /**
+     * Acepta el formato rico del Prompt del sistema (`campos[]`) y el mapa plano legado.
+     *
+     * @return array{valores: array<string,string>, estados: array<string,string>, confianza: array<string,float>}
+     */
+    private function normalizarPropuesta(array $raw): array
+    {
+        $valores   = [];
+        $estados   = [];
+        $confianza = [];
+
+        if (isset($raw['campos']) && is_array($raw['campos'])) {
+            foreach ($raw['campos'] as $item) {
+                if (! is_array($item)) {
+                    continue;
+                }
+                $id = trim((string) ($item['id'] ?? $item['identificador'] ?? ''));
+                if ($id === '') {
+                    continue;
+                }
+
+                $estadoRaw = strtolower(trim((string) ($item['estado'] ?? '')));
+                if (in_array($estadoRaw, ['no_encontrado', 'calculado'], true)) {
+                    $estados[$id] = 'no_encontrado';
+                    continue;
+                }
+
+                $texto = $this->valorPropuestoATexto($item['valor_propuesto'] ?? $item['valor'] ?? null);
+                if ($texto === null) {
+                    if ($estadoRaw !== '') {
+                        $estados[$id] = $this->mapearEstado($estadoRaw);
+                    }
+                    continue;
+                }
+
+                $valores[$id] = $texto;
+                $estados[$id] = $this->mapearEstado($estadoRaw !== '' ? $estadoRaw : 'extraido');
+                if (isset($item['confianza']) && is_numeric($item['confianza'])) {
+                    $confianza[$id] = max(0.0, min(1.0, (float) $item['confianza']));
+                }
+            }
+
+            return ['valores' => $valores, 'estados' => $estados, 'confianza' => $confianza];
+        }
+
+        // Formato plano: { "1.01.01": "Gobierno Local", ... }
+        foreach ($raw as $identificador => $valor) {
+            if (! is_string($identificador)) {
+                continue;
+            }
+            if (in_array($identificador, ['seccion_id', 'seccionId', 'campos'], true)) {
+                continue;
+            }
+            $texto = $this->valorPropuestoATexto($valor);
+            if ($texto === null) {
+                continue;
+            }
+            $valores[$identificador] = $texto;
+        }
+
+        return ['valores' => $valores, 'estados' => $estados, 'confianza' => $confianza];
+    }
+
+    /** @return 'extraido'|'inferido'|'requiere_confirmacion'|'no_encontrado' */
+    private function mapearEstado(string $estado): string
+    {
+        return match ($estado) {
+            'extraido' => 'extraido',
+            'inferido' => 'inferido',
+            'requiere_confirmacion', 'conflictivo' => 'requiere_confirmacion',
+            default => 'no_encontrado',
+        };
+    }
+
+    private function valorPropuestoATexto(mixed $valor): ?string
+    {
+        if ($valor === null) {
+            return null;
+        }
+        if (is_bool($valor)) {
+            return $valor ? 'true' : 'false';
+        }
+        if (is_int($valor) || is_float($valor)) {
+            return (string) $valor;
+        }
+        if (is_array($valor) || is_object($valor)) {
+            // Tablas/objetos no entran en este flujo de texto plano.
+            return null;
+        }
+        $texto = trim((string) $valor);
+        if ($texto === '' || strcasecmp($texto, 'null') === 0) {
+            return null;
+        }
+
+        return $texto;
     }
 }
