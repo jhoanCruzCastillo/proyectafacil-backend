@@ -43,6 +43,22 @@ class LlenadoIAController extends BaseController
             return $this->response->setStatusCode(400)->setJSON(['error' => 'Esta ficha todavía no tiene estructura importada']);
         }
 
+        // Filtro opcional: el cliente puede pedir solo algunas secciones para acortar el tiempo.
+        $body       = $this->request->getJSON(true) ?? [];
+        $filtroIds  = $body['seccionIds'] ?? null;
+        $parcial    = false;
+        if (is_array($filtroIds) && $filtroIds !== []) {
+            $filtroIds = array_map('strval', $filtroIds);
+            $secciones = array_values(array_filter(
+                $secciones,
+                static fn (array $s): bool => in_array((string) ($s['id'] ?? ''), $filtroIds, true),
+            ));
+            $parcial = true;
+            if ($secciones === []) {
+                return $this->response->setStatusCode(400)->setJSON(['error' => 'Ninguna de las secciones indicadas existe en esta ficha']);
+            }
+        }
+
         $fuenteVerdad = $this->fuenteDeLaVerdad($ejemploId, $ejemplo['fuente_verdad_texto'] ?? '');
         if (trim($fuenteVerdad) === '') {
             return $this->response->setStatusCode(400)->setJSON(['error' => 'Carga al menos un documento o escribe información del proyecto antes de llenar con IA']);
@@ -51,14 +67,18 @@ class LlenadoIAController extends BaseController
         $reglas    = $this->contenidoGlobalPorNombre('Reglas de llenado automático con IA');
         $generales = $this->contextosGeneralesDe($plantillaId);
 
-        $valoresFinal   = [];
+        $valoresFinal      = [];
         $resumenPorSeccion = [];
+        $idsAfectados      = [];
 
         foreach ($secciones as $seccion) {
-            $hoja   = (string) ($seccion['hoja'] ?? '');
             $campos = $this->camposLlenables($seccion);
             if ($campos === []) {
                 continue;
+            }
+
+            foreach ($campos as $c) {
+                $idsAfectados[(string) $c['identificador']] = true;
             }
 
             $contextoSeccion = $this->contextoDeSeccion($plantillaId, (string) $seccion['id']);
@@ -90,7 +110,7 @@ class LlenadoIAController extends BaseController
             ];
         }
 
-        $this->reemplazarValores($ejemploId, $valoresFinal);
+        $this->guardarValores($ejemploId, $valoresFinal, $parcial ? array_keys($idsAfectados) : null);
 
         return $this->response->setJSON([
             'valores'   => (object) $valoresFinal,
@@ -245,12 +265,33 @@ class LlenadoIAController extends BaseController
         return implode("\n", $lineas);
     }
 
-    /** Reemplaza POR COMPLETO los valores del ejemplo — "limpiar y volver a llenar", nunca mezclar con lo anterior. */
-    private function reemplazarValores(int $ejemploId, array $valores): void
+    /**
+     * Persiste valores del ejemplo.
+     * - Sin $idsAfectados: reemplazo total (llenado de toda la ficha).
+     * - Con $idsAfectados: limpia solo esos campos y fusiona los nuevos (llenado parcial por sección).
+     *
+     * @param list<string>|null $idsAfectados
+     */
+    private function guardarValores(int $ejemploId, array $valoresNuevos, ?array $idsAfectados): void
     {
         $archivoModel = new ArchivoModel();
         $existente    = $archivoModel->where('propietario_tipo', 'ejemplo')->where('ejemplo_id', $ejemploId)->first();
-        $contenido    = json_encode(['valores' => $valores], JSON_UNESCAPED_UNICODE);
+
+        if ($idsAfectados === null) {
+            $valores = $valoresNuevos;
+        } else {
+            $previos = [];
+            if ($existente && ! empty($existente['contenido_json'])) {
+                $decoded = json_decode((string) $existente['contenido_json'], true);
+                $previos = is_array($decoded['valores'] ?? null) ? $decoded['valores'] : [];
+            }
+            foreach ($idsAfectados as $id) {
+                unset($previos[$id]);
+            }
+            $valores = array_merge($previos, $valoresNuevos);
+        }
+
+        $contenido = json_encode(['valores' => $valores], JSON_UNESCAPED_UNICODE);
 
         if ($existente) {
             $archivoModel->update($existente['id'], ['contenido_json' => $contenido]);

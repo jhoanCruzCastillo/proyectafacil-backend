@@ -2,556 +2,1100 @@
 
 ## Descripción de la sección
 
-- **Qué representa:** la identificación institucional, funcional y de alineamiento del proyecto de inversión (formato FTE-CUIDADO-DIURNO; hoja Excel `Datos Generales`).
-- **Objetivo:** registrar quién formula y quién ejecuta la inversión, la clasificación funcional/tipológica del proyecto, los componentes del nombre del proyecto y su contribución al cierre de una brecha prioritaria.
-- **Qué información contiene:** datos de la Unidad Formuladora (UF) y de la Unidad Ejecutora de Inversiones (UEI); función / división / grupo funcional; sector y tipología; naturaleza, objeto y localización del nombre; indicador de brecha y valores de contribución.
-- **Para qué sirve dentro de la ficha:** es la portada identificatoria del proyecto. Los campos calculados de esta sección aparecen rellenados en el JSON EJEMPLO aunque en la ESTRUCTURA figuren como no editables; no deben tratarse como captura manual.
+Esta sección contiene la información general del proyecto de inversión.
 
-**Hoja Excel:** `Datos Generales`
+La sección está organizada en las siguientes subsecciones:
 
-**Subsecciones:** `1.01`, `1.02`, `1.03`, `1.04`
+- 1.01 Institucionalidad
+- 1.02 Responsabilidad funcional y tipología del proyecto de inversión
+- 1.03 Nombre del proyecto de inversión
+- 1.04 Alineamiento y contribución al cierre de una brecha prioritaria
 
----
+La información debe obtenerse de los documentos proporcionados por el cliente.
 
-# 1.01 Institucionalidad
+Para cada campo, identifica el nodo correspondiente mediante su nombre y
+ubicación dentro de la sección y subsección. El identificador numérico del
+campo se proporciona como referencia para relacionarlo con el JSON.
 
-Identifica a las dos unidades institucionales del proyecto. El JSON incluye notas explícitas que separan el bloque:
+No inventes información que no esté respaldada por los documentos del cliente.
 
-- `UNIDAD FORMULADORA (UF)` — campos `1.01.01` a `1.01.04`
-- `UNIDAD EJECUTORA DE INVERSIONES (UEI)` — campos `1.01.05` a `1.01.08`
+El instructivo establece que el Módulo 1 tiene como objetivo definir la institucionalidad, responsabilidad funcional, nombre del proyecto y su alineamiento y contribución al cierre de brecha; este módulo corresponde a la Sección 1 de la FTE.
 
-### Diferencia importante
+## 1.01 Institucionalidad
 
-Varios campos repiten el mismo **nombre** en UF y UEI (`Nivel de gobierno :`, `Entidad :`). Son nodos distintos (`1.01.01`≠`1.01.05`, `1.01.02`≠`1.01.06`). No deben copiarse entre sí salvo que el ejemplo/proyecto lo justifique; el JSON EJEMPLO muestra valores iguales en nivel de gobierno y entidad, pero responsables y nombres de unidad distintos.
+Esta subsección contiene la información institucional de los órganos que
+participan en las fases de Formulación y Evaluación y de Ejecución del ciclo
+de inversión.
 
----
+Se divide en:
 
-## Campo 1.01.01 — Nivel de gobierno :
+- Unidad Formuladora (UF)
+- Unidad Ejecutora de Inversiones (UEI)
 
-**Tipo:** texto_corto
+El instructivo indica que para la UF se debe identificar el nombre de la UF registrada en el Banco de Inversiones, su nivel de gobierno, la entidad a la que pertenece y el responsable del órgano. Para la UEI se debe identificar igualmente su nombre, nivel de gobierno, entidad y responsable.
 
-**Editable:** Sí
+### Campo 1.01.01 — Nivel de gobierno :
 
-**Qué representa:** nivel de gobierno de la Unidad Formuladora (UF).
+**Representa:**
 
-**Qué debe contener:** una de las opciones del catálogo `etiquetas` del JSON ESTRUCTURA.
+El nivel de gobierno al que pertenece la Unidad Formuladora (UF).
 
-**Valores permitidos (etiquetas):**
+**Tipo de información:**
 
-- Gobierno Nacional
-- Gobierno Regional
-- Gobierno Local
+Texto corto.
 
-**Regla de llenado:** elegir exactamente una etiqueta de la lista. No inventar niveles fuera del catálogo.
-
-**Ejemplo:**
-
-```json
-"Gobierno Nacional"
-```
-
----
-
-## Campo 1.01.02 — Entidad :
-
-**Tipo:** texto_corto
-
-**Editable:** Sí
-
-**Qué representa:** entidad a la que pertenece la Unidad Formuladora.
-
-**Qué debe contener:** nombre de la entidad institucional de la UF.
-
-**Regla de llenado:** texto libre corto. Información no determinada por los archivos proporcionados respecto a un catálogo cerrado de entidades.
-
-**Ejemplo:**
-
-```json
-"Programa Nacional Cuna Más"
-```
-
----
-
-## Campo 1.01.03 — Nombre de la UF :
-
-**Tipo:** texto_corto
-
-**Editable:** Sí
-
-**Qué representa:** nombre de la Unidad Formuladora.
-
-**Qué debe contener:** denominación completa de la UF.
-
-**Regla de llenado:** texto libre corto. El ejemplo sugiere que suele incluir la expresión "Unidad Formuladora" más el nombre de la entidad.
-
-**Ejemplo:**
-
-```json
-"Unidad Formuladora Programa Nacional Cuna Más"
-```
-
----
-
-## Campo 1.01.04 — Responsable de la UF :
-
-**Tipo:** texto_corto
-
-**Editable:** Sí
-
-**Qué representa:** persona responsable de la Unidad Formuladora.
-
-**Qué debe contener:** nombre del responsable de la UF.
-
-**Regla de llenado:** texto libre corto (nombre de persona).
-
-**Ejemplo:**
-
-```json
-"Juan Perez"
-```
-
----
-
-## Campo 1.01.05 — Nivel de gobierno :
-
-**Tipo:** texto_corto
-
-**Editable:** Sí
-
-**Qué representa:** nivel de gobierno de la Unidad Ejecutora de Inversiones (UEI).
-
-**Qué debe contener:** una de las opciones del catálogo `etiquetas`.
-
-**Valores permitidos (etiquetas):**
+**Valores permitidos:**
 
 - Gobierno Nacional
 - Gobierno Regional
 - Gobierno Local
 
-**Regla de llenado:** elegir exactamente una etiqueta. Es el homólogo UEI de `1.01.01`, no el mismo campo.
+**Regla de llenado:**
 
-**Ejemplo:**
+Identifica en los documentos del cliente el nivel de gobierno al que
+pertenece la Unidad Formuladora.
 
-```json
-"Gobierno Nacional"
-```
+Utiliza únicamente uno de los valores permitidos por el campo.
 
----
+No infieras el nivel de gobierno únicamente a partir del nombre de la
+persona responsable. Debe existir información que permita determinar
+la institución o nivel de gobierno correspondiente.
 
-## Campo 1.01.06 — Entidad :
+**Ejemplo de llenado:**
 
-**Tipo:** texto_corto
+Gobierno Nacional
 
-**Editable:** Sí
-
-**Qué representa:** entidad a la que pertenece la UEI.
-
-**Qué debe contener:** nombre de la entidad institucional de la UEI.
-
-**Regla de llenado:** texto libre corto. Homólogo UEI de `1.01.02`.
-
-**Ejemplo:**
+**Nodo JSON de ejemplo:**
 
 ```json
-"Programa Nacional Cuna Más"
+{
+  "id": "1.01.01",
+  "nombre": "Nivel de gobierno :",
+  "tipo_nodo": "campo",
+  "tipo": "texto_corto",
+  "editable": true,
+  "etiquetas": [
+    "Gobierno Nacional",
+    "Gobierno Regional",
+    "Gobierno Local"
+  ],
+  "captura": {
+    "columna": "H",
+    "fila": 8,
+    "abarca_columnas": 13,
+    "abarca_filas": 1
+  },
+  "valor": "Gobierno Nacional"
+}
 ```
 
----
+El JSON de estructura define exactamente esas tres opciones para 1.01.01.
 
-## Campo 1.01.07 — Nombre de la UEI :
+### Campo 1.01.02 — Entidad :
 
-**Tipo:** texto_corto
+**Representa:**
 
-**Editable:** Sí
+La entidad a la que pertenece la Unidad Formuladora (UF).
 
-**Qué representa:** nombre de la Unidad Ejecutora de Inversiones.
+**Tipo de información:**
 
-**Qué debe contener:** denominación de la UEI.
+Texto corto.
 
-**Regla de llenado:** texto libre corto. El ejemplo sugiere una forma abreviada tipo "UEI …".
+**Regla de llenado:**
 
-**Ejemplo:**
+Identifica en los documentos del cliente la entidad a la que pertenece
+la Unidad Formuladora.
+
+Debe utilizarse el nombre de la entidad tal como aparece en la
+documentación disponible.
+
+**Ejemplo de llenado:**
+
+Programa Nacional Cuna Más
+
+**Nodo JSON de ejemplo:**
 
 ```json
-"UEI Cuna Más"
+{
+  "id": "1.01.02",
+  "nombre": "Entidad :",
+  "tipo_nodo": "campo",
+  "tipo": "texto_corto",
+  "editable": true,
+  "captura": {
+    "columna": "H",
+    "fila": 10,
+    "abarca_columnas": 13,
+    "abarca_filas": 1
+  },
+  "valor": "Programa Nacional Cuna Más"
+}
 ```
 
----
+### Campo 1.01.03 — Nombre de la UF :
 
-## Campo 1.01.08 — Responsable de la UEI :
+**Representa:**
 
-**Tipo:** texto_corto
+El nombre de la Unidad Formuladora (UF) responsable de la formulación
+y evaluación del proyecto.
 
-**Editable:** Sí
+**Regla de llenado:**
 
-**Qué representa:** persona responsable de la UEI.
+Identifica el nombre de la UF en los documentos del cliente.
 
-**Qué debe contener:** nombre del responsable de la UEI.
+Cuando exista información sobre el registro o denominación oficial de
+la UF, utiliza dicha denominación.
 
-**Regla de llenado:** texto libre corto. Debe distinguirse de `1.01.04` (responsable de la UF).
+No sustituyas el nombre de la UF por el nombre de la entidad a la que
+pertenece.
 
-**Ejemplo:**
+**Ejemplo de llenado:**
+
+Unidad Formuladora Programa Nacional Cuna Más
+
+**Nodo JSON de ejemplo:**
 
 ```json
-"Carlos Perez"
+{
+  "id": "1.01.03",
+  "nombre": "Nombre de la UF :",
+  "tipo_nodo": "campo",
+  "tipo": "texto_corto",
+  "editable": true,
+  "captura": {
+    "columna": "H",
+    "fila": 12,
+    "abarca_columnas": 13,
+    "abarca_filas": 1
+  },
+  "valor": "Unidad Formuladora Programa Nacional Cuna Más"
+}
 ```
 
----
+### Campo 1.01.04 — Responsable de la UF :
 
-# 1.02 Responsabilidad funcional y tipología del proyecto de inversión
+**Representa:**
 
-Clasifica el proyecto según la cadena funcional (función → división → grupo) y declara sector responsable y tipología.
+La persona responsable de la Unidad Formuladora (UF).
 
-### Nota sobre JSON ESTRUCTURA vs JSON EJEMPLO
+**Regla de llenado:**
 
-En el JSON ESTRUCTURA, los campos `1.02.01` a `1.02.05` ya traen valores no vacíos (coinciden con el EJEMPLO). El resto de campos editables de la sección 01 en ESTRUCTURA sí están vacíos. Priorizar el schema de ESTRUCTURA; los valores de ESTRUCTURA aquí parecen plantilla precargada de tipología, no un vacío genérico.
+Identifica en los documentos del cliente a la persona responsable de
+la UF.
 
----
+Utiliza el nombre encontrado en la documentación.
 
-## Campo 1.02.01 — Función
+No inventes nombres cuando la documentación no permita identificar
+al responsable.
 
-**Tipo:** texto_corto
+**Ejemplo de llenado:**
 
-**Editable:** Sí
+Juan Perez
 
-**Qué representa:** función presupuestal/clasificadora del proyecto.
-
-**Qué debe contener:** código y nombre de la función, en el formato que muestra el ejemplo.
-
-**Regla de llenado:** el ejemplo sugiere el patrón `"<código> <NOMBRE EN MAYÚSCULAS>"`. No hay catálogo `etiquetas` en el JSON para este campo.
-
-**Ejemplo:**
+**Nodo JSON de ejemplo:**
 
 ```json
-"23 PROTECCIÓN SOCIAL"
+{
+  "id": "1.01.04",
+  "nombre": "Responsable de la UF :",
+  "tipo_nodo": "campo",
+  "tipo": "texto_corto",
+  "editable": true,
+  "captura": {
+    "columna": "H",
+    "fila": 14,
+    "abarca_columnas": 13,
+    "abarca_filas": 1
+  },
+  "valor": "Juan Perez"
+}
 ```
 
----
+### Campo 1.01.05 — Nivel de gobierno :
 
-## Campo 1.02.02 — División funcional
+**Representa:**
 
-**Tipo:** texto_corto
+El nivel de gobierno al que pertenece la Unidad Ejecutora de
+Inversiones (UEI).
 
-**Editable:** Sí
+**Tipo de información:**
 
-**Qué representa:** división funcional dentro de la función.
+Texto corto.
 
-**Qué debe contener:** código y nombre de la división funcional.
+**Valores permitidos:**
 
-**Regla de llenado:** mismo patrón de código + nombre que `1.02.01`. Debe ser coherente con la Función, según lo que sugiera el ejemplo; la dependencia obligatoria no está declarada en el JSON.
+- Gobierno Nacional
+- Gobierno Regional
+- Gobierno Local
 
-**Ejemplo:**
+**Regla de llenado:**
+
+Identifica en los documentos del cliente el nivel de gobierno al que
+pertenece la UEI.
+
+Utiliza únicamente uno de los valores permitidos.
+
+**Ejemplo de llenado:**
+
+Gobierno Nacional
+
+**Nodo JSON de ejemplo:**
 
 ```json
-"051 ASISTENCIA SOCIAL"
+{
+  "id": "1.01.05",
+  "nombre": "Nivel de gobierno :",
+  "tipo_nodo": "campo",
+  "tipo": "texto_corto",
+  "editable": true,
+  "etiquetas": [
+    "Gobierno Nacional",
+    "Gobierno Regional",
+    "Gobierno Local"
+  ],
+  "captura": {
+    "columna": "H",
+    "fila": 18,
+    "abarca_columnas": 13,
+    "abarca_filas": 1
+  },
+  "valor": "Gobierno Nacional"
+}
 ```
 
----
+### Campo 1.01.06 — Entidad :
 
-## Campo 1.02.03 — Grupo funcional
+**Representa:**
 
-**Tipo:** texto_corto
+La entidad a la que pertenece la Unidad Ejecutora de Inversiones
+(UEI).
 
-**Editable:** Sí
+**Regla de llenado:**
 
-**Qué representa:** grupo funcional dentro de la división.
+Identifica la entidad correspondiente a la UEI en los documentos
+del cliente.
 
-**Qué debe contener:** código y nombre del grupo funcional.
+**Ejemplo de llenado:**
 
-**Regla de llenado:** mismo patrón código + nombre. El ejemplo sugiere coherencia con Función y División.
+Programa Nacional Cuna Más
 
-**Ejemplo:**
+**Nodo JSON de ejemplo:**
 
 ```json
-"0115 PROTECCIÓN DE POBLACIONES EN RIESGO"
+{
+  "id": "1.01.06",
+  "nombre": "Entidad :",
+  "tipo_nodo": "campo",
+  "tipo": "texto_corto",
+  "editable": true,
+  "captura": {
+    "columna": "H",
+    "fila": 20,
+    "abarca_columnas": 13,
+    "abarca_filas": 1
+  },
+  "valor": "Programa Nacional Cuna Más"
+}
 ```
 
----
+### Campo 1.01.07 — Nombre de la UEI :
 
-## Campo 1.02.04 — Sector responsable
+**Representa:**
 
-**Tipo:** texto_corto
+El nombre de la Unidad Ejecutora de Inversiones (UEI) propuesta como
+responsable de la fase de ejecución del proyecto.
 
-**Editable:** Sí
+**Regla de llenado:**
 
-**Qué representa:** sector responsable del proyecto.
+Identifica el nombre de la UEI en los documentos del cliente.
 
-**Qué debe contener:** nombre del sector (en el ejemplo, en mayúsculas).
+La UEI debe corresponder al órgano responsable de la ejecución del
+proyecto.
 
-**Regla de llenado:** texto corto. Información no determinada por los archivos proporcionados respecto a un catálogo cerrado de sectores.
+**Ejemplo de llenado:**
 
-**Ejemplo:**
+UEI Cuna Más
+
+**Nodo JSON de ejemplo:**
 
 ```json
-"DESARROLLO E INCLUSION SOCIAL"
+{
+  "id": "1.01.07",
+  "nombre": "Nombre de la UEI :",
+  "tipo_nodo": "campo",
+  "tipo": "texto_corto",
+  "editable": true,
+  "captura": {
+    "columna": "H",
+    "fila": 22,
+    "abarca_columnas": 13,
+    "abarca_filas": 1
+  },
+  "valor": "UEI Cuna Más"
+}
 ```
 
----
+### Campo 1.01.08 — Responsable de la UEI :
 
-## Campo 1.02.05 — Tipología de proyecto
+**Representa:**
 
-**Tipo:** texto_corto
+La persona responsable del órgano correspondiente a la Unidad
+Ejecutora de Inversiones (UEI).
 
-**Editable:** Sí
+**Regla de llenado:**
 
-**Qué representa:** tipología del proyecto de inversión.
+Identifica en los documentos del cliente a la persona responsable
+de la UEI.
 
-**Qué debe contener:** nombre de la tipología.
+No inventes el nombre del responsable si no existe información
+suficiente.
 
-**Regla de llenado:** texto corto. En este formato, el ejemplo usa la tipología de Centro Infantil de Atención Integral.
+**Ejemplo de llenado:**
 
-**Ejemplo:**
+Carlos Perez
+
+**Nodo JSON de ejemplo:**
 
 ```json
-"CENTRO INFANTIL DE ATENCIÓN INTEGRAL"
+{
+  "id": "1.01.08",
+  "nombre": "Responsable de la UEI :",
+  "tipo_nodo": "campo",
+  "tipo": "texto_corto",
+  "editable": true,
+  "captura": {
+    "columna": "H",
+    "fila": 24,
+    "abarca_columnas": 13,
+    "abarca_filas": 1
+  },
+  "valor": "Carlos Perez"
+}
 ```
 
----
+Los ocho campos de 1.01 están definidos de esa manera en la estructura JSON, y el JSON de ejemplo proporciona los valores de referencia anteriores.
 
-# 1.03 Nombre del proyecto de inversión
+## 1.02 Responsabilidad funcional y tipología del proyecto de inversión
 
-Arma (o refleja) el nombre del proyecto a partir de tres componentes en la misma fila del Excel: naturaleza (editable), objeto (calculado) y localización (calculado).
+Esta subsección contiene la responsabilidad funcional y la tipología
+correspondiente al proyecto de inversión de CIAI.
 
-### Diferencia importante
+Los campos son:
 
-Solo `1.03.01` es de captura manual. `1.03.02` y `1.03.03` son `tipo: calculado` / `editable: false` en el JSON ESTRUCTURA: **no deben llenarse** en el autollenado.
+- Función
+- División funcional
+- Grupo funcional
+- Sector responsable
+- Tipología de proyecto
 
-El ejemplo sugiere que el nombre completo del proyecto se lee como concatenación de los tres fragmentos (naturaleza + objeto + localización), pero la fórmula exacta de composición **no está determinada por los archivos proporcionados**.
+El instructivo define específicamente Función, División funcional, Grupo funcional, Sector responsable y Tipología de proyecto. Para el ejemplo del documento se utilizan, respectivamente, 23 Protección social, 051 Asistencia social, 0115 Protección de poblaciones en riesgo, Desarrollo e Inclusión Social y Centro Infantil de Atención Integral (CIAI).
 
----
+### Campo 1.02.01 — Función
 
-## Campo 1.03.01 — Naturaleza de intervención
+**Representa:**
 
-**Tipo:** texto_corto
+La función correspondiente al proyecto dentro de la clasificación
+funcional.
 
-**Editable:** Sí
+**Regla de llenado:**
 
-**Qué representa:** tipo de intervención que tipifica el proyecto en su nombre.
+Identifica la función correspondiente al proyecto según la
+documentación y clasificación aplicable.
 
-**Qué debe contener:** una de las opciones del catálogo `etiquetas`.
+Para este formato, el ejemplo del instructivo corresponde a:
 
-**Valores permitidos (etiquetas):**
+23 Protección social
+
+**Ejemplo de llenado:**
+
+23 PROTECCIÓN SOCIAL
+
+**Nodo JSON de ejemplo:**
+
+```json
+{
+  "id": "1.02.01",
+  "nombre": "Función",
+  "tipo_nodo": "campo",
+  "tipo": "texto_corto",
+  "editable": true,
+  "captura": {
+    "columna": "H",
+    "fila": 29,
+    "abarca_columnas": 13,
+    "abarca_filas": 1
+  },
+  "valor": "23 PROTECCIÓN SOCIAL"
+}
+```
+
+### Campo 1.02.02 — División funcional
+
+**Representa:**
+
+La división funcional correspondiente al proyecto.
+
+El instructivo describe la División funcional 051 como Asistencia
+social, relacionada con acciones orientadas al desarrollo social,
+amparo, asistencia, desarrollo de capacidades sociales y económicas
+y promoción de la igualdad de oportunidades.
+
+**Ejemplo de llenado:**
+
+051 ASISTENCIA SOCIAL
+
+**Nodo JSON de ejemplo:**
+
+```json
+{
+  "id": "1.02.02",
+  "nombre": "División funcional",
+  "tipo_nodo": "campo",
+  "tipo": "texto_corto",
+  "editable": true,
+  "captura": {
+    "columna": "H",
+    "fila": 31,
+    "abarca_columnas": 13,
+    "abarca_filas": 1
+  },
+  "valor": "051 ASISTENCIA SOCIAL"
+}
+```
+
+### Campo 1.02.03 — Grupo funcional
+
+**Representa:**
+
+El grupo funcional correspondiente al proyecto.
+
+Para este tipo de proyecto, el instructivo utiliza como ejemplo
+0115 Protección de poblaciones en riesgo.
+
+**Ejemplo de llenado:**
+
+0115 PROTECCIÓN DE POBLACIONES EN RIESGO
+
+**Nodo JSON de ejemplo:**
+
+```json
+{
+  "id": "1.02.03",
+  "nombre": "Grupo funcional",
+  "tipo_nodo": "campo",
+  "tipo": "texto_corto",
+  "editable": true,
+  "captura": {
+    "columna": "H",
+    "fila": 33,
+    "abarca_columnas": 13,
+    "abarca_filas": 1
+  },
+  "valor": "0115 PROTECCIÓN DE POBLACIONES EN RIESGO"
+}
+```
+
+El instructivo describe este grupo funcional como las acciones orientadas a proteger a poblaciones en riesgo, principalmente población vulnerable.
+
+### Campo 1.02.04 — Sector responsable
+
+**Representa:**
+
+El sector responsable de la intervención.
+
+**Ejemplo de llenado:**
+
+DESARROLLO E INCLUSION SOCIAL
+
+**Nodo JSON de ejemplo:**
+
+```json
+{
+  "id": "1.02.04",
+  "nombre": "Sector responsable",
+  "tipo_nodo": "campo",
+  "tipo": "texto_corto",
+  "editable": true,
+  "captura": {
+    "columna": "H",
+    "fila": 35,
+    "abarca_columnas": 13,
+    "abarca_filas": 1
+  },
+  "valor": "DESARROLLO E INCLUSION SOCIAL"
+}
+```
+
+### Campo 1.02.05 — Tipología de proyecto
+
+**Representa:**
+
+La tipología del proyecto de inversión.
+
+Para esta FTE corresponde a proyectos de la tipología
+Centro Infantil de Atención Integral (CIAI).
+
+**Ejemplo de llenado:**
+
+CENTRO INFANTIL DE ATENCIÓN INTEGRAL
+
+**Nodo JSON de ejemplo:**
+
+```json
+{
+  "id": "1.02.05",
+  "nombre": "Tipología de proyecto",
+  "tipo_nodo": "campo",
+  "tipo": "texto_corto",
+  "editable": true,
+  "captura": {
+    "columna": "H",
+    "fila": 37,
+    "abarca_columnas": 13,
+    "abarca_filas": 1
+  },
+  "valor": "CENTRO INFANTIL DE ATENCIÓN INTEGRAL"
+}
+```
+
+La estructura y el ejemplo JSON confirman los cinco campos y sus valores de referencia.
+
+## 1.03 Nombre del proyecto de inversión
+
+El nombre del proyecto se construye a partir de tres elementos:
+
+1. Naturaleza de intervención
+2. Objeto de intervención
+3. Localización
+
+La naturaleza de intervención es el único campo editable de esta
+subsección en la estructura JSON actual.
+
+Los campos Objeto de intervención y Localización están definidos
+actualmente como campos calculados y no editables.
+
+El instructivo explica que la naturaleza depende del objetivo del proyecto y contempla Mejoramiento, Ampliación, Recuperación y, cuando corresponda, Mejoramiento y ampliación. También define el objeto como el servicio sobre el que interviene el proyecto y la localización como el lugar donde se ubicará el CIAI.
+
+### Campo 1.03.01 — Naturaleza de intervención
+
+**Representa:**
+
+El tipo de intervención que se realizará mediante el proyecto.
+
+**Valores permitidos:**
 
 - Mejoramiento
 - Ampliación
 - Mejoramiento y ampliación
 - Recuperación
 
-**Regla de llenado:** elegir exactamente una etiqueta.
+**Reglas de interpretación:**
 
-**Ejemplo:**
+**Mejoramiento:**
+Utilizar cuando el proyecto busca mejorar la calidad del Servicio
+de Cuidado Diurno que se brinda en un CIAI existente.
+
+**Ampliación:**
+Utilizar cuando el proyecto busca ampliar la cobertura del Servicio
+de Cuidado Diurno en un CIAI existente.
+
+**Recuperación:**
+Utilizar cuando el proyecto busca recuperar la capacidad de prestación
+del Servicio de Cuidado Diurno en un CIAI existente cuyos factores de
+producción hayan colapsado, sido dañados o destruidos total o
+parcialmente.
+
+**Mejoramiento y ampliación:**
+Puede utilizarse cuando corresponda una intervención que combine
+ambas naturalezas.
+
+**Ejemplo de llenado:**
+
+Mejoramiento
+
+**Nodo JSON de ejemplo:**
 
 ```json
-"Mejoramiento"
+{
+  "id": "1.03.01",
+  "nombre": "Naturaleza de intervención",
+  "tipo_nodo": "campo",
+  "tipo": "texto_corto",
+  "editable": true,
+  "etiquetas": [
+    "Mejoramiento",
+    "Ampliación",
+    "Mejoramiento y ampliación",
+    "Recuperación"
+  ],
+  "captura": {
+    "columna": "B",
+    "fila": 44,
+    "abarca_columnas": 3,
+    "abarca_filas": 1
+  },
+  "valor": "Mejoramiento"
+}
 ```
 
----
+### Campo 1.03.02 — Objeto de intervención
 
-## Campo 1.03.02 — Objeto de intervención
+**Representa:**
 
-**Tipo:** calculado
+El servicio sobre el que intervendrá el proyecto y el nombre de la
+Unidad Productora (UP).
 
-**Editable:** No
+Para esta FTE, el instructivo establece que el objeto de intervención
+corresponde al Servicio de Cuidado Diurno en el CIAI.
 
-**Qué representa:** fragmento del nombre del proyecto que describe el objeto de la intervención.
+**Tipo de nodo:**
 
-**Qué debe contener:** no es campo de captura manual.
+Calculado.
 
-**Regla:** este campo no debe tratarse como un campo de captura manual. En el JSON EJEMPLO aparece un texto descriptivo del servicio/objeto; de dónde se calcula exactamente **no está determinado por los archivos proporcionados** (solo se observa el resultado).
+**Editable:**
 
-**Ejemplo (solo referencia del valor calculado observado):**
+No.
+
+**Regla de llenado:**
+
+Este campo no debe ser tratado como un campo de captura manual.
+
+Su contenido debe derivarse según la lógica definida para la
+estructura de la ficha y la información relacionada con el proyecto.
+
+**Ejemplo de llenado:**
+
+del Servicio de Cuidado Infantil en el Centro Infantil de Atención
+Integral (CIAI)
+
+**Nodo JSON de ejemplo:**
 
 ```json
-"del Servicio de Cuidado Infantil en el Centro Infantil de Atención Integral (CIAI)"
+{
+  "id": "1.03.02",
+  "nombre": "Objeto de intervención",
+  "tipo_nodo": "campo",
+  "tipo": "calculado",
+  "editable": false,
+  "captura": {
+    "columna": "F",
+    "fila": 44,
+    "abarca_columnas": 4,
+    "abarca_filas": 1
+  },
+  "valor": "del Servicio de Cuidado Infantil en el Centro Infantil de Atención Integral (CIAI)"
+}
 ```
 
----
+### Campo 1.03.03 — Localización
 
-## Campo 1.03.03 — Localización
+**Representa:**
 
-**Tipo:** calculado
+El lugar donde se ubicará el CIAI.
 
-**Editable:** No
+Debe incluir:
 
-**Qué representa:** fragmento del nombre del proyecto con la localización geográfica.
+- localidad o centro poblado
+- distrito
+- provincia
+- departamento
 
-**Qué debe contener:** no es campo de captura manual.
+**Tipo de nodo:**
 
-**Regla:** no llenar manualmente. El ejemplo sugiere una frase que encadena localidad, distrito, provincia y departamento; la fuente exacta de esos datos dentro de la ficha **no está determinada por los archivos proporcionados** en esta sección.
+Calculado.
 
-**Ejemplo (solo referencia del valor calculado observado):**
+**Editable:**
+
+No.
+
+**Regla de llenado:**
+
+Este campo no debe ser tratado como un campo de captura manual.
+
+Su contenido debe construirse a partir de la información de
+localización disponible para el proyecto.
+
+**Ejemplo de llenado:**
+
+en la localidad de San Antonio, distrito de San Sebastian,
+provincia de Cusco, departamento de Cusco
+
+**Nodo JSON de ejemplo:**
 
 ```json
-"en la localidad de San Antonio, distrito de San Sebastian, provincia de Cusco, departamento de Cusco"
+{
+  "id": "1.03.03",
+  "nombre": "Localización",
+  "tipo_nodo": "campo",
+  "tipo": "calculado",
+  "editable": false,
+  "captura": {
+    "columna": "K",
+    "fila": 44,
+    "abarca_columnas": 10,
+    "abarca_filas": 1
+  },
+  "valor": "en la localidad de San Antonio, distrito de San Sebastian, provincia de Cusco, departamento de Cusco"
+}
 ```
 
----
+La estructura actual confirma que 1.03.02 y 1.03.03 son calculado y editable: false; el JSON de ejemplo muestra los valores correspondientes.
 
-# 1.04 Alineamiento y contribución al cierre de una brecha prioritaria
+## 1.04 Alineamiento y contribución al cierre de una brecha prioritaria
 
-Declara el servicio con brecha priorizada, el indicador de brecha, su unidad de medida, el espacio geográfico y el año de referencia, más dos valores numéricos editables: el valor del indicador y la contribución del proyecto al cierre de brecha.
+Esta subsección contiene la información relacionada con el servicio
+público y la brecha prioritaria a cuyo cierre contribuye el proyecto.
 
-### Diferencia importante
+Para esta FTE se considera la brecha de calidad del CIAI.
 
-- `1.04.01` … `1.04.05` son **calculados / no editables** en ESTRUCTURA → no llenar.
-- `1.04.06` (Valor) y `1.04.07` (Contribución del Cierre de Brecha) son **decimal / editables** → sí son captura.
+La brecha de calidad corresponde al porcentaje de centros infantiles
+de atención integral que brindan el servicio de cuidado integral en
+condición inadecuada (PCIAICI).
 
----
+Los campos 1.04.01 a 1.04.05 son campos calculados y no editables
+en la estructura JSON actual.
 
-## Campo 1.04.01 — Servicios públicos con brecha identificada y priorizada
+Los campos 1.04.06 y 1.04.07 son campos editables de tipo decimal.
 
-**Tipo:** calculado
+El instructivo distingue entre brecha de cobertura y brecha de calidad, y establece que para esta FTE se considera la brecha de calidad.
 
-**Editable:** No
+### Campo 1.04.01 — Servicios públicos con brecha identificada y priorizada
 
-**Qué representa:** servicio público respecto del cual existe una brecha identificada y priorizada.
+**Representa:**
 
-**Regla:** no llenar manualmente.
+El servicio público relacionado con la brecha identificada y priorizada.
 
-**Ejemplo (valor calculado observado):**
+**Tipo de nodo:**
+
+Calculado.
+
+**Editable:**
+
+No.
+
+**Ejemplo de llenado:**
+
+Servicio de cuidado diurno
+
+**Nodo JSON de ejemplo:**
 
 ```json
-"Servicio de cuidado diurno"
+{
+  "id": "1.04.01",
+  "nombre": "Servicios públicos con brecha identificada y priorizada",
+  "tipo_nodo": "campo",
+  "tipo": "calculado",
+  "editable": false,
+  "captura": {
+    "columna": "M",
+    "fila": 49,
+    "abarca_columnas": 8,
+    "abarca_filas": 1
+  },
+  "valor": "Servicio de cuidado diurno"
+}
 ```
 
----
+### Campo 1.04.02 — Nombre del Indicador de brecha de acceso a servicios
 
-## Campo 1.04.02 — Nombre del Indicador de brecha de acceso a servicios
+**Representa:**
 
-**Tipo:** calculado
+El nombre del indicador de brecha utilizado para representar la brecha
+que atiende el proyecto.
 
-**Editable:** No
+Para esta FTE, corresponde al indicador asociado a la brecha de calidad
+del CIAI.
 
-**Qué representa:** nombre del indicador de brecha de acceso a servicios.
+**Ejemplo de llenado:**
 
-**Regla:** no llenar manualmente.
+Porcentaje de centros infantiles de atención integral que brindan el
+servicio de cuidado integral en condición inadecuada. (PCIAICI)
 
-**Ejemplo (valor calculado observado):**
+**Tipo de nodo:**
+
+Calculado.
+
+**Editable:**
+
+No.
+
+**Nodo JSON de ejemplo:**
 
 ```json
-"Porcentaje de centros infantiles de atención integral que brindan el servicio de cuidado integral en condición inadecuada. (PCIAICI)"
+{
+  "id": "1.04.02",
+  "nombre": "Nombre del Indicador de brecha de acceso a servicios",
+  "tipo_nodo": "campo",
+  "tipo": "calculado",
+  "editable": false,
+  "captura": {
+    "columna": "B",
+    "fila": 53,
+    "abarca_columnas": 7,
+    "abarca_filas": 1
+  },
+  "valor": "Porcentaje de centros infantiles de atención integral que brindan el servicio de cuidado integral en condición inadecuada. (PCIAICI)"
+}
 ```
 
----
+### Campo 1.04.03 — Unidad de medida
 
-## Campo 1.04.03 — Unidad de medida
+**Representa:**
 
-**Tipo:** calculado
+La unidad utilizada para expresar el indicador de brecha.
 
-**Editable:** No
+**Ejemplo de llenado:**
 
-**Qué representa:** unidad de medida del indicador de brecha.
+Centro Infantil de Atención Integral (CIAI)
 
-**Regla:** no llenar manualmente.
+**Tipo de nodo:**
 
-**Ejemplo (valor calculado observado):**
+Calculado.
+
+**Editable:**
+
+No.
+
+**Nodo JSON de ejemplo:**
 
 ```json
-"Centro Infantil de Atención Integral (CIAI)"
+{
+  "id": "1.04.03",
+  "nombre": "Unidad de medida",
+  "tipo_nodo": "campo",
+  "tipo": "calculado",
+  "editable": false,
+  "captura": {
+    "columna": "J",
+    "fila": 53,
+    "abarca_columnas": 3,
+    "abarca_filas": 1
+  },
+  "valor": "Centro Infantil de Atención Integral (CIAI)"
+}
 ```
 
----
+### Campo 1.04.04 — Espacio geográfico
 
-## Campo 1.04.04 — Espacio geográfico
+**Representa:**
 
-**Tipo:** calculado
+El ámbito geográfico al que corresponde el valor del indicador
+de brecha.
 
-**Editable:** No
+**Ejemplo de llenado:**
 
-**Qué representa:** ámbito geográfico al que se refiere el indicador de brecha.
+Distrito de San Sebastian
 
-**Regla:** no llenar manualmente. El ejemplo sugiere un distrito; la regla de derivación exacta no está determinada en esta sección.
+**Tipo de nodo:**
 
-**Ejemplo (valor calculado observado):**
+Calculado.
+
+**Editable:**
+
+No.
+
+**Nodo JSON de ejemplo:**
 
 ```json
-"Distrito de San Sebastian"
+{
+  "id": "1.04.04",
+  "nombre": "Espacio geográfico",
+  "tipo_nodo": "campo",
+  "tipo": "calculado",
+  "editable": false,
+  "captura": {
+    "columna": "N",
+    "fila": 53,
+    "abarca_columnas": 3,
+    "abarca_filas": 1
+  },
+  "valor": "Distrito de San Sebastian"
+}
 ```
 
----
+### Campo 1.04.05 — Año
 
-## Campo 1.04.05 — Año
+**Representa:**
 
-**Tipo:** calculado
+El año correspondiente al valor registrado para el indicador
+de brecha.
 
-**Editable:** No
+**Ejemplo de llenado:**
 
-**Qué representa:** año de referencia del valor del indicador.
+2026
 
-**Regla:** no llenar manualmente. En el ejemplo el valor aparece como texto `"2026"` aunque el nombre del campo es "Año".
+**Tipo de nodo:**
 
-**Ejemplo (valor calculado observado):**
+Calculado.
+
+**Editable:**
+
+No.
+
+**Nodo JSON de ejemplo:**
 
 ```json
-"2026"
+{
+  "id": "1.04.05",
+  "nombre": "Año",
+  "tipo_nodo": "campo",
+  "tipo": "calculado",
+  "editable": false,
+  "captura": {
+    "columna": "R",
+    "fila": 53,
+    "abarca_columnas": 1,
+    "abarca_filas": 1
+  },
+  "valor": "2026"
+}
 ```
 
----
+### Campo 1.04.06 — Valor
 
-## Campo 1.04.06 — Valor
+**Representa:**
 
-**Tipo:** decimal (`decimales: 2` en ESTRUCTURA)
+El valor del indicador de brecha correspondiente al espacio
+geográfico y año registrados.
 
-**Editable:** Sí
+**Tipo de información:**
 
-**Qué representa:** valor del indicador de brecha para el espacio geográfico y año de referencia.
+Decimal.
 
-**Qué debe contener:** un valor numérico decimal (hasta 2 decimales según schema).
+**Decimales configurados:**
 
-**Regla de llenado:** campo editable de captura. **Diferencia ESTRUCTURA vs EJEMPLO:** el schema declara `tipo: decimal`, pero el JSON EJEMPLO guarda el string `"60%"` (incluye símbolo de porcentaje). Al autollenar, preferir el tipo del schema (`decimal`) si la fuente de verdad aporta un número; si se reproduce el estilo del ejemplo, el valor observado incluye `%` como texto. No está determinado por los archivos si el Excel espera fracción (`0.60`), porcentaje numérico (`60`) o texto con `%`.
+2.
 
-**Ejemplo (tal como aparece en el JSON EJEMPLO):**
+**Regla de llenado:**
+
+Extrae el valor del indicador de brecha desde la documentación
+proporcionada por el cliente.
+
+Conserva el significado del valor y su unidad de medida.
+
+**Ejemplo de llenado:**
+
+60%
+
+**Nodo JSON de ejemplo:**
 
 ```json
-"60%"
+{
+  "id": "1.04.06",
+  "nombre": "Valor",
+  "tipo_nodo": "campo",
+  "tipo": "decimal",
+  "editable": true,
+  "decimales": 2,
+  "captura": {
+    "columna": "T",
+    "fila": 53,
+    "abarca_columnas": 1,
+    "abarca_filas": 1
+  },
+  "valor": "60%"
+}
 ```
 
----
+### Campo 1.04.07 — Contribución del Cierre de Brecha (Valor)
 
-## Campo 1.04.07 — Contribución del Cierre de Brecha (Valor)
+**Representa:**
 
-**Tipo:** decimal (`decimales: 2` en ESTRUCTURA)
+El valor que expresa la contribución del proyecto al cierre de
+la brecha prioritaria identificada.
 
-**Editable:** Sí
+**Tipo de información:**
 
-**Qué representa:** magnitud de la contribución del proyecto al cierre de la brecha.
+Decimal.
 
-**Qué debe contener:** valor decimal (hasta 2 decimales).
+**Decimales configurados:**
 
-**Regla de llenado:** captura manual editable. En el JSON EJEMPLO el valor es el número `1` (tipo JSON number), no un string. Qué unidad expresa exactamente ese `1` **no está determinado por los archivos proporcionados** (¿un CIAI? ¿un punto porcentual?). El ejemplo solo muestra el número.
+2.
 
-**Ejemplo:**
+**Regla de llenado:**
 
-```json
+Identifica el valor correspondiente en la información proporcionada
+para el proyecto y registra dicho valor.
+
+No confundas este campo con el valor del indicador de brecha
+registrado en el campo 1.04.06.
+
+**Ejemplo de llenado:**
+
 1
+
+**Nodo JSON de ejemplo:**
+
+```json
+{
+  "id": "1.04.07",
+  "nombre": "Contribución del Cierre de Brecha (Valor)",
+  "tipo_nodo": "campo",
+  "tipo": "decimal",
+  "editable": true,
+  "decimales": 2,
+  "captura": {
+    "columna": "M",
+    "fila": 55,
+    "abarca_columnas": 8,
+    "abarca_filas": 1
+  },
+  "valor": 1
+}
 ```
 
----
+El JSON de ejemplo confirma los valores de 1.04.01 a 1.04.07: servicio de cuidado diurno, indicador PCIAICI, CIAI como unidad de medida, distrito de San Sebastian, año 2026, valor 60% y contribución 1.
 
-## Resumen de campos editables vs no editables (Sección 01)
+## Reglas generales para la Sección 1
 
-| ID | Nombre | Editable | Acción en autollenado |
-|---|---|---|---|
-| 1.01.01 | Nivel de gobierno : (UF) | Sí | Llenar (catálogo) |
-| 1.01.02 | Entidad : (UF) | Sí | Llenar |
-| 1.01.03 | Nombre de la UF : | Sí | Llenar |
-| 1.01.04 | Responsable de la UF : | Sí | Llenar |
-| 1.01.05 | Nivel de gobierno : (UEI) | Sí | Llenar (catálogo) |
-| 1.01.06 | Entidad : (UEI) | Sí | Llenar |
-| 1.01.07 | Nombre de la UEI : | Sí | Llenar |
-| 1.01.08 | Responsable de la UEI : | Sí | Llenar |
-| 1.02.01 | Función | Sí | Llenar |
-| 1.02.02 | División funcional | Sí | Llenar |
-| 1.02.03 | Grupo funcional | Sí | Llenar |
-| 1.02.04 | Sector responsable | Sí | Llenar |
-| 1.02.05 | Tipología de proyecto | Sí | Llenar |
-| 1.03.01 | Naturaleza de intervención | Sí | Llenar (catálogo) |
-| 1.03.02 | Objeto de intervención | No | NO LLENAR (calculado) |
-| 1.03.03 | Localización | No | NO LLENAR (calculado) |
-| 1.04.01 | Servicios públicos con brecha… | No | NO LLENAR (calculado) |
-| 1.04.02 | Nombre del Indicador de brecha… | No | NO LLENAR (calculado) |
-| 1.04.03 | Unidad de medida | No | NO LLENAR (calculado) |
-| 1.04.04 | Espacio geográfico | No | NO LLENAR (calculado) |
-| 1.04.05 | Año | No | NO LLENAR (calculado) |
-| 1.04.06 | Valor | Sí | Llenar (decimal) |
-| 1.04.07 | Contribución del Cierre de Brecha (Valor) | Sí | Llenar (decimal) |
+1. Identifica primero la sección:
+   "SECCIÓN N°01: DATOS GENERALES DEL PROYECTO"
+
+2. Identifica después la subsección por su nombre:
+   - "1.01 Institucionalidad"
+   - "1.02 Responsabilidad funcional y tipología del proyecto de inversión"
+   - "1.03 Nombre del proyecto de inversión"
+   - "1.04 Alineamiento y contribución al cierre de una brecha prioritaria"
+
+3. Dentro de la subsección, identifica el campo utilizando su nombre
+   exactamente o mediante coincidencia semántica clara.
+
+4. Utiliza el ID numérico del campo únicamente como referencia para
+   localizar el nodo correspondiente dentro del JSON.
+
+5. No modifiques la estructura del nodo.
+
+6. No modifiques:
+   - id
+   - nombre
+   - tipo_nodo
+   - tipo
+   - editable
+   - etiquetas
+   - captura
+   - decimales
+
+7. Cuando corresponda llenar un campo, modifica únicamente su propiedad
+   "valor".
+
+8. No inventes información que no pueda ser sustentada por los
+   documentos proporcionados por el cliente.
+
+9. Si un campo requiere información que no está disponible en los
+   documentos, no inventes un valor.
+
+10. Respeta las opciones definidas en "etiquetas" cuando el campo las
+    tenga.
+
+11. Los campos cuyo "editable" sea false no deben tratarse como campos
+    de captura manual. Son campos calculados o derivados.
+
+12. Los campos calculados deben conservar la lógica definida por la
+    estructura del sistema y no deben ser tratados como campos
+    editables por la IA.
+
+13. Cuando exista evidencia suficiente para completar un campo,
+    registra el valor en el nodo JSON correspondiente.
+
+14. El objetivo es actualizar los valores del JSON, no escribir
+    directamente sobre las celdas del archivo Excel.
