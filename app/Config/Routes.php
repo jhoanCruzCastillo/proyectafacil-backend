@@ -46,6 +46,12 @@ $routes->group('api', ['filter' => 'auth'], static function (RouteCollection $ro
     $routes->get('ejemplos/(:num)/excel', 'ExcelEjemplosController::get/$1');
     $routes->post('ejemplos/(:num)/excel', 'ExcelEjemplosController::set/$1');
 
+    $routes->get('ejemplos/(:num)/fuente-verdad', 'FuenteVerdadController::index/$1');
+    $routes->post('ejemplos/(:num)/fuente-verdad/archivos', 'FuenteVerdadController::guardarArchivo/$1');
+    $routes->delete('ejemplos/(:num)/fuente-verdad/archivos/(:num)', 'FuenteVerdadController::eliminarArchivo/$1/$2');
+    $routes->put('ejemplos/(:num)/fuente-verdad/texto', 'FuenteVerdadController::guardarTexto/$1');
+    $routes->post('ejemplos/(:num)/llenar-ia', 'LlenadoIAController::llenarFicha/$1');
+
     $routes->get('usuarios', 'UsuariosController::index');
     $routes->post('usuarios', 'UsuariosController::create');
     $routes->put('usuarios/(:num)', 'UsuariosController::update/$1');

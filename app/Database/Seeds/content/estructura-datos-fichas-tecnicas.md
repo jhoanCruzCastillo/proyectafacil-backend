@@ -221,7 +221,7 @@ Como ya se explicó en detalle la estructura base del nodo `campo` en el punto 3
 
 ### 3.2 Tipo calculado ✏️ *(AQUÍ MODIFIQUE HOY 2026-08-06 a las 08:47 hrs)*
 
-**Si la celda del Excel ya trae su propia fórmula, no hace falta declarar nada.** El valor se obtiene evaluando esa fórmula con los datos que la estructura ya tiene, y se muestra en vivo mientras se llena la ficha. `formula` y `fuentes` quedan solo para los cálculos **propios** de la app, los que no existen en el Excel.
+🔴 **AQUÍ MODIFIQUÉ HOY 2026-08-12 — `formula`/`fuentes` quedan obsoletos.** Si la celda del Excel ya trae su propia fórmula, no hace falta declarar nada: el valor se obtiene evaluando esa fórmula con los datos que la estructura ya tiene, y se muestra en vivo mientras se llena la ficha. Esto no se limita a fórmulas aritméticas — incluye cualquier fórmula de Excel, incluidas las de búsqueda/referencia que se autocompletan a partir de una selección previa (ej. un `VLOOKUP`/`INDEX-MATCH` que llena Departamento/Provincia al elegir un UBIGEO). `formula` y `fuentes` (tabla de abajo) **ya no son necesarios**: existían para que la app calculara por su cuenta lo que el Excel no traía, pero en la práctica todo campo `calculado` de las fichas reales ya trae su propia fórmula en el Excel asignado, así que se evalúa en vivo con el motor de la app y no hace falta declarar nada aparte.
 
 **Una celda con fórmula NUNCA se escribe.** Al insertar los datos se respeta lo que el Excel calcula: nada de pisar una fórmula con un número. Esto vale para toda celda del archivo que lleve fórmula, esté o no declarada como calculada en la estructura.
 
@@ -243,6 +243,8 @@ Como ya se explicó en detalle la estructura base del nodo `campo` en el punto 3
 |---|---|
 | `formula` | Fórmula en sintaxis de Excel, usando `{id}` como marcador de cada campo referenciado en vez de una celda directa (ej. `{8.01.02}` en vez de `H20`). El generador reemplaza cada `{id}` por la celda real de ese campo (resuelta vía su propio `captura`) al momento de escribir el archivo Excel. |
 | `fuentes` | Array explícito de todos los `id` que aparecen dentro de `formula`. Aunque técnicamente se podrían extraer parseando el string de `formula`, mantenerlo como array separado sirve para: validar rápido que todas las referencias existen en el documento, y para que cualquier lógica de dependencias (por ejemplo, saber qué campos recalcular si cambia uno) no tenga que parsear texto. |
+
+🔴 **AQUÍ MODIFIQUÉ HOY 2026-08-12 — `formula`/`fuentes` en desuso.** El ejemplo y la tabla de arriba (`formula`, `fuentes`) documentan el mecanismo original para que la app calculara valores que el Excel no traía. Ya no hace falta declararlos en fichas nuevas: todo campo `calculado` real trae su propia fórmula en el Excel asignado (aritmética o de búsqueda/referencia), así que el motor de cálculo en vivo la evalúa directamente. Se dejan como referencia histórica del formato.
 
 🔴 **AQUÍ MODIFIQUÉ HOY 2/08/2026 a las 12:01 hrs.** Cómo se comporta este tipo en el viaje de ida y vuelta al Excel — qué se protege en cada dirección y por qué — está en la sección **5. PROTECCIÓN DE CELDAS CALCULADAS**. Resumen: al **volcar** (Excel → JSON) un campo `calculado` se salta, conserva su `formula` y no el número cacheado; al **insertar** (JSON → Excel) su fórmula solo se escribe si la celda destino no trae ya una propia.
 

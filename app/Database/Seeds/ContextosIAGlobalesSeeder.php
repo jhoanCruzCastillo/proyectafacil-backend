@@ -58,6 +58,37 @@ class ContextosIAGlobalesSeeder extends Seeder
                 // cualquier sección que lo necesite.
                 'markdown' => file_get_contents(__DIR__ . '/content/estructura-datos-fichas-tecnicas.md'),
             ],
+            [
+                'nombre' => 'Reglas de llenado automático con IA',
+                'icono'  => 'faWandMagicSparkles',
+                // Reglas de comportamiento para el LLENADO AUTOMÁTICO (el cliente carga su "fuente de
+                // la verdad" — PDF/TXT/MD + texto libre sobre su proyecto real — y la IA llena la ficha
+                // completa). Es transversal a cualquier sector: se asocia siempre, junto con los
+                // contextos de cada sección (que sí explican el dominio) y "Estructura de datos" (que
+                // explica la forma). Este contexto explica el CRITERIO al llenar, no el contenido ni la
+                // estructura.
+                'markdown' => <<<'MD'
+## Qué es el llenado automático
+El cliente carga una "fuente de la verdad" (uno o más documentos PDF/TXT/MD y opcionalmente texto libre) que describe SU proyecto real. A partir de eso, y de los contextos de cada sección, se llena automáticamente toda la ficha técnica — campo por campo, no como conversación.
+
+## La única fuente de datos es la fuente de la verdad
+- Todo valor que se proponga debe poder rastrearse a algo que el cliente escribió o subió. Los contextos de sección y "Estructura de datos" explican CÓMO interpretar y dónde va cada dato — nunca son ellos mismos la fuente del dato.
+- Los ejemplos ya resueltos (ejemplos de referencia) sirven solo como guía de **formato y estilo de redacción** — cómo se ve una respuesta bien escrita para ese campo. Nunca se copia su contenido real (nombres, cifras, ubicaciones) a la ficha del cliente, salvo que la fuente de la verdad del cliente diga exactamente eso.
+- Si un campo no tiene con qué llenarse en la fuente de la verdad, se deja vacío. Nunca se inventa, aproxima ni "completa razonablemente" un dato ausente — un campo vacío es honesto; un dato inventado no lo es y puede terminar en un documento oficial.
+
+## Qué campos no se llenan
+- Nunca proponer valor para un campo que la ficha marca como calculado por el Excel (fórmula propia) — se resuelve solo a partir de los demás campos. Si no es evidente si un campo es calculado, mejor omitirlo que arriesgar un valor que de todas formas el Excel va a ignorar.
+- Los campos tipo tabla (filas dinámicas, agrupadas o jerárquicas) quedan fuera del llenado automático por ahora — su estructura es demasiado específica para generarla a ciegas. Se llenan a mano o con ayuda puntual del asesor de IA, campo por campo.
+
+## Formato de cada valor
+- Fechas, porcentajes y montos se escriben tal como se leerían en la hoja ("1.10%", "S/ 1,234"), nunca como el número crudo interno.
+- Para campos de selección o catálogo (una lista cerrada de opciones), usar exactamente el texto de una opción válida si se conoce con certeza cuál aplica; si hay duda entre varias, dejarlo vacío en vez de elegir una al azar.
+- Texto libre: redactar en español, en el registro formal de un documento técnico oficial — ni telegráfico ni conversacional.
+
+## Cuando la fuente de la verdad no alcanza para una sección entera
+Si ningún dato de la fuente de la verdad aplica a una sección completa, esa sección se deja tal como estaba (vacía o con lo que ya tenía) — no se rellena con contenido genérico solo para que "se vea completa".
+MD,
+            ],
         ];
     }
 

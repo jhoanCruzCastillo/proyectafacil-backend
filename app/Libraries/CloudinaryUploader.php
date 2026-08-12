@@ -97,4 +97,23 @@ class CloudinaryUploader
 
         return (string) $resultado['secure_url'];
     }
+
+    /**
+     * Sube un documento de la "fuente de la verdad" (PDF/TXT/MD que el cliente carga con información
+     * de su proyecto). Llega como data URI desde el navegador, igual que subirExcel.
+     *
+     * @return string URL segura (https) del archivo subido
+     */
+    public function subirDocumento(string $fuente, string $nombreOriginal): string
+    {
+        $resultado = $this->uploadApi->upload($fuente, [
+            'resource_type'      => 'raw',
+            'folder'             => 'proyecta-facil/fuente-verdad',
+            'use_filename'       => true,
+            'unique_filename'    => true,
+            'filename_override'  => $nombreOriginal,
+        ]);
+
+        return (string) $resultado['secure_url'];
+    }
 }

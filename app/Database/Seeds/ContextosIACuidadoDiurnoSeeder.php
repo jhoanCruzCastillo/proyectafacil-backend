@@ -10,9 +10,11 @@ use CodeIgniter\Database\Seeder;
 // plantilla Excel.
 //
 // Siembra tres cosas:
-//  1. Dos contextos GENERALES propios de esta ficha (aplican a TODA la FTE-CUIDADO-DIURNO, pero no
-//     se comparten con otras fichas ni sectores — son específicos de la tipología CIAI, a diferencia
-//     de un contexto global de verdad como "Estructura de datos" o "Invierte.pe").
+//  1. Tres contextos GENERALES (UI: "Locales") propios de esta ficha (aplican a TODA la
+//     FTE-CUIDADO-DIURNO, pero no se comparten con otras fichas ni sectores): dos de reglas de la
+//     tipología CIAI, y una guía de llenado campo por campo (por identificador) extraída del ejemplo
+//     de referencia "4_ejemplo_anexo" — a diferencia de un contexto global de verdad como
+//     "Estructura de datos" o "Invierte.pe".
 //  2. El contexto LOCAL de cada sección de la plantilla, con los globales verdaderamente
 //     compartidos que le apliquen (los generales de arriba se los da la IA automáticamente a toda la
 //     ficha, no hace falta asociarlos sección por sección).
@@ -231,6 +233,10 @@ Se debe elaborar **estudio de preinversión a nivel de Perfil** cuando:
 - Verificar que el monto declarado sea coherente con el tipo de documento técnico.
 - No inventar cifras: si falta un dato, pedirlo al usuario.
 MD,
+            ],
+            [
+                'nombre'   => 'Guía de llenado campo por campo',
+                'markdown' => file_get_contents(__DIR__ . '/content/fte-cuidado-diurno-campos-guia.md'),
             ],
         ];
     }
