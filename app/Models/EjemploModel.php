@@ -12,6 +12,7 @@ class EjemploModel extends Model
 
     protected $allowedFields = [
         'plantilla_id', 'nombre', 'subtitulo', 'detalle', 'activo',
-        'propietario_usuario_id', 'creado_por_usuario_id', 'compartida', 'estado', 'fuente_verdad_texto',
+        'propietario_usuario_id', 'creado_por_usuario_id', 'compartida', 'estado',
+        'excel_actualizado', 'fuente_verdad_texto',
     ];
 }

@@ -139,6 +139,10 @@ class EjemplosController extends BaseController
             'creadoPorUsuarioId' => $fila['creado_por_usuario_id'] !== null ? (string) $fila['creado_por_usuario_id'] : null,
             'compartida'        => (bool) $fila['compartida'],
             'estado'            => $fila['estado'],
+            // Ausente en filas previas a la migración → se trata como al día.
+            'excelActualizado'  => array_key_exists('excel_actualizado', $fila)
+                ? (bool) $fila['excel_actualizado']
+                : true,
         ];
     }
 
@@ -154,6 +158,7 @@ class EjemplosController extends BaseController
             'creadoPorUsuarioId' => 'creado_por_usuario_id',
             'compartida'         => 'compartida',
             'estado'             => 'estado',
+            'excelActualizado'   => 'excel_actualizado',
         ];
 
         $fila = [];
@@ -162,7 +167,7 @@ class EjemplosController extends BaseController
                 continue;
             }
             $valor = $dto[$claveDto] ?? null;
-            if (in_array($columna, ['activo', 'compartida'], true)) {
+            if (in_array($columna, ['activo', 'compartida', 'excel_actualizado'], true)) {
                 $valor = (int) (bool) $valor;
             }
             $fila[$columna] = $valor;
@@ -170,6 +175,10 @@ class EjemplosController extends BaseController
         // Nace archivado por defecto — el admin decide explícitamente cuándo publicarlo.
         if (! $soloProvistos && ! isset($fila['estado'])) {
             $fila['estado'] = 'archivado';
+        }
+        // Nuevo ejemplo: la copia de Excel (recién creada o pendiente) arranca al día.
+        if (! $soloProvistos && ! isset($fila['excel_actualizado'])) {
+            $fila['excel_actualizado'] = 1;
         }
 
         return $fila;
