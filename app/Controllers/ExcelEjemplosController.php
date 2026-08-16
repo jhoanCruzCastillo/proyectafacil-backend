@@ -2,7 +2,7 @@
 
 namespace App\Controllers;
 
-use App\Libraries\CloudinaryUploader;
+use App\Libraries\ExcelStorage;
 use App\Models\ArchivoModel;
 use App\Models\EjemploModel;
 use CodeIgniter\HTTP\ResponseInterface;
@@ -35,18 +35,17 @@ class ExcelEjemplosController extends BaseController
 
         $dto = $this->request->getJSON(true) ?? [];
         $nombre = (string) ($dto['nombre'] ?? 'archivo.xlsx');
-        // dataUrl acá puede ser una URL de Cloudinary ya existente (copia inicial del Excel de la
-        // plantilla) o un data URI base64 nuevo (resultado de insertarValoresEnExcel) — Cloudinary
-        // acepta ambos como origen de upload, ver CloudinaryUploader::subirExcel.
+        // dataUrl: URL Cloudinary, URL presignada S3, o data URI tras insertarValoresEnExcel.
         $dataUrl = (string) ($dto['dataUrl'] ?? '');
         if ($dataUrl === '') {
             return $this->response->setStatusCode(400)->setJSON(['error' => 'Falta el archivo (dataUrl)']);
         }
 
+        $storage = new ExcelStorage();
         try {
-            $url = (new CloudinaryUploader())->subirExcel($dataUrl, $nombre);
+            $url = $storage->subirDesdeFuente($dataUrl, $nombre);
         } catch (Throwable $e) {
-            return $this->response->setStatusCode(502)->setJSON(['error' => 'No se pudo subir a Cloudinary: ' . $e->getMessage()]);
+            return $this->response->setStatusCode(502)->setJSON(['error' => ExcelStorage::mensajeErrorAmigable($e)]);
         }
 
         $archivoModel = new ArchivoModel();
@@ -74,10 +73,12 @@ class ExcelEjemplosController extends BaseController
 
     private function toDto(array $archivo): array
     {
+        $storage = new ExcelStorage();
+
         return [
             'id'          => (string) $archivo['id'],
             'nombre'      => $archivo['nombre'],
-            'dataUrl'     => $archivo['url'],
+            'dataUrl'     => $storage->urlParaCliente((string) ($archivo['url'] ?? ''), (int) $archivo['id']),
             'fechaSubida' => $archivo['fecha_subida'],
         ];
     }
