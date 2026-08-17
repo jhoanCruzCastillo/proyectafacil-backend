@@ -151,6 +151,9 @@ class PlantillasController extends BaseController
             if ($columna === 'disponible_nivel0') {
                 $valor = (int) (bool) $valor;
             }
+            if ($columna === 'fecha_actualizacion' && is_string($valor)) {
+                $valor = $this->normalizarFecha($valor);
+            }
             $fila[$columna] = $valor;
         }
         if (! $soloProvistos && ! isset($fila['fecha_actualizacion'])) {
@@ -175,5 +178,23 @@ class PlantillasController extends BaseController
                 'tipologia'    => $tipologia,
             ]);
         }
+    }
+
+    // El frontend manda a veces `d/m/Y` (Date.toLocaleDateString('es-PE')); la columna es DATE (`Y-m-d`).
+    // Sin esto PostgreSQL rechaza p.ej. "14/8/2026" y el PUT entero falla — también bloqueando el
+    // guardado de valores del ejemplo que venía después en el mismo flujo del editor.
+    private function normalizarFecha(string $valor): string
+    {
+        if (preg_match('/^\d{4}-\d{2}-\d{2}/', $valor)) {
+            return substr($valor, 0, 10);
+        }
+        $partes = explode('/', $valor);
+        if (count($partes) === 3) {
+            [$d, $m, $y] = $partes;
+
+            return sprintf('%04d-%02d-%02d', (int) $y, (int) $m, (int) $d);
+        }
+
+        return $valor;
     }
 }

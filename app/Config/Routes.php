@@ -31,6 +31,8 @@ $routes->group('api', ['filter' => 'auth'], static function (RouteCollection $ro
     $routes->post('plantillas/(:num)/archivos', 'ArchivosController::addArchivo/$1');
     $routes->delete('plantillas/(:num)/archivos/(:num)', 'ArchivosController::deleteArchivo/$1/$2');
     $routes->post('plantillas/(:num)/archivos/(:num)/asignar', 'ArchivosController::asignarArchivo/$1/$2');
+    // Proxy binario (S3/Cloudinary) — el SPA no puede fetch directo al bucket (CORS).
+    $routes->get('archivos/(:num)/contenido', 'ArchivosController::contenido/$1');
 
     // Imágenes de campos tipo `imagen`: el binario se sube a Cloudinary y en el JSON se guarda su URL.
     $routes->post('imagenes', 'ImagenesController::subir');
