@@ -56,6 +56,8 @@ class DeployDemoCompletoSeeder extends Seeder
             SubtemasEspecialidadSeeder::class,
             ContextosIAGlobalesSeeder::class,
             ContextosIACuidadoDiurnoSeeder::class,
+            ContextoGeneralCuidadoDiurnoSeeder::class,
+            PromptSistemaCuidadoDiurnoSeeder::class,
             CronogramaDemoAsesor1Seeder::class,
             NoAtendidasDemoAsesor1Seeder::class,
             LiquidacionDemoAsesor1Seeder::class,

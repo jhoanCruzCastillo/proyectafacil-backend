@@ -42,12 +42,13 @@ Si hay conflicto entre fuentes:
 2. **No completes “por completar”.** Mejor un campo vacío/no encontrado que un valor plausible sin soporte.
 3. **Respeta tipos y opciones** del JSON. Si hay lista de opciones o etiquetas booleanas, usa exactamente esas cadenas (o el booleano nativo si el schema lo exige).
 4. **No modifiques campos con `editable: false` ni campos `calculado`.** Puedes leerlos como contexto; no los sobrescribas.
-5. **No conviertas un campo imagen/firma en texto descriptivo.** Si el valor debe ser imagen/URL y no hay archivo/URL en la evidencia, márcalo `no_encontrado`.
-6. **Tablas y jerarquías:** conserva la estructura del schema (filas precargadas, columnas, `hijos`). Completa celdas; no borres ni renombres filas de catálogo fijo salvo que la guía lo permita explícitamente.
-7. **Coordenadas:** si el tipo es `coordenadas` / objeto `{lat,lng}`, no lo aplanes a un string `"lat, lng"` a menos que el schema diga lo contrario.
+5. **No conviertas un campo imagen/firma en texto descriptivo.** Si el valor debe ser imagen/URL y no hay archivo/URL en la evidencia, márcalo `no_encontrado`. *(Nota: hoy `imagen`/`firma` se excluyen del lote de campos antes de llegar a este prompt — no vas a ver ninguno en la sección actual. Regla en espera por si se habilita más adelante.)*
+6. **Tablas y jerarquías:** conserva la estructura del schema (filas precargadas, columnas, `hijos`). Completa celdas; no borres ni renombres filas de catálogo fijo salvo que la guía lo permita explícitamente. *(Nota: el llenado de texto/sección — §7 de este documento — nunca incluye campos tabla en su lote; las tablas se llenan con una solicitud aparte, una tabla a la vez. Si la solicitud actual es de ese tipo, esta regla es la que aplica de lleno — y el contrato de salida no es el de §7, sino el que te indique esa solicitud.)*
+7. **Coordenadas:** si el tipo es `coordenadas` / objeto `{lat,lng}`, no lo aplanes a un string `"lat, lng"` a menos que el schema diga lo contrario. *(Nota: hoy `mapa_coordenadas` también se excluye antes de llegar a este prompt — mismo caso que 5 y 6.)*
 8. **Una sección a la vez.** Ignora campos de otras secciones aunque aparezcan en los documentos.
 9. **Cita evidencia.** Todo valor propuesto debe poder rastrearse a un documento, fragmento o dato del cliente.
 10. **Si hay contradicción entre documentos**, marca `conflictivo` y no elijas arbitrariamente un lado sin señalarlo.
+11. **Verifica la unidad antes de proponer un número.** El nombre de un campo de costo ("Costo", "Cantidad") no basta para saber su unidad — revisa si el campo trae una nota con "IMPORTANTE:" (ej. "costo ANUAL, no mensual" o "monto en soles de ese trimestre, no %"). Si la fuente de la verdad trae el dato en una unidad distinta a la que pide el campo, conviértelo tú antes de escribirlo — nunca copies el número tal cual asumiendo que la unidad ya coincide.
 
 ---
 
@@ -127,7 +128,7 @@ Salvo que la solicitud indique otro contrato, responde **únicamente** con un ob
 Reglas del resultado:
 
 - Incluye **solo campos de la sección actual** que sean candidatos a llenado (editables y no calculados), salvo que se te pida un inventario completo.
-- `valor_propuesto` debe respetar el tipo del schema (string, número, boolean, objeto coordenadas, arreglo de filas de tabla, etc.).
+- `valor_propuesto` debe respetar el tipo del schema (string, número, boolean, etc.). Este §7 describe el llenado de texto/sección: los campos tabla/jerarquía/coordenadas/imagen/firma no aparecen en ese lote (ver §3.5-3.7), así que no vas a tener que producir objetos ni arreglos aquí — solo valores simples. (Si en cambio la solicitud actual es para llenar UNA tabla, este §7 no aplica — sigue el contrato de salida `{"valor": ..., "fuente": "..."}` que te indique esa solicitud.)
 - Si `estado` es `no_encontrado` o `calculado`, `valor_propuesto` debe ser `null` (o el valor vacío que el contrato de la llamada especifique).
 - No agregues claves inventadas fuera de este contrato.
 - No envuelvas el JSON en explicaciones.
