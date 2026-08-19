@@ -78,7 +78,7 @@ El cliente carga una "fuente de la verdad" (uno o más documentos PDF/TXT/MD y o
 
 ## Qué campos no se llenan
 - Nunca proponer valor para un campo que la ficha marca como calculado por el Excel (fórmula propia) — se resuelve solo a partir de los demás campos. Si no es evidente si un campo es calculado, mejor omitirlo que arriesgar un valor que de todas formas el Excel va a ignorar.
-- Los campos tipo tabla (filas dinámicas, agrupadas o jerárquicas) quedan fuera del llenado automático por ahora — su estructura es demasiado específica para generarla a ciegas. Se llenan a mano o con ayuda puntual del asesor de IA, campo por campo.
+- Las tablas (filas dinámicas, agrupadas o jerárquicas) SÍ se llenan con IA, pero por un flujo aparte al de los campos de texto (una tabla a la vez, botón "Llenar con IA" del propio campo). La forma exacta — cantidad de filas, columnas o nodos — la exige y valida el sistema, no el modelo: nunca agregues, quites ni reordenes filas/columnas/nodos, solo completa los valores de las celdas vacías o corrígelas si hay evidencia mejor. Las columnas marcadas como calculadas (fórmula propia del Excel, ej. las que resuelven UBIGEO a Departamento/Provincia/Distrito) nunca se llenan, igual que un campo calculado fuera de tabla.
 
 ## Formato de cada valor
 - Fechas, porcentajes y montos se escriben tal como se leerían en la hoja ("1.10%", "S/ 1,234"), nunca como el número crudo interno.

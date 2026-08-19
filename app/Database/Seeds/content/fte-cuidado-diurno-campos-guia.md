@@ -3,7 +3,7 @@
 Este contexto describe, campo por campo (por su `identificador` único), cómo debe llenarse cada campo de la Ficha Técnica Estándar del Servicio de Cuidado Diurno (CIAI). Los ejemplos marcados como "Ejemplo real" provienen del ejemplo de referencia ya cargado para esta ficha ("4_ejemplo_anexo") — úsalos como guía de formato y estilo, no los copies literalmente salvo que el contexto del usuario coincida.
 
 Reglas generales (ya cubiertas por el contexto global "Reglas de llenado automático con IA", reforzadas aquí para esta ficha):
-- Los campos de tipo **tabla** no se llenan por este mecanismo (requieren estructura de filas) — se listan aquí solo para que sepas qué contienen si el usuario pregunta.
+- Los campos de tipo **tabla** se llenan con un flujo aparte, una tabla a la vez (botón "Llenar con IA" del propio campo, no este listado por sección) — se listan aquí solo para que sepas qué contienen si el usuario pregunta.
 - Los campos **calculado** nunca se llenan — el Excel los calcula solo.
 - Los campos **imagen** y **mapa_coordenadas** no se llenan con texto.
 
@@ -48,11 +48,11 @@ Reglas generales (ya cubiertas por el contexto global "Reglas de llenado automá
 
 ### 2.01 Localización del área de estudio del proyecto
 
-- **2.01.01** — Localización del área de estudio del proyecto: tabla (no se llena por este mecanismo). Columnas: N°, Ubigeo, Departamento, Provincia, Distrito, Localidad/Centro poblado.
+- **2.01.01** — Localización del área de estudio del proyecto: tabla. Columnas: N°, Ubigeo, Departamento, Provincia, Distrito, Localidad/Centro poblado.
 
 ### 2.02 Localización del área de influencia del proyecto
 
-- **2.02.01** — Localización del área de influencia del proyecto: tabla (no se llena por este mecanismo). Columnas: N°, Ubigeo, Departamento, Provincia, Distrito, Localidad/Centro poblado.
+- **2.02.01** — Localización del área de influencia del proyecto: tabla. Columnas: N°, Ubigeo, Departamento, Provincia, Distrito, Localidad/Centro poblado.
 
 ### 2.03 Macro y micro localización del área de estudio
 
@@ -72,11 +72,11 @@ Reglas generales (ya cubiertas por el contexto global "Reglas de llenado automá
 - **2.04.06** — Accesibilidad: Ejemplo real: "El territorio de este distrito se extiende en 89,44 kilómetros cuadrados y se encuentra dentro del conurbano de la ciudad de Cuzco. Se encuentra localizado a 13º 31’ 49” Latitud Sur y 71º 56’ 14” Longitud Oeste. Se encuentra a 15 mitutos del centro de la ciudad de Cusco. Las vías de acceso son asfaltadas, se encuentran en buen estado."".
 - **2.04.07** — Condiciones de pobreza: Ejemplo real: "En el distrito aún existe una exclusión social que genera pobreza monetaria en la población principalmente del área rural y zonas periurbanas de expansión, donde la población tiene carencias, ello está condicionado a las limitadas oportunidades de desarrollo que brindan las autoridades, como la calidad educativa que se brinda, el nivel educativo que tiene la población, limitadas oportunidades laborales, servicios de salud integrales que garanticen la esperanza de vida. El distrito de San Sebastián alcanza al año 2019 un Índice de Desarrollo Humano IDH de 0,6806, lo que significa que el nivel de desarrollo humano en el distrito se encuentra en nivel medio. Fuente: Plan de Desarrollo Concertado MD San Sebastián al 2033".
 - **2.04.08** — Principales características sociales y económicas: Ejemplo real: "La vulnerabilidad de los derechos de los niños, niñas y adolescentes es un problema que podrían deberse a las limitadas acciones la disfunción familiar, entorno familiar desfavorable y el limitado sistema de protección de las niñas, niños y adolescentes por las instancias que velan por sus derechos esta es ocasionado por los propios padres por múltiples factores como discusiones, disfunciones; así como por personas extrañas que violenta, vulneran sus derechos y dañan su integridad afectando el desarrollo integral, socioemocional y su desarrollo en el futuro como ciudadano, así mismo las instancias que velan por sus derechos no protegen adecuadamente permitiendo la persistencia e incremento de la vulneración de sus derechos. para su reducción se debe promover acciones multisectoriales desde la educación, salud, seguridad y fortalecer las instancias que velan por los derechos de los niños, niñas y adolescentes. Fuente: Plan de Desarrollo Concertado MD San Sebastián al 2033".
-- **2.04.09** — C. Acceso a servicios públicos en el distrito: tabla (no se llena por este mecanismo). Columnas: Servicio público, Porcentaje de viviendas con acceso, Año de información, Fuente de información (incluir enlace).
+- **2.04.09** — C. Acceso a servicios públicos en el distrito: tabla. Columnas: Servicio público, Porcentaje de viviendas con acceso, Año de información, Fuente de información (incluir enlace).
 
 ### 2.05 Identificar los peligros que pueden ocurrir en el área de estudio
 
-- **2.05.01** — Identificar los peligros que pueden ocurrir en el área de estudio: tabla (no se llena por este mecanismo). Columnas: Peligros, Sí / No, Características (Intensidad, frecuencia, área de impacto, otros), Sí/No, Características de los cambios o los nuevos peligros.
+- **2.05.01** — Identificar los peligros que pueden ocurrir en el área de estudio: tabla. Columnas: Peligros, Sí / No, Características (Intensidad, frecuencia, área de impacto, otros), Sí/No, Características de los cambios o los nuevos peligros.
 
 ## Sección 3: SECCIÓN N°03: DIAGNÓSTICO DE LA UNIDAD PRODUCTORA
 
@@ -90,15 +90,15 @@ Reglas generales (ya cubiertas por el contexto global "Reglas de llenado automá
 
 ### 3.03 Localización geográfica de la Unidad Productora
 
-- **3.03.01** — Localización geográfica de la Unidad Productora: tabla (no se llena por este mecanismo). Columnas: N°, UBIGEO, Departamento, Provincia, Distrito, Localidad / Centro poblado, Coordenadas geográficas en decimales Latitud y Longitud.
+- **3.03.01** — Localización geográfica de la Unidad Productora: tabla. Columnas: N°, UBIGEO, Departamento, Provincia, Distrito, Localidad / Centro poblado, Coordenadas geográficas en decimales Latitud y Longitud.
 
 ### 3.04 Diagnóstico de procesos de la Unidad Productora
 
-- **3.04.01** — Caracterización de los procesos de producción del CIAI: tabla (no se llena por este mecanismo). Columnas: N°, Servicio y sus procesos de producción, Descripción ¿En qué consiste el proceso?, Situación actual.
+- **3.04.01** — Caracterización de los procesos de producción del CIAI: tabla. Columnas: N°, Servicio y sus procesos de producción, Descripción ¿En qué consiste el proceso?, Situación actual.
 
 ### 3.05 Diagnóstico de los activos de la UP
 
-- **3.05.01** — Diagnóstico de los activos de la UP: tabla (no se llena por este mecanismo). Columnas: Servicio y procesos de producción, Tipo de Factor productivo, Activos estratégicos, Norma técnica, Sí / No, Estado Situacional.
+- **3.05.01** — Diagnóstico de los activos de la UP: tabla. Columnas: Servicio y procesos de producción, Tipo de Factor productivo, Activos estratégicos, Norma técnica, Sí / No, Estado Situacional.
 
 ### 3.06 Condiciones técnicas del local del CIAI
 
@@ -116,45 +116,45 @@ Reglas generales (ya cubiertas por el contexto global "Reglas de llenado automá
 
 ### 3.07 Detallar las prácticas de operación y mantenimiento del CIAI, en la situación actual
 
-- **3.07.01** — a. Personal: tabla (no se llena por este mecanismo). Columnas: Descripción de las prácticas de operación, en la situación sin proyecto, Detalle, Cantidad, Costo, Total.
-- **3.07.02** — b. Servicios y mantenimiento: tabla (no se llena por este mecanismo). Columnas: Descripción de las condiciones del mantenimiento y los servicios del CIAI, en la situación sin proyecto, Detalle, Cantidad, Costo, Total.
+- **3.07.01** — a. Personal: tabla. Columnas: Descripción de las prácticas de operación, en la situación sin proyecto, Detalle, Cantidad, Costo, Total.
+- **3.07.02** — b. Servicios y mantenimiento: tabla. Columnas: Descripción de las condiciones del mantenimiento y los servicios del CIAI, en la situación sin proyecto, Detalle, Cantidad, Costo, Total.
 
 ### 3.08 Evolución del nivel de producción de servicio de cuidado diurno provisto en el CIAI
 
-- **3.08.01** — Evolución del nivel de producción de servicio de cuidado diurno provisto en el CIAI: tabla (no se llena por este mecanismo). Columnas: Servicios, Unidad de Medida, Año -5, Año -4, Año -3, Año -2, Año -1.
+- **3.08.01** — Evolución del nivel de producción de servicio de cuidado diurno provisto en el CIAI: tabla. Columnas: Servicios, Unidad de Medida, Año -5, Año -4, Año -3, Año -2, Año -1.
 
 ### 3.09 Estimar la exposición de la UP frente a los peligros identificados en el diagnóstico del área de estudio
 
-- **3.09.01** — Estimar la exposición de la UP frente a los peligros identificados en el diagnóstico del área de estudio: tabla (no se llena por este mecanismo). Columnas: Peligros, ¿Cuál es el nivel de exposición del CIAI al peligro?, ¿Cuál es el nivel de fragilidad del CIAI ante la ocurrencia del peligro?, ¿Se cuenta con un plan de contingencia ante la interrupción o alteración del servicio ocasionado por el peligro?.
+- **3.09.01** — Estimar la exposición de la UP frente a los peligros identificados en el diagnóstico del área de estudio: tabla. Columnas: Peligros, ¿Cuál es el nivel de exposición del CIAI al peligro?, ¿Cuál es el nivel de fragilidad del CIAI ante la ocurrencia del peligro?, ¿Se cuenta con un plan de contingencia ante la interrupción o alteración del servicio ocasionado por el peligro?.
 
 ## Sección 4: SECCIÓN N°04: DIAGNÓSTICO DE LOS INVOLUCRADOS
 
 ### 4.01 Descripción de la población afectada
 
-- **4.01.01** — Descripción de la población afectada: tabla (no se llena por este mecanismo). Columnas: Tipo de población, Descripción, Unidad de medida, Cantidad, %.
+- **4.01.01** — Descripción de la población afectada: tabla. Columnas: Tipo de población, Descripción, Unidad de medida, Cantidad, %.
 
 ### 4.02 Caracterización de la población afectada
 
-- **4.02.01** — Niños y niñas que comprenden la población demandante potencial: tabla (no se llena por este mecanismo). Columnas: Variables /indicadores, Categorías, Número de niños, Número de niñas, % respecto a la población demandante efectiva, Fuente.
+- **4.02.01** — Niños y niñas que comprenden la población demandante potencial: tabla. Columnas: Variables /indicadores, Categorías, Número de niños, Número de niñas, % respecto a la población demandante efectiva, Fuente.
 
 ### 4.03 Matriz de involucrados
 
-- **4.03.01** — Matriz de involucrados: tabla (no se llena por este mecanismo). Columnas: Grupos involucrados, Posición, Situación negativa percibida, Intereses o expectativas, Estrategias del Proyecto de Inversión, Acuerdos y compromisos.
+- **4.03.01** — Matriz de involucrados: tabla. Columnas: Grupos involucrados, Posición, Situación negativa percibida, Intereses o expectativas, Estrategias del Proyecto de Inversión, Acuerdos y compromisos.
 
 ## Sección 5: SECCIÓN N°05: PROBLEMA/OBJETIVO
 
 ### 5.01 Definición del problema, sus causas y efectos
 
-- **5.01.01** — Definición del problema central: tabla (no se llena por este mecanismo). Columnas: Descripción del problema central, Indicador, Descripción del indicador, UM, Valor.
-- **5.01.02** — Causas directas, indirectas y evidencias: tabla (no se llena por este mecanismo). Columnas: Causas Directas (CD), Causas indirectas (CI), Evidencias.
-- **5.01.03** — Efectos directos, sustento y evidencias: tabla (no se llena por este mecanismo). Columnas: Sustento (evidencias), Sustento (evidencias), Efectos Directos (ED).
+- **5.01.01** — Definición del problema central: tabla. Columnas: Descripción del problema central, Indicador, Descripción del indicador, UM, Valor.
+- **5.01.02** — Causas directas, indirectas y evidencias: tabla. Columnas: Causas Directas (CD), Causas indirectas (CI), Evidencias.
+- **5.01.03** — Efectos directos, sustento y evidencias: tabla. Columnas: Sustento (evidencias), Sustento (evidencias), Efectos Directos (ED).
 
 ### 5.02 Definición de los objetivos del proyecto
 
-- **5.02.01** — Definición del objetivo central: tabla (no se llena por este mecanismo). Columnas: Descripción del objetivo central, Indicador, Descripción del indicador, UM, Valor.
-- **5.02.02** — Medios fundamentales: tabla (no se llena por este mecanismo). Columnas: N°, Medios fundamentales (componentes), Acciones.
-- **5.02.04** — Medios fundamentales: tabla (no se llena por este mecanismo). Columnas: N°, Medios fundamentales (componentes), Acciones.
-- **5.02.03** — Fines directos e indirectos: tabla (no se llena por este mecanismo). Columnas: Fines Indirectos (FI), Fines directos (FD).
+- **5.02.01** — Definición del objetivo central: tabla. Columnas: Descripción del objetivo central, Indicador, Descripción del indicador, UM, Valor.
+- **5.02.02** — Medios fundamentales: tabla. Columnas: N°, Medios fundamentales (componentes), Acciones.
+- **5.02.04** — Medios fundamentales: tabla. Columnas: N°, Medios fundamentales (componentes), Acciones.
+- **5.02.03** — Fines directos e indirectos: tabla. Columnas: Fines Indirectos (FI), Fines directos (FD).
 
 ### 5.03 Descripción de la alternativa de solución al problema
 
@@ -186,30 +186,30 @@ Reglas generales (ya cubiertas por el contexto global "Reglas de llenado automá
 
 ### 7.02 Análisis y proyección de la demanda del servicio
 
-- **7.02.01** — Análisis y proyección de la demanda del servicio: tabla (no se llena por este mecanismo). Columnas: Tipo de población, Año 0, Año 1, Año 2, Año 3, Año 4, Año 5, Año 6, Año 7, Año 8, Año 9, Año 10.
+- **7.02.01** — Análisis y proyección de la demanda del servicio: tabla. Columnas: Tipo de población, Año 0, Año 1, Año 2, Año 3, Año 4, Año 5, Año 6, Año 7, Año 8, Año 9, Año 10.
 - **7.02.02** — Consideraciones para definir la demanda del servicio: Ejemplo real: "Población Total: es la población total del área de influencia definida en el diagnóstico. Población de Referencia: es la proporción de la población total, vinculada con el objetivo central del proyecto de inversión, es decir, que está dentro del grupo etario que podría recibir el Servicio de Cuidado Diurno. Población Demandante Potencial: es el segmento de la población de referencia, que es afectada por el problema central, que no accede al Servicio de Cuidado Diurno o accede de forma inadecuada. Población Demandante Efectiva: es el segmento de la población demandante potencial que cumple con los criterios de focalización definidos por el Sector para acceder al Servicio de Cuidado Diurno, en un CIAI. Población Objetivo: es aquella parte de la población demandante efectiva que el proyecto está en condiciones de atender de forma integral en un CIAI, considerando la política de focalización del Sector y la definición de la meta correspondiente. Es definida por el Programa Nacional Cuna Más.".
 
 ### 7.03 Proyección de la demanda del Servicio de Cuidado Diurno
 
-- **7.03.01** — Proyección de la demanda del Servicio de Cuidado Diurno: tabla (no se llena por este mecanismo). Columnas: Detalle, Unidad de Medida, Año 0, Año 1, Año 2, Año 3, Año 4, Año 5, Año 6, Año 7, Año 8, Año 9, Año 10.
+- **7.03.01** — Proyección de la demanda del Servicio de Cuidado Diurno: tabla. Columnas: Detalle, Unidad de Medida, Año 0, Año 1, Año 2, Año 3, Año 4, Año 5, Año 6, Año 7, Año 8, Año 9, Año 10.
 
 ### 7.04 Estimación de la oferta optimizada (sin proyecto)
 
-- **7.04.01** — Estimación de la oferta optimizada (sin proyecto): tabla (no se llena por este mecanismo). Columnas: Condiciones para optimización de la oferta, Capacidad actual del CIAI, Capacidad optimizada del CIAI, Factor de producción a optimizar, Acción para optimizar la oferta actual.
+- **7.04.01** — Estimación de la oferta optimizada (sin proyecto): tabla. Columnas: Condiciones para optimización de la oferta, Capacidad actual del CIAI, Capacidad optimizada del CIAI, Factor de producción a optimizar, Acción para optimizar la oferta actual.
 
 ### 7.05 Proyección de la oferta del Servicio de Cuidado Diurno
 
-- **7.05.01** — Proyección de la oferta del Servicio de Cuidado Diurno: tabla (no se llena por este mecanismo). Columnas: Detalle, Unidad de Medida, , , , , , , , , , , .
+- **7.05.01** — Proyección de la oferta del Servicio de Cuidado Diurno: tabla. Columnas: Detalle, Unidad de Medida, , , , , , , , , , , .
 
 ### 7.06 Brecha del Servicio de Cuidado Diurno
 
-- **7.06.01** — Brecha del Servicio de Cuidado Diurno: tabla (no se llena por este mecanismo). Columnas: Detalle, Unidad de Medida, , , , , , , , , , , .
+- **7.06.01** — Brecha del Servicio de Cuidado Diurno: tabla. Columnas: Detalle, Unidad de Medida, , , , , , , , , , , .
 
 ## Sección 08: SECCIÓN N°08: ANÁLISIS TÉCNICO
 
 ### 8.01 ANÁLISIS DE TAMAÑO (¿cuánto producir?)
 
-- **08.01.1** — Nuevo campo: tabla (no se llena por este mecanismo). Columnas: N°, Factor condicionante, Unidad de Medida, Valor, Tamaño (tipo) de CIAI, según factor condicionante, Área mínima rquerida del CIAI, no incluye Servicio Alimentario (m2) 1/, Área minima requerida del CIAI, incluye Servicio alimentario (m2) 1/.
+- **08.01.1** — Nuevo campo: tabla. Columnas: N°, Factor condicionante, Unidad de Medida, Valor, Tamaño (tipo) de CIAI, según factor condicionante, Área mínima rquerida del CIAI, no incluye Servicio Alimentario (m2) 1/, Área minima requerida del CIAI, incluye Servicio alimentario (m2) 1/.
 - **08.01.2** — Tamaño de CIAI a implementar con el proyecto de inversión: **NO LLENAR** — lo calcula el Excel automáticamente.
 
 ### 8.02 análisis de localización (¿dónde producir?)
@@ -224,51 +224,51 @@ Reglas generales (ya cubiertas por el contexto global "Reglas de llenado automá
 - **08.02.8** — Energía eléctrica: EI CIAI cuenta o contara con conexion a la red pública de abastecimiento de energía eléctrica.: Ejemplo real: "Cumple".
 - **08.02.9** — Titularidad del local donde funciona el CIAI: Ejemplo real: "Propiedad del Estado".
 - **08.02.10** — Situación del saneamiento físico legal o arreglo institucional, prevista para la implementación del proyecto: Ejemplo real: "Caso Gobierno Regional: Resolución y/o acuerdo de consejo que aprueba la afectación a favor o transferencia a favor del PNCM".
-- **08.02.11** — Ubicación del CIAI: tabla (no se llena por este mecanismo). Columnas: N°, Departamento, Provincia, Distrito, Localidad/Centro poblado, Coordenadas geográficas en decimales Latitud y Longitud.
+- **08.02.11** — Ubicación del CIAI: tabla. Columnas: N°, Departamento, Provincia, Distrito, Localidad/Centro poblado, Coordenadas geográficas en decimales Latitud y Longitud.
 
 ### 8.03 ANÁLISIS DE TECNOLOGÍA (¿CÓMO PRODUCIR?)
 
-- **08.03.1** — Descripción del proceso de producción del servicio (con proyecto): tabla (no se llena por este mecanismo). Columnas: Servicio, Tipo Factor Productivo, Activo del CIAI, Descripción, ¿Se incluye como parte del PI?, Normativa aplicable (del PNCM o RNE, según corresponda).
+- **08.03.1** — Descripción del proceso de producción del servicio (con proyecto): tabla. Columnas: Servicio, Tipo Factor Productivo, Activo del CIAI, Descripción, ¿Se incluye como parte del PI?, Normativa aplicable (del PNCM o RNE, según corresponda).
 
 ### 8.04 IDENTIficación de medidas de reducción del riesgo de desastres
 
-- **08.04.1** — Descripción de las medidas de reducción del riesgo de desastres, en función al análisis de la exposición y fragilidad del CIAI: tabla (no se llena por este mecanismo). Columnas: Peligros, Exposición, Fragilidad, Resiliencia, Descripcion de las medidas de reduccion del riesgo de desastres, en funcion al resultado del analisis de la exposicion y fragilidad del CIAI (proponer medidas en los casos que el resultado sea "Alto" o "Medio").
+- **08.04.1** — Descripción de las medidas de reducción del riesgo de desastres, en función al análisis de la exposición y fragilidad del CIAI: tabla. Columnas: Peligros, Exposición, Fragilidad, Resiliencia, Descripcion de las medidas de reduccion del riesgo de desastres, en funcion al resultado del analisis de la exposicion y fragilidad del CIAI (proponer medidas en los casos que el resultado sea "Alto" o "Medio").
 
 ### 8.05 resumen de las alternativas técnicas
 
-- **08.05.1** — Resumen de las alternativas técnicas: tabla (no se llena por este mecanismo). Columnas: Descripción de alternativas técnicas, Tamaño, Localización, Descripción de la tecnología.
+- **08.05.1** — Resumen de las alternativas técnicas: tabla. Columnas: Descripción de alternativas técnicas, Tamaño, Localización, Descripción de la tecnología.
 
 ### 8.06 METAS FÍSICAS DE LOS ACTIVOS QUE SE BUSCAN CREAR O INTERVENIR CON EL PROYECTO
 
-- **08.06.1** — Componente 1: tabla (no se llena por este mecanismo). Columnas: Acción sobre el activo, Tipo de factor productivo, Activos, Área normativa mínima requerida por unidad física (m2), Unidad de medida, Cantidad, Unidad de medida, Cantidad.
-- **08.06.2** — Componente 2: tabla (no se llena por este mecanismo). Columnas: Acción sobre el activo, Tipo de factor productivo, Activos, Unidad de medida, Cantidad.
-- **08.06.3** — Componente 3: tabla (no se llena por este mecanismo). Columnas: Acción sobre el activo, Tipo de factor productivo, Activos, Unidad de medida, Cantidad.
-- **08.06.4** — Componente 4: tabla (no se llena por este mecanismo). Columnas: Acción sobre el activo, Tipo de factor productivo, Activos, Unidad de medida, Cantidad.
+- **08.06.1** — Componente 1: tabla. Columnas: Acción sobre el activo, Tipo de factor productivo, Activos, Área normativa mínima requerida por unidad física (m2), Unidad de medida, Cantidad, Unidad de medida, Cantidad.
+- **08.06.2** — Componente 2: tabla. Columnas: Acción sobre el activo, Tipo de factor productivo, Activos, Unidad de medida, Cantidad.
+- **08.06.3** — Componente 3: tabla. Columnas: Acción sobre el activo, Tipo de factor productivo, Activos, Unidad de medida, Cantidad.
+- **08.06.4** — Componente 4: tabla. Columnas: Acción sobre el activo, Tipo de factor productivo, Activos, Unidad de medida, Cantidad.
 
 ## Sección 09: SECCIÓN N°09: COSTOS DEL PROYECTO - ALTERNATIVA 1
 
 ### 9.01 cOSTO DE EJECUCIÓN Física de las acciones
 
-- **09.01.1** — Componente 1.1: tabla (no se llena por este mecanismo). Columnas: Acción sobre el activo, Tipo de factor productivo, Activos, Unidad de medida, Cantidad, Unidad de medida, Cantidad, Costo unitario, Costo total.
-- **09.01.2** — Componente 1.2: tabla (no se llena por este mecanismo). Columnas: Acción sobre el activo, Tipo de factor productivo, Activos, Unidad de medida, Cantidad, Unidad de medida, Cantidad, Costo unitario, Costo total.
-- **09.01.3** — Componente 2: tabla (no se llena por este mecanismo). Columnas: Acción sobre el activo, Tipo de factor productivo, Activos, Unidad de medida, Cantidad, Costo total.
-- **09.01.4** — Componente 3: tabla (no se llena por este mecanismo). Columnas: Acción sobre el activo, Tipo de factor productivo, Activos, Unidad de medida, Cantidad, Costo total.
-- **09.01.5** — Componente 4: tabla (no se llena por este mecanismo). Columnas: Acción sobre el activo, Tipo de factor productivo, Activos, Unidad de medida, Cantidad, Costo total.
-- **09.01.6** — Costos indirectos: tabla (no se llena por este mecanismo). Columnas: Otros costos, Costos a precios de mercado, % respecto al costo directo.
+- **09.01.1** — Componente 1.1: tabla. Columnas: Acción sobre el activo, Tipo de factor productivo, Activos, Unidad de medida, Cantidad, Unidad de medida, Cantidad, Costo unitario, Costo total.
+- **09.01.2** — Componente 1.2: tabla. Columnas: Acción sobre el activo, Tipo de factor productivo, Activos, Unidad de medida, Cantidad, Unidad de medida, Cantidad, Costo unitario, Costo total.
+- **09.01.3** — Componente 2: tabla. Columnas: Acción sobre el activo, Tipo de factor productivo, Activos, Unidad de medida, Cantidad, Costo total.
+- **09.01.4** — Componente 3: tabla. Columnas: Acción sobre el activo, Tipo de factor productivo, Activos, Unidad de medida, Cantidad, Costo total.
+- **09.01.5** — Componente 4: tabla. Columnas: Acción sobre el activo, Tipo de factor productivo, Activos, Unidad de medida, Cantidad, Costo total.
+- **09.01.6** — Costos indirectos: tabla. Columnas: Otros costos, Costos a precios de mercado, % respecto al costo directo.
 - **09.01.7** — Subtotal de otros costos de inversión: **NO LLENAR** — lo calcula el Excel automáticamente.
 - **09.01.8** — Costo Total de inversión: **NO LLENAR** — lo calcula el Excel automáticamente.
 
 ### 9.02 COstos de reinversión
 
-- **09.02.1** — Costos de reinversión: tabla (no se llena por este mecanismo). Columnas: Activos, UM, Cantidad, y1, y2, y3, y4, y5, y6, y7, y8, y9, y10.
+- **09.02.1** — Costos de reinversión: tabla. Columnas: Activos, UM, Cantidad, y1, y2, y3, y4, y5, y6, y7, y8, y9, y10.
 
 ### 9.03 cOSTOS DE OPERACIÓN Y MANTENIMIENTO CON Y SIN PROYECTO
 
 - **09.03.1** — Fecha prevista de inicio de operaciones: (mes / año): **NO LLENAR** — lo calcula el Excel automáticamente.
 - **09.03.2** — Horizonte de funcionamiento (años): Ejemplo real: "10".
-- **09.03.3** — Costos de operación y mantenimiento — Situación sin proyecto: tabla (no se llena por este mecanismo). Columnas: Detalle, Cantidad, Costo, Total.
+- **09.03.3** — Costos de operación y mantenimiento — Situación sin proyecto: tabla. Columnas: Detalle, Cantidad, Costo, Total.
 - **09.03.4** — Total de costos de operación y mantenimiento (sin proyecto): **NO LLENAR** — lo calcula el Excel automáticamente.
-- **09.03.5** — Costos de operación y mantenimiento — Situación con proyecto: tabla (no se llena por este mecanismo). Columnas: Detalle, Cantidad, Costo, Total.
+- **09.03.5** — Costos de operación y mantenimiento — Situación con proyecto: tabla. Columnas: Detalle, Cantidad, Costo, Total.
 - **09.03.6** — Total de costos de operación y mantenimiento (con proyecto): **NO LLENAR** — lo calcula el Excel automáticamente.
 
 ### 9.04 Cronograma de inversión de metas financieras
@@ -276,42 +276,42 @@ Reglas generales (ya cubiertas por el contexto global "Reglas de llenado automá
 - **09.04.1** — Fecha prevista de inicio de ejecución (mes y año): **NO LLENAR** — lo calcula el Excel automáticamente.
 - **09.04.2** — Tipo de periodo: Ejemplo real: "Trimestre".
 - **09.04.3** — Número de periodos: valor numérico.
-- **09.04.4** — Cronograma de inversión de metas financieras: tabla (no se llena por este mecanismo). Columnas: Componente, Tipo de factor productivo, Tri 1, Tri 2, Tri 3, Tri 4, Tri 5, Tri 6, Tri 7, Tri 8, Costo estimado de inversión a precios de mercado (Soles).
+- **09.04.4** — Cronograma de inversión de metas financieras: tabla. Columnas: Componente, Tipo de factor productivo, Tri 1, Tri 2, Tri 3, Tri 4, Tri 5, Tri 6, Tri 7, Tri 8, Costo estimado de inversión a precios de mercado (Soles).
 - **09.04.5** — Sub total del cronograma de inversión: **NO LLENAR** — lo calcula el Excel automáticamente.
-- **09.04.6** — Otros costos: tabla (no se llena por este mecanismo). Columnas: Otros costos, Tri 1, Tri 2, Tri 3, Tri 4, Tri 5, Tri 6, Tri 7, Tri 8, Costos a precio de mercado.
+- **09.04.6** — Otros costos: tabla. Columnas: Otros costos, Tri 1, Tri 2, Tri 3, Tri 4, Tri 5, Tri 6, Tri 7, Tri 8, Costos a precio de mercado.
 - **09.04.7** — Sub total de otros costos: **NO LLENAR** — lo calcula el Excel automáticamente.
 - **09.04.8** — Costo total de inversión: **NO LLENAR** — lo calcula el Excel automáticamente.
 - **09.04.9** — Control concurrente: valor numérico. Ejemplo real: "33921.1".
 
 ### 9.05 Cronograma de metas físicas
 
-- **09.05.1** — Cronograma de metas físicas: tabla (no se llena por este mecanismo). Columnas: Componente, Tipo de factor productivo, Unidad de medida representativa, Tri 1, Tri 2, Tri 3, Tri 4, Tri 5, Tri 6, Tri 7, Tri 8, Total Meta Física.
+- **09.05.1** — Cronograma de metas físicas: tabla. Columnas: Componente, Tipo de factor productivo, Unidad de medida representativa, Tri 1, Tri 2, Tri 3, Tri 4, Tri 5, Tri 6, Tri 7, Tri 8, Total Meta Física.
 
 ## Sección 10: SECCIÓN N°09: COSTOS DEL PROYECTO - ALTERNATIVA 2
 
 ### 9.01 Costo de ejecución física de las acciones
 
-- **10.01.1** — Componente 1: tabla (no se llena por este mecanismo). Columnas: Acción sobre el activo, Tipo de factor productivo, Activos, Unidad de medida, Cantidad, Unidad de medida, Cantidad, Costo unitario, Costo total.
-- **10.01.2** — Componente 2: tabla (no se llena por este mecanismo). Columnas: Acción sobre el activo, Tipo de factor productivo, Activos, Unidad de medida, Cantidad, Costo total.
-- **10.01.3** — Componente 3: tabla (no se llena por este mecanismo). Columnas: Acción sobre el activo, Tipo de factor productivo, Activos, Unidad de medida, Cantidad, Costo total.
-- **10.01.4** — Componente 4: tabla (no se llena por este mecanismo). Columnas: Acción sobre el activo, Tipo de factor productivo, Activos, Unidad de medida, Cantidad, Costo total.
-- **10.01.5** — Medidas de reducción del riesgo de desastre y mitigación ambiental: tabla (no se llena por este mecanismo). Columnas: Activos, Unidad de medida, Cantidad, Costo unitario, Costo total.
+- **10.01.1** — Componente 1: tabla. Columnas: Acción sobre el activo, Tipo de factor productivo, Activos, Unidad de medida, Cantidad, Unidad de medida, Cantidad, Costo unitario, Costo total.
+- **10.01.2** — Componente 2: tabla. Columnas: Acción sobre el activo, Tipo de factor productivo, Activos, Unidad de medida, Cantidad, Costo total.
+- **10.01.3** — Componente 3: tabla. Columnas: Acción sobre el activo, Tipo de factor productivo, Activos, Unidad de medida, Cantidad, Costo total.
+- **10.01.4** — Componente 4: tabla. Columnas: Acción sobre el activo, Tipo de factor productivo, Activos, Unidad de medida, Cantidad, Costo total.
+- **10.01.5** — Medidas de reducción del riesgo de desastre y mitigación ambiental: tabla. Columnas: Activos, Unidad de medida, Cantidad, Costo unitario, Costo total.
 - **10.01.6** — Sub Total de costos directos: **NO LLENAR** — lo calcula el Excel automáticamente.
-- **10.01.7** — Costos indirectos: tabla (no se llena por este mecanismo). Columnas: Otros costos, Costos a precios de mercado, % respecto al costo directo.
+- **10.01.7** — Costos indirectos: tabla. Columnas: Otros costos, Costos a precios de mercado, % respecto al costo directo.
 - **10.01.8** — Subtotal de otros costos de inversión: **NO LLENAR** — lo calcula el Excel automáticamente.
 - **10.01.9** — Costo Total de inversión: **NO LLENAR** — lo calcula el Excel automáticamente.
 
 ### 9.02 Costos de reinversión
 
-- **10.02.1** — Costos de reinversión: tabla (no se llena por este mecanismo). Columnas: Activos, UM, Cantidad, Año 1, Año 2, Año 3, Año 4, Año 5, Año 6, Año 7, Año 8, Año 9, Año 10.
+- **10.02.1** — Costos de reinversión: tabla. Columnas: Activos, UM, Cantidad, Año 1, Año 2, Año 3, Año 4, Año 5, Año 6, Año 7, Año 8, Año 9, Año 10.
 
 ### 9.03 Costos de operación y mantenimiento con y sin proyecto
 
 - **10.03.1** — Fecha prevista de inicio de operaciones (mes / año): **NO LLENAR** — lo calcula el Excel automáticamente.
 - **10.03.2** — Horizonte de funcionamiento (años): valor numérico. Ejemplo real: "10".
-- **10.03.3** — Costos de operación y mantenimiento — Situación sin proyecto: tabla (no se llena por este mecanismo). Columnas: Detalle, Cantidad, Costo, Total.
+- **10.03.3** — Costos de operación y mantenimiento — Situación sin proyecto: tabla. Columnas: Detalle, Cantidad, Costo, Total.
 - **10.03.4** — Total de costos de operación y mantenimiento (sin proyecto): **NO LLENAR** — lo calcula el Excel automáticamente.
-- **10.03.5** — Costos de operación y mantenimiento — Situación con proyecto: tabla (no se llena por este mecanismo). Columnas: Detalle, Cantidad, Costo, Total.
+- **10.03.5** — Costos de operación y mantenimiento — Situación con proyecto: tabla. Columnas: Detalle, Cantidad, Costo, Total.
 - **10.03.6** — Total de costos de operación y mantenimiento (con proyecto): **NO LLENAR** — lo calcula el Excel automáticamente.
 
 ### 9.04 Cronograma de inversión de metas financieras
@@ -319,42 +319,42 @@ Reglas generales (ya cubiertas por el contexto global "Reglas de llenado automá
 - **10.04.1** — Fecha prevista de inicio de ejecución (mes y año): **NO LLENAR** — lo calcula el Excel automáticamente.
 - **10.04.2** — Tipo de periodo: Ejemplo real: "Trimestre".
 - **10.04.3** — Número de periodos: valor numérico.
-- **10.04.4** — Cronograma de inversión de metas financieras: tabla (no se llena por este mecanismo). Columnas: Componente, Tipo de factor productivo, Tri 1, Tri 2, Tri 3, Tri 4, Tri 5, Tri 6, Tri 7, Tri 8, Costo estimado de inversión a precios de mercado (Soles).
+- **10.04.4** — Cronograma de inversión de metas financieras: tabla. Columnas: Componente, Tipo de factor productivo, Tri 1, Tri 2, Tri 3, Tri 4, Tri 5, Tri 6, Tri 7, Tri 8, Costo estimado de inversión a precios de mercado (Soles).
 - **10.04.5** — Sub total del cronograma de inversión: **NO LLENAR** — lo calcula el Excel automáticamente.
-- **10.04.6** — Otros costos: tabla (no se llena por este mecanismo). Columnas: Otros costos, Tri 1, Tri 2, Tri 3, Tri 4, Tri 5, Tri 6, Tri 7, Tri 8, Costos a precio de mercado.
+- **10.04.6** — Otros costos: tabla. Columnas: Otros costos, Tri 1, Tri 2, Tri 3, Tri 4, Tri 5, Tri 6, Tri 7, Tri 8, Costos a precio de mercado.
 - **10.04.7** — Sub total de otros costos: **NO LLENAR** — lo calcula el Excel automáticamente.
 - **10.04.8** — Costo total de inversión: **NO LLENAR** — lo calcula el Excel automáticamente.
 - **10.04.9** — Control concurrente: valor numérico.
 
 ### 9.05 Cronograma de metas físicas
 
-- **10.05.1** — Cronograma de metas físicas: tabla (no se llena por este mecanismo). Columnas: Componente, Tipo de factor productivo, Unidad de medida representativa, Tri 1, Tri 2, Tri 3, Tri 4, Tri 5, Tri 6, Tri 7, Tri 8, Total Meta Física.
+- **10.05.1** — Cronograma de metas físicas: tabla. Columnas: Componente, Tipo de factor productivo, Unidad de medida representativa, Tri 1, Tri 2, Tri 3, Tri 4, Tri 5, Tri 6, Tri 7, Tri 8, Total Meta Física.
 
 ## Sección 11: SECCIÓN N°09: COSTOS DEL PROYECTO - ALTERNATIVA 3
 
 ### 9.01 Costo de ejecución física de las acciones
 
-- **11.01.1** — Componente 1: tabla (no se llena por este mecanismo). Columnas: Acción sobre el activo, Tipo de factor productivo, Activos, Unidad de medida, Cantidad, Unidad de medida, Cantidad, Costo unitario, Costo total.
-- **11.01.2** — Componente 2: tabla (no se llena por este mecanismo). Columnas: Acción sobre el activo, Tipo de factor productivo, Activos, Unidad de medida, Cantidad, Costo total.
-- **11.01.3** — Componente 3: tabla (no se llena por este mecanismo). Columnas: Acción sobre el activo, Tipo de factor productivo, Activos, Unidad de medida, Cantidad, Costo total.
-- **11.01.4** — Componente 4: tabla (no se llena por este mecanismo). Columnas: Acción sobre el activo, Tipo de factor productivo, Activos, Unidad de medida, Cantidad, Costo total.
-- **11.01.5** — Medidas de reducción del riesgo de desastre y mitigación ambiental: tabla (no se llena por este mecanismo). Columnas: Activos, Unidad de medida, Cantidad, Costo unitario, Costo total.
+- **11.01.1** — Componente 1: tabla. Columnas: Acción sobre el activo, Tipo de factor productivo, Activos, Unidad de medida, Cantidad, Unidad de medida, Cantidad, Costo unitario, Costo total.
+- **11.01.2** — Componente 2: tabla. Columnas: Acción sobre el activo, Tipo de factor productivo, Activos, Unidad de medida, Cantidad, Costo total.
+- **11.01.3** — Componente 3: tabla. Columnas: Acción sobre el activo, Tipo de factor productivo, Activos, Unidad de medida, Cantidad, Costo total.
+- **11.01.4** — Componente 4: tabla. Columnas: Acción sobre el activo, Tipo de factor productivo, Activos, Unidad de medida, Cantidad, Costo total.
+- **11.01.5** — Medidas de reducción del riesgo de desastre y mitigación ambiental: tabla. Columnas: Activos, Unidad de medida, Cantidad, Costo unitario, Costo total.
 - **11.01.6** — Sub Total de costos directos: **NO LLENAR** — lo calcula el Excel automáticamente.
-- **11.01.7** — Costos indirectos: tabla (no se llena por este mecanismo). Columnas: Otros costos, Costos a precios de mercado, % respecto al costo directo.
+- **11.01.7** — Costos indirectos: tabla. Columnas: Otros costos, Costos a precios de mercado, % respecto al costo directo.
 - **11.01.8** — Subtotal de otros costos de inversión: **NO LLENAR** — lo calcula el Excel automáticamente.
 - **11.01.9** — Costo Total de inversión: **NO LLENAR** — lo calcula el Excel automáticamente.
 
 ### 9.02 Costos de reinversión
 
-- **11.02.1** — Costos de reinversión: tabla (no se llena por este mecanismo). Columnas: Activos, UM, Cantidad, Año 1, Año 2, Año 3, Año 4, Año 5, Año 6, Año 7, Año 8, Año 9, Año 10.
+- **11.02.1** — Costos de reinversión: tabla. Columnas: Activos, UM, Cantidad, Año 1, Año 2, Año 3, Año 4, Año 5, Año 6, Año 7, Año 8, Año 9, Año 10.
 
 ### 9.03 Costos de operación y mantenimiento con y sin proyecto
 
 - **11.03.1** — Fecha prevista de inicio de operaciones (mes / año): **NO LLENAR** — lo calcula el Excel automáticamente.
 - **11.03.2** — Horizonte de funcionamiento (años): valor numérico. Ejemplo real: "10".
-- **11.03.3** — Costos de operación y mantenimiento — Situación sin proyecto: tabla (no se llena por este mecanismo). Columnas: Detalle, Cantidad, Costo, Total.
+- **11.03.3** — Costos de operación y mantenimiento — Situación sin proyecto: tabla. Columnas: Detalle, Cantidad, Costo, Total.
 - **11.03.4** — Total de costos de operación y mantenimiento (sin proyecto): **NO LLENAR** — lo calcula el Excel automáticamente.
-- **11.03.5** — Costos de operación y mantenimiento — Situación con proyecto: tabla (no se llena por este mecanismo). Columnas: Detalle, Cantidad, Costo, Total.
+- **11.03.5** — Costos de operación y mantenimiento — Situación con proyecto: tabla. Columnas: Detalle, Cantidad, Costo, Total.
 - **11.03.6** — Total de costos de operación y mantenimiento (con proyecto): **NO LLENAR** — lo calcula el Excel automáticamente.
 
 ### 9.04 Cronograma de inversión de metas financieras
@@ -362,101 +362,101 @@ Reglas generales (ya cubiertas por el contexto global "Reglas de llenado automá
 - **11.04.1** — Fecha prevista de inicio de ejecución (mes y año): **NO LLENAR** — lo calcula el Excel automáticamente.
 - **11.04.2** — Tipo de periodo: Ejemplo real: "Trimestre".
 - **11.04.3** — Número de periodos: valor numérico.
-- **11.04.4** — Cronograma de inversión de metas financieras: tabla (no se llena por este mecanismo). Columnas: Componente, Tipo de factor productivo, Tri 1, Tri 2, Tri 3, Tri 4, Tri 5, Tri 6, Tri 7, Tri 8, Costo estimado de inversión a precios de mercado (Soles).
+- **11.04.4** — Cronograma de inversión de metas financieras: tabla. Columnas: Componente, Tipo de factor productivo, Tri 1, Tri 2, Tri 3, Tri 4, Tri 5, Tri 6, Tri 7, Tri 8, Costo estimado de inversión a precios de mercado (Soles).
 - **11.04.5** — Sub total del cronograma de inversión: **NO LLENAR** — lo calcula el Excel automáticamente.
-- **11.04.6** — Otros costos: tabla (no se llena por este mecanismo). Columnas: Otros costos, Tri 1, Tri 2, Tri 3, Tri 4, Tri 5, Tri 6, Tri 7, Tri 8, Costos a precio de mercado.
+- **11.04.6** — Otros costos: tabla. Columnas: Otros costos, Tri 1, Tri 2, Tri 3, Tri 4, Tri 5, Tri 6, Tri 7, Tri 8, Costos a precio de mercado.
 - **11.04.7** — Sub total de otros costos: **NO LLENAR** — lo calcula el Excel automáticamente.
 - **11.04.8** — Costo total de inversión: **NO LLENAR** — lo calcula el Excel automáticamente.
 - **11.04.9** — Control concurrente: valor numérico.
 
 ### 9.05 Cronograma de metas físicas
 
-- **11.05.1** — Cronograma de metas físicas: tabla (no se llena por este mecanismo). Columnas: Componente, Tipo de factor productivo, Unidad de medida representativa, Tri 1, Tri 2, Tri 3, Tri 4, Tri 5, Tri 6, Tri 7, Tri 8, Total Meta Física.
+- **11.05.1** — Cronograma de metas físicas: tabla. Columnas: Componente, Tipo de factor productivo, Unidad de medida representativa, Tri 1, Tri 2, Tri 3, Tri 4, Tri 5, Tri 6, Tri 7, Tri 8, Total Meta Física.
 
 ## Sección 12: SECCIÓN N°10: EVALUACIÓN SOCIAL - ALTERNATIVA 1
 
 ### 10.01 BENEFICIOS SOCIALES
 
-- **12.01.1** — Benificios de la intervención: tabla (no se llena por este mecanismo). Columnas: Benificios de la intervención.
+- **12.01.1** — Benificios de la intervención: tabla. Columnas: Benificios de la intervención.
 
 ### 10.02 COSTOS SOCIALES
 
-- **12.02.1** — Transformación de costos de inversión a precios sociales: tabla (no se llena por este mecanismo). Columnas: Detalle, Costo a precios de mercado , Factor de corrección, Costo a precios sociales .
-- **12.02.2** — Transformación de costos de operación y mantenimiento a precios sociales: tabla (no se llena por este mecanismo). Columnas: Detalle, Costo a precios de mercado , Factor de corrección, Costo a precios sociales .
+- **12.02.1** — Transformación de costos de inversión a precios sociales: tabla. Columnas: Detalle, Costo a precios de mercado , Factor de corrección, Costo a precios sociales .
+- **12.02.2** — Transformación de costos de operación y mantenimiento a precios sociales: tabla. Columnas: Detalle, Costo a precios de mercado , Factor de corrección, Costo a precios sociales .
 
 ### 10.03 FLUJO DE COSTOS A PRECIOS SOCIALES (EVALUACIÓN SOCIAL)
 
-- **12.03.1** — FLUJO DE COSTOS A PRECIOS SOCIALES (EVALUACIÓN SOCIAL): tabla (no se llena por este mecanismo). Columnas: Años, Año 0, Año 1, Año 2, Año 3, Año 4, Año 5, Año 6, Año 7, Año 8, Año 9, Año 10.
+- **12.03.1** — FLUJO DE COSTOS A PRECIOS SOCIALES (EVALUACIÓN SOCIAL): tabla. Columnas: Años, Año 0, Año 1, Año 2, Año 3, Año 4, Año 5, Año 6, Año 7, Año 8, Año 9, Año 10.
 
 ### 10.04 INDICADORES DE RENTABILIDAD SOCIAL
 
-- **12.04.1** — INDICADORES DE RENTABILIDAD SOCIAL: tabla (no se llena por este mecanismo). Columnas: Tipo, Criterio de elección**, Alternativa 1.
+- **12.04.1** — INDICADORES DE RENTABILIDAD SOCIAL: tabla. Columnas: Tipo, Criterio de elección**, Alternativa 1.
 
 ### 10.05 ANÁLISIS DE SENSIBILIDAD
 
-- **12.05.1** — ANALISIS DE SENSIBILIDAD BIDIMENSIONAL: tabla (no se llena por este mecanismo). Columnas: ICE (S/), Variación % del total de beneficiarios, 20, 15, 10, 0, -10, -15, -20.
+- **12.05.1** — ANALISIS DE SENSIBILIDAD BIDIMENSIONAL: tabla. Columnas: ICE (S/), Variación % del total de beneficiarios, 20, 15, 10, 0, -10, -15, -20.
 
 ## Sección 13: SECCIÓN N°10: EVALUACIÓN SOCIAL - ALTERNATIVA 2
 
 ### 10.01 BENEFICIOS SOCIALES
 
-- **13.01.1** — Benificios de la intervención: tabla (no se llena por este mecanismo). Columnas: Benificios de la intervención.
+- **13.01.1** — Benificios de la intervención: tabla. Columnas: Benificios de la intervención.
 
 ### 10.02 COSTOS SOCIALES
 
-- **13.02.1** — Transformación de costos de inversión a precios sociales: tabla (no se llena por este mecanismo). Columnas: Detalle, Costo a precios de mercado , Factor de corrección, Costo a precios sociales .
-- **13.02.2** — Transformación de costos de operación y mantenimiento a precios sociales: tabla (no se llena por este mecanismo). Columnas: Detalle, Costo a precios de mercado , Factor de corrección, Costo a precios sociales .
+- **13.02.1** — Transformación de costos de inversión a precios sociales: tabla. Columnas: Detalle, Costo a precios de mercado , Factor de corrección, Costo a precios sociales .
+- **13.02.2** — Transformación de costos de operación y mantenimiento a precios sociales: tabla. Columnas: Detalle, Costo a precios de mercado , Factor de corrección, Costo a precios sociales .
 
 ### 10.03 FLUJO DE COSTOS A PRECIOS SOCIALES (EVALUACIÓN SOCIAL)
 
-- **13.03.1** — FLUJO DE COSTOS A PRECIOS SOCIALES (EVALUACIÓN SOCIAL): tabla (no se llena por este mecanismo). Columnas: Años, Año 0, Año 1, Año 2, Año 3, Año 4, Año 5, Año 6, Año 7, Año 8, Año 9, Año 10.
+- **13.03.1** — FLUJO DE COSTOS A PRECIOS SOCIALES (EVALUACIÓN SOCIAL): tabla. Columnas: Años, Año 0, Año 1, Año 2, Año 3, Año 4, Año 5, Año 6, Año 7, Año 8, Año 9, Año 10.
 
 ### 10.04 INDICADORES DE RENTABILIDAD SOCIAL
 
-- **13.04.1** — INDICADORES DE RENTABILIDAD SOCIAL: tabla (no se llena por este mecanismo). Columnas: Tipo, Criterio de elección**, Alternativa 1.
+- **13.04.1** — INDICADORES DE RENTABILIDAD SOCIAL: tabla. Columnas: Tipo, Criterio de elección**, Alternativa 1.
 
 ### 10.05 ANÁLISIS DE SENSIBILIDAD
 
-- **13.05.1** — ANALISIS DE SENSIBILIDAD BIDIMENSIONAL: tabla (no se llena por este mecanismo). Columnas: ICE / VAN, Variación % del total de beneficiarios, 20, 15, 10, 0, -10, -15, -20.
+- **13.05.1** — ANALISIS DE SENSIBILIDAD BIDIMENSIONAL: tabla. Columnas: ICE / VAN, Variación % del total de beneficiarios, 20, 15, 10, 0, -10, -15, -20.
 
 ## Sección 14: SECCIÓN N°10: EVALUACIÓN SOCIAL - ALTERNATIVA 3
 
 ### 10.01 BENEFICIOS SOCIALES
 
-- **14.01.1** — Benificios de la intervención: tabla (no se llena por este mecanismo). Columnas: Benificios de la intervención.
+- **14.01.1** — Benificios de la intervención: tabla. Columnas: Benificios de la intervención.
 
 ### 10.02 COSTOS SOCIALES
 
-- **14.02.1** — Transformación de costos de inversión a precios sociales: tabla (no se llena por este mecanismo). Columnas: Detalle, Costo a precios de mercado , Factor de corrección, Costo a precios sociales .
-- **14.02.2** — Transformación de costos de operación y mantenimiento a precios sociales: tabla (no se llena por este mecanismo). Columnas: Detalle, Costo a precios de mercado , Factor de corrección, Costo a precios sociales .
+- **14.02.1** — Transformación de costos de inversión a precios sociales: tabla. Columnas: Detalle, Costo a precios de mercado , Factor de corrección, Costo a precios sociales .
+- **14.02.2** — Transformación de costos de operación y mantenimiento a precios sociales: tabla. Columnas: Detalle, Costo a precios de mercado , Factor de corrección, Costo a precios sociales .
 
 ### 10.03 FLUJO DE COSTOS A PRECIOS SOCIALES (EVALUACIÓN SOCIAL)
 
-- **14.03.1** — FLUJO DE COSTOS A PRECIOS SOCIALES (EVALUACIÓN SOCIAL): tabla (no se llena por este mecanismo). Columnas: Años, Año 0, Año 1, Año 2, Año 3, Año 4, Año 5, Año 6, Año 7, Año 8, Año 9, Año 10.
+- **14.03.1** — FLUJO DE COSTOS A PRECIOS SOCIALES (EVALUACIÓN SOCIAL): tabla. Columnas: Años, Año 0, Año 1, Año 2, Año 3, Año 4, Año 5, Año 6, Año 7, Año 8, Año 9, Año 10.
 
 ### 10.04 INDICADORES DE RENTABILIDAD SOCIAL
 
-- **14.04.1** — INDICADORES DE RENTABILIDAD SOCIAL: tabla (no se llena por este mecanismo). Columnas: Tipo, Criterio de elección**, Alternativa 1.
+- **14.04.1** — INDICADORES DE RENTABILIDAD SOCIAL: tabla. Columnas: Tipo, Criterio de elección**, Alternativa 1.
 
 ### 10.05 ANÁLISIS DE SENSIBILIDAD
 
-- **14.05.1** — ANALISIS DE SENSIBILIDAD BIDIMENSIONAL: tabla (no se llena por este mecanismo). Columnas: ICE / VAN, Variación % del total de beneficiarios, 20, 15, 10, 0, -10, -15, -20.
+- **14.05.1** — ANALISIS DE SENSIBILIDAD BIDIMENSIONAL: tabla. Columnas: ICE / VAN, Variación % del total de beneficiarios, 20, 15, 10, 0, -10, -15, -20.
 
 ## Sección 15: SECCIÓN N°11: SOSTENIBILIDAD (de la alternativa seleccionada)
 
 ### 11.01 dEscripción de la capacidad institucional en la sostenibilidad del proyecto
 
-- **15.01.1** — Nuevo campo: tabla (no se llena por este mecanismo). Columnas: Ítem, Descripción, Documento de opinión favorable del PNCM.
+- **15.01.1** — Nuevo campo: tabla. Columnas: Ítem, Descripción, Documento de opinión favorable del PNCM.
 
 ### 11.02 Gestión integral de los riesgos
 
-- **15.02.1** — Gestión integral de los riesgos: tabla (no se llena por este mecanismo). Columnas: Tipo de riesgo, Descripción del riesgo, Probabilidad de ocurrencia, Impacto, Estimación de riesgo, Medidas de mitigación del riesgo.
+- **15.02.1** — Gestión integral de los riesgos: tabla. Columnas: Tipo de riesgo, Descripción del riesgo, Probabilidad de ocurrencia, Impacto, Estimación de riesgo, Medidas de mitigación del riesgo.
 
 ## Sección 16: SECCIÓN N°12: GESTIÓN DEL PROYECTO (de la alternativa seleccionada)
 
 ### 12.01 plan de implementación
 
-- **16.01.1** — Nuevo campo: tabla (no se llena por este mecanismo). Columnas: Actividades del Plan de Implementación, Inicio, Fin, Órgano Responsable, 1, 2, 3, 4, 5, 6, 7, 8.
+- **16.01.1** — Nuevo campo: tabla. Columnas: Actividades del Plan de Implementación, Inicio, Fin, Órgano Responsable, 1, 2, 3, 4, 5, 6, 7, 8.
 
 ### 12.02 MODALIDAD DE EJECUCIÓN DE PROYECTO
 
@@ -464,7 +464,7 @@ Reglas generales (ya cubiertas por el contexto global "Reglas de llenado automá
 
 ### 12.03 REQUERIMIENTOS INSTITUCIONALES Y NORMATIVOS EN LA FASE DE EJECUCIÓN Y FASE DE FUNCIONAMIENTO
 
-- **16.03.1** — Condiciones previas relevantes para la fase de ejecución: tabla (no se llena por este mecanismo). Columnas: Condición o requerimiento, Marcar, Estado situacional.
+- **16.03.1** — Condiciones previas relevantes para la fase de ejecución: tabla. Columnas: Condición o requerimiento, Marcar, Estado situacional.
 
 ### 12.04 eNTIDAD QUE ESTARÁ A CARGO DE LA OPERACIÓN Y MANTENIMIENTO
 
@@ -478,13 +478,13 @@ Reglas generales (ya cubiertas por el contexto global "Reglas de llenado automá
 
 ### 13.01 Impacto ambiental
 
-- **17.01.1** — Impacto ambiental: tabla (no se llena por este mecanismo). Columnas: IMPACTOS NEGATIVOS, MEDIDAS DE MITIGACIÓN, COSTO (S/).
+- **17.01.1** — Impacto ambiental: tabla. Columnas: IMPACTOS NEGATIVOS, MEDIDAS DE MITIGACIÓN, COSTO (S/).
 
 ## Sección 18: SECCIÓN N°14: MARCO LÓGICO (de la alternativa seleccionada)
 
 ### 14.01 RESUmen del proyecto: matriz del marco lógico
 
-- **18.01.1** — Matriz del marco lógico: tabla (no se llena por este mecanismo). Columnas: Supuestos, Medios de verificación, Nivel de objetivo, Indicador, Valor.
+- **18.01.1** — Matriz del marco lógico: tabla. Columnas: Supuestos, Medios de verificación, Nivel de objetivo, Indicador, Valor.
 
 ## Sección 19: SECCIÓN N°15: CONCLUSIONES Y RECOMENDACIONES
 
@@ -496,4 +496,4 @@ Reglas generales (ya cubiertas por el contexto global "Reglas de llenado automá
 
 ### 17.01 Anexos
 
-- **20.01.1** — Anexos: tabla (no se llena por este mecanismo). Columnas: Nro., Descripción del anexo, ¿Se presenta el anexo como parte de la Ficha Técnica Estándar?.
+- **20.01.1** — Anexos: tabla. Columnas: Nro., Descripción del anexo, ¿Se presenta el anexo como parte de la Ficha Técnica Estándar?.

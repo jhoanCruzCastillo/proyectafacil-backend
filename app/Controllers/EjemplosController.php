@@ -63,10 +63,20 @@ class EjemplosController extends BaseController
 
         $dto = $this->request->getJSON(true) ?? [];
 
-        if (array_key_exists('valores', $dto)) {
+        // `fuentes` (Record<identificador, texto>) es opcional: de dónde salió cada dato llenado con
+        // IA, para el botón "?" del editor. Viaja en el mismo blob que `valores` (ver clase, arriba).
+        if (array_key_exists('valores', $dto) || array_key_exists('fuentes', $dto)) {
             $archivoModel = new ArchivoModel();
             $archivo      = $archivoModel->where('propietario_tipo', 'ejemplo')->where('ejemplo_id', $id)->first();
-            $contenido    = json_encode(['valores' => $dto['valores']], JSON_UNESCAPED_UNICODE);
+
+            $existente = [];
+            if ($archivo && $archivo['contenido_json']) {
+                $decoded   = json_decode((string) $archivo['contenido_json'], true);
+                $existente = is_array($decoded) ? $decoded : [];
+            }
+            $valores   = array_key_exists('valores', $dto) ? $dto['valores'] : ($existente['valores'] ?? []);
+            $fuentes   = array_key_exists('fuentes', $dto) ? $dto['fuentes'] : ($existente['fuentes'] ?? []);
+            $contenido = json_encode(['valores' => $valores, 'fuentes' => $fuentes], JSON_UNESCAPED_UNICODE);
 
             if ($archivo) {
                 $archivoModel->update($archivo['id'], ['contenido_json' => $contenido]);
@@ -107,6 +117,35 @@ class EjemplosController extends BaseController
         return $this->response->setJSON((object) []);
     }
 
+    /**
+     * Marca (o desmarca) este ejemplo como el "ejemplo de referencia para IA" de su plantilla — el
+     * caso ya resuelto que LlenadoIAController usa como few-shot. Va aparte de `update()` genérico
+     * (no en `fromDto`/`$mapa`) porque a lo más UNO puede estar marcado por plantilla: activar este
+     * limpia cualquier otro primero, en la misma transacción — un `PUT` de campo suelto no puede
+     * garantizar esa exclusividad.
+     */
+    public function marcarReferenciaIA($id = null): ResponseInterface
+    {
+        $model = new EjemploModel();
+        $fila  = $model->find($id);
+        if (! $fila) {
+            return $this->response->setStatusCode(404)->setJSON(['error' => 'Ejemplo no encontrado']);
+        }
+
+        $body   = $this->request->getJSON(true) ?? [];
+        $activo = (bool) ($body['activo'] ?? true);
+
+        $db = db_connect();
+        $db->transStart();
+        if ($activo) {
+            $db->table('ejemplos')->where('plantilla_id', $fila['plantilla_id'])->set(['es_referencia_ia' => 0])->update();
+        }
+        $model->update($id, ['es_referencia_ia' => $activo ? 1 : 0]);
+        $db->transComplete();
+
+        return $this->response->setJSON($this->toDto($model->find($id)));
+    }
+
     private function toDto(array $fila): array
     {
         $db = db_connect();
@@ -119,9 +158,11 @@ class EjemplosController extends BaseController
 
         $archivo = (new ArchivoModel())->where('propietario_tipo', 'ejemplo')->where('ejemplo_id', $fila['id'])->first();
         $valores = [];
+        $fuentes = [];
         if ($archivo && $archivo['contenido_json']) {
             $contenido = json_decode((string) $archivo['contenido_json'], true);
             $valores = $contenido['valores'] ?? [];
+            $fuentes = $contenido['fuentes'] ?? [];
         }
 
         return [
@@ -134,6 +175,8 @@ class EjemplosController extends BaseController
             // (object) fuerza `{}` en vez de `[]` cuando está vacío — Ejemplo.valores es
             // Record<string,string> en el frontend, no un array.
             'valores'           => (object) $valores,
+            // Origen de cada valor llenado con IA (texto breve), para el botón "?" del editor.
+            'fuentes'           => (object) $fuentes,
             'tipologiasIoarr'   => array_map(static fn (array $t) => $t['tipologia'], $tipologias),
             'propietarioId'     => $fila['propietario_usuario_id'] !== null ? (string) $fila['propietario_usuario_id'] : null,
             'creadoPorUsuarioId' => $fila['creado_por_usuario_id'] !== null ? (string) $fila['creado_por_usuario_id'] : null,
@@ -143,6 +186,9 @@ class EjemplosController extends BaseController
             'excelActualizado'  => array_key_exists('excel_actualizado', $fila)
                 ? (bool) $fila['excel_actualizado']
                 : true,
+            // A lo más uno por plantilla — ver EjemplosController::marcarReferenciaIA. Consumido por
+            // LlenadoIAController::valoresEjemploReferencia para el few-shot del llenado con IA.
+            'esReferenciaIA'    => (bool) ($fila['es_referencia_ia'] ?? false),
         ];
     }
 

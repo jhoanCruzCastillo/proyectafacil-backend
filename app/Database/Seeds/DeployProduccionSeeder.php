@@ -30,6 +30,13 @@ class DeployProduccionSeeder extends Seeder
             RolesPermisosBaseSeeder::class,
             PlantillasSeeder::class,
             EstructuraPlantillasSeeder::class,
+            // Sin estos 4, el llenado con IA arranca en un ambiente real sin reglas, sin contexto de
+            // dominio y sin guía por sección — el modelo solo vería el schema JSON crudo. Estaban
+            // sembrados en el ambiente local a mano (nunca vía seeder) hasta que se detectó el hueco.
+            ContextosIAGlobalesSeeder::class,
+            ContextosIACuidadoDiurnoSeeder::class,
+            ContextoGeneralCuidadoDiurnoSeeder::class,
+            PromptSistemaCuidadoDiurnoSeeder::class,
             SuperusuarioProduccionSeeder::class,
         ];
 

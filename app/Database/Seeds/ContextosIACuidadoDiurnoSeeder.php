@@ -241,12 +241,22 @@ MD,
         ];
     }
 
-    /** Clave = fragmento del nombre de la sección en la plantilla. `globales` son SOLO los verdaderamente compartidos (Invierte.pe, Finanzas, Sociales...) — lo específico de CIAI ya lo cubren los contextos generales de esta ficha. */
+    /**
+     * Clave = fragmento del nombre de la sección en la plantilla. `globales` son SOLO los
+     * verdaderamente compartidos (Invierte.pe, Finanzas, Sociales...) — lo específico de CIAI ya lo
+     * cubren los contextos generales de esta ficha.
+     *
+     * "Estructura de datos — Fichas técnicas" se asocia a TODAS las secciones (casi todas tienen al
+     * menos un campo tabla) — hoy no cambia el llenado automático porque LlenadoIAController excluye
+     * los campos tipo tabla antes de armar el prompt, pero deja el terreno listo: si algún día se
+     * habilita el llenado de tablas, el modelo ya tendrá la convención tipo_nodo/captura/config
+     * disponible en el contexto de sección sin tener que volver a sembrar nada.
+     */
     private function contextosPorSeccion(): array
     {
         return [
             'Datos Generales' => [
-                'globales' => ['Invierte.pe'],
+                'globales' => ['Estructura de datos — Fichas técnicas', 'Invierte.pe'],
                 'markdown' => <<<'MD'
 ## Objetivo
 Definir la institucionalidad, la responsabilidad funcional, el nombre del proyecto y su alineamiento con el cierre de una brecha prioritaria.
@@ -274,7 +284,7 @@ Ejemplo: "Mejoramiento del Servicio de Cuidado Infantil en el Centro Infantil de
 MD,
             ],
             'Territorio' => [
-                'globales' => ['Sociales'],
+                'globales' => ['Estructura de datos — Fichas técnicas', 'Sociales'],
                 'markdown' => <<<'MD'
 ## Objetivo
 Analizar el ámbito geográfico donde se ubican la población afectada y la unidad productora: área de estudio, área de influencia, macro y microlocalización, características del distrito y peligros.
@@ -289,6 +299,19 @@ Debe enmarcarse en el **ámbito de intervención focalizada del PNCM**, que se c
 - Centros poblados urbanos de quintil 1 al 4 en departamentos con pobreza departamental mayor a 30.1%, con familias económicamente activas.
 - Centros poblados urbanos de quintil 1 al 3 en departamentos con menor pobreza departamental.
 
+## 2.03 Macro y microlocalización del área de estudio
+- Los mapas de macrolocalización y microlocalización (imágenes) los sube el usuario manualmente — la IA no los toca.
+- **Fuente de información**: cita las fuentes cartográficas usadas para elaborar los mapas (ej. INEI — planos censales, Google Earth Pro, catastro municipal, IGN). Si la fuente de la verdad no lo menciona explícitamente, déjala vacía — no inventes una fuente genérica.
+
+## 2.04 Características del distrito donde se ubica o ubicará el CIAI
+Datos físicos, climáticos y socioeconómicos del distrito, normalmente disponibles en el diagnóstico territorial de la fuente de la verdad:
+- **Altitud** (m.s.n.m.), **Temperatura media anual**, **Humedad**, **Precipitación media anual**: cifras puntuales — cópialas tal como aparecen (con su unidad) en la fuente; no las inventes ni las redondees.
+- **Coordenadas geográficas** (latitud/longitud en decimales): del predio o centro poblado donde se ubica/ubicará el CIAI.
+- **Accesibilidad**: cómo se llega al distrito/predio (vías, tiempo de viaje, medios de transporte).
+- **Condiciones de pobreza**: cifras de pobreza monetaria/no monetaria del distrito, citando fuente y año (ej. Mapa de Pobreza INEI).
+- **Principales características sociales y económicas**: actividades económicas predominantes, situación de la población objetivo (niñez, familias).
+- **Acceso a servicios públicos en el distrito** (tabla): porcentaje de acceso a agua, desagüe, electricidad u otros servicios — usa las cifras que traiga la fuente de la verdad, normalmente de un censo o diagnóstico similar.
+
 ## 2.05 Peligros
 Identificar antecedentes de ocurrencia en el área de estudio y posibles cambios futuros, con sus características (intensidad, frecuencia, área de impacto).
 Peligros a evaluar: inundaciones, movimientos en masa, lluvias intensas, heladas, nevadas, sismos, sequías, vulcanismo, tsunamis, incendios forestales y urbanos, erosión, vientos fuertes, friaje, radiación solar.
@@ -296,11 +319,12 @@ Fuente recomendada: **SIGRID – CENEPRED** (https://sigrid.cenepred.gob.pe/sigr
 
 ## Reglas
 - El UBIGEO es obligatorio y determina departamento, provincia y distrito: no contradecirlo.
-- Toda cifra de pobreza o población debe citar fuente y año.
+- Toda cifra de pobreza, población o característica del distrito debe citar fuente y año si la fuente de la verdad la trae.
+- No inventes cifras climáticas, de accesibilidad o de acceso a servicios que no estén en la fuente de la verdad: si no aparecen, deja el campo vacío.
 MD,
             ],
             'Unidad Productora' => [
-                'globales' => [],
+                'globales' => ['Estructura de datos — Fichas técnicas', ],
                 'markdown' => <<<'MD'
 ## Objetivo
 Analizar las características del Servicio de Cuidado Diurno que se brinda en el CIAI y el estado situacional de sus factores de producción.
@@ -317,36 +341,53 @@ Por cada activo estratégico se registra: servicio y procesos de producción, ti
 
 Un CIAI está en condición inadecuada cuando **al menos un** factor de producción no cumple la lista de condiciones de infraestructura del servicio.
 
+## 3.06 Condiciones técnicas del local
+11 preguntas de Sí/No (más 2 de texto libre al final) sobre el local donde funciona o funcionará el CIAI: distancia a peligros (agentes contaminantes, grifos, líneas de alta tensión), colindancia con establecimientos de salud, si las salas están en primer piso, orientación de las puertas respecto al tránsito vehicular, y acceso a agua/desagüe/energía eléctrica por red pública. Responde exactamente "Sí" o "No" para cada una — nunca "no aplica" ni una descripción larga, salvo que la fuente de la verdad realmente no diga nada al respecto (ahí sí déjala vacía).
+Las 2 últimas (titularidad del local, situación del saneamiento físico legal) son de catálogo cerrado — usa el texto exacto de la opción que corresponda.
+
+## 3.07 Prácticas de operación y mantenimiento (situación actual)
+Dos tablas jerárquicas agrupadas: **a. Personal** (quién opera el CIAI hoy — cargos, cantidad, costo) y **b. Servicios y mantenimiento** (quién paga/mantiene el local, con qué frecuencia, a qué costo). El nodo padre de cada grupo es una descripción narrativa de la práctica actual; los hijos son el detalle con cantidad y costo (el total lo calcula el Excel, nunca lo llenes).
+
+## 3.08 Evolución del nivel de producción
+Serie histórica de los últimos 5 años (Año -5 a Año -1) de cuántas niñas/niños atendió el CIAI — normalmente viene en el mismo documento que reporta la capacidad actual/autorizada del CIAI.
+
+## 3.09 Exposición a peligros de la Unidad Productora
+Por cada peligro identificado en 2.05 (Sección 2), indicar el nivel de exposición y fragilidad del CIAI específicamente (no del área de estudio en general) y si existe un plan de contingencia (Sí/No). Si 2.05 no identificó peligros con antecedentes, esta tabla puede quedar vacía — no inventes niveles de exposición sin evidencia.
+
 ## Reglas
 - Evaluar cada activo contra su norma técnica, no de forma genérica.
 - Si un activo no aplica al CIAI, decirlo explícitamente en vez de marcarlo como cumplido.
-- Describir también operación, mantenimiento y la evolución del servicio en los últimos años.
+- Las respuestas Sí/No de 3.06 y 3.09 deben ser exactamente "Sí" o "No", nunca variantes.
 MD,
             ],
             'Involucrados' => [
-                'globales' => ['Sociales'],
+                'globales' => ['Estructura de datos — Fichas técnicas', 'Sociales'],
                 'markdown' => <<<'MD'
 ## Objetivo
 Describir y caracterizar a la población afectada, e identificar a los involucrados, su percepción, expectativas y nivel de participación.
 
 ## 4.01 Población afectada
-Conjunto de personas afectadas por la problemática del Servicio de Cuidado Diurno, sea por falta de acceso (**cobertura**) o por recibirlo de forma inadecuada (**calidad**).
+Conjunto de personas afectadas por la problemática del Servicio de Cuidado Diurno, sea por falta de acceso (**cobertura**) o por recibirlo de forma inadecuada (**calidad**). Tabla agrupada por tipo de población (población total del área de influencia, población de referencia 6-36 meses, demandante potencial, demandante efectiva, población objetivo) — cada fila trae descripción, unidad de medida, cantidad y %.
 
 Grupos de análisis:
 - **Población total**: población de los distritos del área de influencia. Fuente: **INEI**.
 - **Población de referencia**: la parte de la población total dentro del grupo etario de **6 a 36 meses** que podría recibir el servicio, aplicando los criterios de focalización del PNCM.
 - **Población demandante potencial**, **demandante efectiva** y **población objetivo**.
 
+## 4.02 Caracterización de la población demandante potencial
+Desagregación de los niños y niñas de la población demandante potencial (4.01) por variable/indicador (ej. edad, sexo, condición socioeconómica) y categoría dentro de esa variable (ej. "de 6 a 12 meses", "de 13 a 24 meses") — cantidad de niños, cantidad de niñas, % respecto a la población demandante efectiva, y fuente. Debe ser consistente con los totales de 4.01: la suma de categorías de una misma variable no debería superponerse ni exceder la población demandante potencial reportada ahí.
+
 ## 4.03 Matriz de involucrados
-Registrar por cada actor: grupo, problemas percibidos, intereses, estrategias y acuerdos o compromisos.
+Registrar por cada actor: grupo, posición (a favor/cooperante/opositor), problemas percibidos, intereses, estrategias y acuerdos o compromisos.
 
 ## Reglas
 - Toda cifra poblacional debe indicar fuente y año.
 - Mantener la coherencia de estos grupos con el Análisis de Mercado: esa sección se calcula a partir de ellos.
+- No inventes cifras de 4.02 que no aparezcan (ni se puedan derivar con una sola operación simple) en la fuente de la verdad — mejor dejar la fila vacía que una cifra inventada que "cuadre" con el total.
 MD,
             ],
             'Problema' => [
-                'globales' => ['Invierte.pe'],
+                'globales' => ['Estructura de datos — Fichas técnicas', 'Invierte.pe'],
                 'markdown' => <<<'MD'
 ## Objetivo
 Identificar el problema central con sus causas y efectos, definir los objetivos y plantear alternativas de solución técnicamente posibles, pertinentes y comparables.
@@ -356,19 +397,42 @@ Se identifica con la técnica del **árbol de causas y efectos**. Para proyectos
 - Las niñas y niños de 6 a 36 meses **acceden a una prestación inadecuada** del Servicio de Cuidado Diurno (el CIAI existe pero opera en condiciones inadecuadas).
 - Las niñas y niños de 6 a 36 meses **no acceden** al Servicio de Cuidado Diurno (no existe el CIAI).
 
+### 5.01.01 — Indicador del problema (tabla, filas dinámicas)
+Una sola fila. Describe el problema central (`descripcion_problema`), su indicador de seguimiento (`indicador`, `descripcion_indicador`), la unidad de medida (`um`, normalmente "CIAI") y el valor actual (`valor`) — el valor viene de la brecha diagnosticada en las secciones 2 y 3, no lo inventes si no hay evidencia.
+
+### 5.01.02 — Árbol de causas (tabla jerárquica de 3 niveles)
+`Causas Directas (CD)` → `Causas indirectas (CI)` → `Evidencias`. Cada CD agrupa una o más CI, y cada CI se sustenta con una evidencia (dato o cifra concreta de la fuente de la verdad o del diagnóstico de las secciones 2-4, nunca inventada). Usa 2-3 CD como máximo, cada una con 1-3 CI.
+
+### 5.01.03 — Árbol de efectos (tabla jerárquica de 3 niveles)
+`Efectos Indirectos (EI)` → `Evidencias (sustento)` → `Efectos Directos (ED)`. Ojo con el orden: el nivel raíz son los EFECTOS INDIRECTOS (la consecuencia de más alto nivel, ej. "Inadecuado desarrollo cognitivo..."), el nivel intermedio es la evidencia/sustento que lo cuantifica, y las hojas son los EFECTOS DIRECTOS (la consecuencia inmediata del problema). No confundas el nivel raíz con "evidencias" — cada nivel tiene su propio rol aunque el nombre de columna pueda sonar parecido.
+
 ## 5.02 Objetivo central
-Se formula como la situación positiva que revierte el problema central. Los medios se derivan de las causas y los fines de los efectos.
+Se formula como la situación positiva que revierte el problema central (mismo texto que 5.01.01 pero en positivo). Los medios se derivan de las causas y los fines de los efectos.
+
+### 5.02.01 — Indicador del objetivo (tabla, filas dinámicas)
+Espejo de 5.01.01 pero en positivo: mismo indicador y unidad de medida, con la meta (valor objetivo) en vez del valor actual del problema.
+
+### 5.02.02 y 5.02.04 — Medios fundamentales y acciones (dos tablas de filas dinámicas que forman UNA sola lista continua)
+La ficha real divide esta lista en dos campos de tabla separados, pero conceptualmente es una sola tabla de Medios Fundamentales — **debe existir un Medio Fundamental por cada Causa Indirecta (CI) definida en el árbol de 5.01.02** (no uno por Causa Directa). Reparto:
+- `5.02.02` lleva SOLO el primer Medio Fundamental (numero = 1), derivado de la primera CI del árbol, con su(s) Acción(es) concreta(s) para revertirla.
+- `5.02.04` continúa la MISMA lista con el resto de Medios Fundamentales (numero = 2, 3, 4... uno por cada CI restante, en el mismo orden en que aparecen en 5.01.02).
+- Nunca repitas un mismo Medio Fundamental en ambas tablas, y la columna `medio` (nombre del medio fundamental) no debe quedar vacía — descríbelo brevemente aunque el ejemplo de referencia a veces lo deje así.
+
+### 5.02.03 — Árbol de fines (tabla jerárquica de 2 niveles)
+`Fines Indirectos (FI)` → `Fines directos (FD)` — espejo en positivo del árbol de efectos de 5.01.03 (sin el nivel de evidencias intermedio).
 
 ## 5.03 Alternativas
-Deben guardar relación directa con el objetivo central y ser comparables entre sí.
+Deben guardar relación directa con el objetivo central y ser comparables entre sí. `5.03.01` es un campo calculado por el Excel a partir de 5.01-5.02 — no se llena con IA.
 
 ## Reglas
 - El problema debe redactarse como situación negativa, nunca como falta de una solución ("no hay mobiliario" no es un problema central).
-- Causas y efectos deben ser consistentes con el diagnóstico del territorio, la unidad productora y los involucrados.
+- Causas y efectos deben ser consistentes con el diagnóstico del territorio, la unidad productora y los involucrados (secciones 2-4) — reutiliza esos datos, no inventes cifras nuevas.
+- El número de Causas Indirectas en 5.01.02 debe coincidir con el número total de filas entre 5.02.02 y 5.02.04 (una relación 1 a 1, Medio Fundamental por Causa Indirecta).
+- Los efectos (5.01.03) y fines (5.02.03) deben tener la misma cantidad de ramas raíz que causas/medios, guardando simetría causa↔efecto y medio↔fin.
 MD,
             ],
             'Horizonte' => [
-                'globales' => ['Invierte.pe', 'Finanzas'],
+                'globales' => ['Estructura de datos — Fichas técnicas', 'Invierte.pe', 'Finanzas'],
                 'markdown' => <<<'MD'
 ## Objetivo
 Definir el horizonte de evaluación para determinar el flujo de costos y beneficiarios sujetos a evaluación.
@@ -386,7 +450,7 @@ El horizonte comprende **fase de Ejecución + fase de Funcionamiento**.
 MD,
             ],
             'Mercado' => [
-                'globales' => ['Finanzas'],
+                'globales' => ['Estructura de datos — Fichas técnicas', 'Finanzas'],
                 'markdown' => <<<'MD'
 ## Objetivo
 Estimar oferta y demanda del Servicio de Cuidado Diurno para calcular la **brecha** que atenderá el proyecto.
@@ -406,7 +470,7 @@ Estimar oferta y demanda del Servicio de Cuidado Diurno para calcular la **brech
 MD,
             ],
             'Análisis Técnico' => [
-                'globales' => [],
+                'globales' => ['Estructura de datos — Fichas técnicas', ],
                 'markdown' => <<<'MD'
 ## Objetivo
 Definir tamaño, localización y tecnología de la intervención, identificar medidas de reducción del riesgo de desastres, resumir las alternativas técnicas planteadas y fijar las metas físicas de los activos a crear o intervenir. Este bloque se desarrolla **una vez por cada alternativa técnica propuesta** (ver el resumen de alternativas), aunque en la ficha vive como una sola sección de análisis técnico común.
@@ -429,7 +493,9 @@ También se registra la titularidad del local (ej. "Propiedad del Estado") y la 
 Se usa **ingeniería conceptual**. Por cada activo del CIAI (infraestructura, mobiliario, equipo, intangibles — el mismo catálogo del diagnóstico de la Unidad Productora) se indica: descripción, si se incluye o no como parte del proyecto de inversión, y la normativa aplicable (Directiva PNCM, RNE). Los activos y su descripción vienen predefinidos en la ficha; el equipo formulador solo decide inclusión y normativa.
 
 ## Identificación de medidas de reducción del riesgo de desastres
-Para cada peligro con exposición "Alto" o "Medio" (heredado del diagnóstico del territorio), se describe la medida concreta de reducción del riesgo. Ejemplos reales de esta tipología: coberturas de techos diseñadas para altos niveles de precipitación (lluvias intensas), ambientes con materiales térmicos (heladas), elementos antisísmicos según el RNE (sismos), estructuras diseñadas para vientos fuertes.
+La tabla `08.04.1` viene con **exactamente 16 filas fijas, una por cada peligro del catálogo estándar** (el mismo orden y catálogo de `2.05.01` en Diagnóstico del Territorio) — nunca agregues, quites ni combines filas, ni aunque dos peligros te parezcan similares:
+Inundaciones, Movimientos en masa, Lluvias intensas, Helada, Nevadas, Friaje, Sismos, Sequías, Vulcanismo, Tsunamis, Incendios forestales, Erosión, Vientos fuertes, Incendios urbanos, Radiación solar, Otros.
+Para CADA una de las 16 (en ese orden): completa Exposición/Fragilidad/Resiliencia según lo ya registrado en `2.05.01` para ese peligro (si ahí no aparece o su exposición es "Bajo"/no aplica, marca lo mismo aquí — no la subas de nivel). Solo escribe una medida concreta en "Descripción de las medidas..." para los peligros con exposición **Alto o Medio** heredada de `2.05.01`; en el resto deja esa columna vacía o "No aplica", pero la FILA debe seguir presente. Ejemplos reales de medida: coberturas de techos diseñadas para altos niveles de precipitación (lluvias intensas), ambientes con materiales térmicos (heladas), elementos antisísmicos según el RNE (sismos), estructuras diseñadas para vientos fuertes.
 
 ## Resumen de las alternativas técnicas
 Tamaño y localización se completan automáticamente; se debe describir la **tecnología** de cada alternativa (ej. "En el diseño del proyecto se consideran los estándares definidos en la Directiva 'Parámetros de diseño...' y en la Directiva 'Equipamiento y Dotación de Materiales...' del PNCM"). Puede haber más de una alternativa técnica — cada una se evalúa por separado en la sección de Costos y de Evaluación Social correspondiente.
@@ -445,13 +511,15 @@ Se organiza por **componente** (normalmente uno por tipo de factor productivo: I
 MD,
             ],
             'COSTOS DEL PROYECTO - ALTERNATIVA 1' => [
-                'globales' => ['Finanzas'],
+                'globales' => ['Estructura de datos — Fichas técnicas', 'Finanzas'],
                 'markdown' => <<<'MD'
 ## Objetivo
 Estimar, a precios de mercado, los costos de la **Alternativa técnica 1**: costo de ejecución física, reinversiones, operación y mantenimiento, y los cronogramas de inversión (financiero y físico).
 
 ## Costo de ejecución física de las acciones
 Por cada **componente** (uno por tipo de factor productivo: Infraestructura, Equipos, Mobiliario, Intangibles) se detalla: acción sobre el activo, tipo de factor productivo, activo, unidad de medida y cantidad (unidad física y, para infraestructura, dimensión física en m²/ml), costo unitario y costo total. Esto es el **costo directo**. Ejemplo real: Componente 1 "Infraestructura del CIAI cumple con los estándares de calidad" — Sala de cuidado diurno (2 salas, 100.80 m², S/ 3,650/m², S/ 367,920), Ambiente de recreación activa (90 m², S/ 328,500), Almacén (60.48 m², S/ 220,752), Cerco perimétrico (200 ml, S/ 550/ml, S/ 110,000).
+
+**Mapeo fijo campo → componente** (no lo adivines ni lo desplaces): `09.01.1` y `09.01.2` son las dos partes de Componente 1 = Infraestructura (misma fuente que `08.06.1`); `09.01.3` = Componente 2 = Equipos (misma fuente que `08.06.2`); `09.01.4` = Componente 3 = Mobiliario (misma fuente que `08.06.3`); `09.01.5` = Componente 4 = Intangibles (misma fuente que `08.06.4`). Cada uno se llena con los activos de SU propio componente en Análisis Técnico — nunca muevas el contenido de un componente al campo de otro componente aunque uno de ellos parezca tener más información disponible. Si la fuente da un solo monto conjunto para "mobiliario y equipos" (sin desglosar cuánto es de cada uno), ponlo UNA sola vez en el componente que mejor le corresponda (Equipos) y deja el otro campo (Mobiliario) vacío — nunca repitas el mismo monto en dos componentes, aunque eso signifique dejar uno sin llenar.
 
 Además de los componentes, se suman **costos indirectos**: Gestión del proyecto, Expediente técnico o documento equivalente, Supervisión, Liquidación, Gastos generales — cada uno como monto y como % del costo directo. En el ejemplo oficial: Gestión del proyecto S/ 65,000 (5.0%), Expediente técnico S/ 89,700 (6.8%), Supervisión S/ 50,000 (3.8%), Liquidación S/ 30,000 (2.3%), Gastos generales S/ 150,000 (11.4%) — subtotal de otros costos S/ 384,700, costo total de inversión ≈ S/ 1,696,055 (varía según qué componentes se incluyan).
 
@@ -474,7 +542,7 @@ En base al cronograma financiero, se distribuyen en el tiempo las metas físicas
 MD,
             ],
             'COSTOS DEL PROYECTO - ALTERNATIVA 2' => [
-                'globales' => ['Finanzas'],
+                'globales' => ['Estructura de datos — Fichas técnicas', 'Finanzas'],
                 'markdown' => <<<'MD'
 ## Objetivo
 Igual estructura y reglas que la sección de Costos del Proyecto de la Alternativa 1 (costo de ejecución física por componente, costos indirectos, reinversión, operación y mantenimiento, cronograma financiero y cronograma físico) — ver ese contexto para el detalle de cada campo y sus ejemplos.
@@ -488,7 +556,7 @@ Esta es la **Alternativa técnica 2**: sus montos y metas físicas deben corresp
 MD,
             ],
             'COSTOS DEL PROYECTO - ALTERNATIVA 3' => [
-                'globales' => ['Finanzas'],
+                'globales' => ['Estructura de datos — Fichas técnicas', 'Finanzas'],
                 'markdown' => <<<'MD'
 ## Objetivo
 Igual estructura y reglas que la sección de Costos del Proyecto de la Alternativa 1 — ver ese contexto para el detalle de cada campo y sus ejemplos.
@@ -502,7 +570,7 @@ Esta es la **Alternativa técnica 3**: sus montos y metas físicas deben corresp
 MD,
             ],
             'EVALUACIÓN SOCIAL - ALTERNATIVA 1' => [
-                'globales' => ['Finanzas', 'Invierte.pe'],
+                'globales' => ['Estructura de datos — Fichas técnicas', 'Finanzas', 'Invierte.pe'],
                 'markdown' => <<<'MD'
 ## Objetivo
 Identificar, medir y valorizar los beneficios y costos de la **Alternativa técnica 1** desde el punto de vista del bienestar social del país, estimar los indicadores de rentabilidad social y hacer el análisis de sensibilidad. Con el resultado de esta evaluación (comparando todas las alternativas) se selecciona la mejor alternativa técnica.
@@ -528,7 +596,7 @@ Matriz bidimensional que muestra cómo varía el índice costo-eficacia ante cam
 MD,
             ],
             'EVALUACIÓN SOCIAL - ALTERNATIVA 2' => [
-                'globales' => ['Finanzas', 'Invierte.pe'],
+                'globales' => ['Estructura de datos — Fichas técnicas', 'Finanzas', 'Invierte.pe'],
                 'markdown' => <<<'MD'
 ## Objetivo
 Igual estructura y reglas que la Evaluación Social de la Alternativa 1 (beneficios sociales, costos sociales, flujo a precios sociales, indicadores costo-eficacia calculados automáticamente, análisis de sensibilidad) — ver ese contexto para el detalle.
@@ -542,7 +610,7 @@ Se alimenta de los **Costos del Proyecto de la Alternativa 2**, no de la Alterna
 MD,
             ],
             'EVALUACIÓN SOCIAL - ALTERNATIVA 3' => [
-                'globales' => ['Finanzas', 'Invierte.pe'],
+                'globales' => ['Estructura de datos — Fichas técnicas', 'Finanzas', 'Invierte.pe'],
                 'markdown' => <<<'MD'
 ## Objetivo
 Igual estructura y reglas que la Evaluación Social de la Alternativa 1 — ver ese contexto para el detalle.
@@ -555,7 +623,7 @@ Se alimenta de los **Costos del Proyecto de la Alternativa 3**. Si no existe una
 MD,
             ],
             'SOSTENIBILIDAD' => [
-                'globales' => [],
+                'globales' => ['Estructura de datos — Fichas técnicas', ],
                 'markdown' => <<<'MD'
 ## Objetivo
 Analizar la capacidad del proyecto para producir el Servicio de Cuidado Diurno de manera ininterrumpida durante todo el horizonte de evaluación. **Se desarrolla solo para la alternativa que resultó seleccionada en la Evaluación Social** (la de mejor costo-eficacia), no para todas.
@@ -573,7 +641,7 @@ Se identifican los riesgos que pueden afectar al proyecto en Ejecución y Funcio
 MD,
             ],
             'GESTIÓN DEL PROYECTO' => [
-                'globales' => [],
+                'globales' => ['Estructura de datos — Fichas técnicas', ],
                 'markdown' => <<<'MD'
 ## Objetivo
 Planear, ejecutar, supervisar y controlar la implementación de los componentes del proyecto. **Se desarrolla solo para la alternativa seleccionada** en la Evaluación Social.
@@ -599,7 +667,7 @@ Una sola opción entre las cinco oficiales: Recursos ordinarios, Recursos direct
 MD,
             ],
             'IMPACTO AMBIENTAL' => [
-                'globales' => [],
+                'globales' => ['Estructura de datos — Fichas técnicas', ],
                 'markdown' => <<<'MD'
 ## Objetivo
 Identificar los impactos negativos que el proyecto puede generar sobre el ambiente, durante Ejecución y Funcionamiento, y plantear medidas de gestión ambiental (prevención, corrección, mitigación). **Se desarrolla para la alternativa seleccionada.**
@@ -613,7 +681,7 @@ Se listan los impactos negativos separados por fase — "Durante la Ejecución" 
 MD,
             ],
             'MARCO LÓGICO' => [
-                'globales' => ['Invierte.pe'],
+                'globales' => ['Estructura de datos — Fichas técnicas', 'Invierte.pe'],
                 'markdown' => <<<'MD'
 ## Objetivo
 Construir el Marco Lógico: la herramienta que resume la coherencia y consistencia del proyecto, a partir del árbol de objetivos y las acciones para lograr los medios fundamentales. **Se desarrolla para la alternativa seleccionada en la Evaluación Social**, y la columna de objetivos debe ser consistente con lo ya definido en Problema/Objetivo y en Costos del Proyecto.
@@ -632,7 +700,7 @@ Cuatro niveles de objetivo, cada uno con indicador, valor meta, medios de verifi
 MD,
             ],
             'CONCLUSIONES' => [
-                'globales' => ['Invierte.pe'],
+                'globales' => ['Estructura de datos — Fichas técnicas', 'Invierte.pe'],
                 'markdown' => <<<'MD'
 ## Objetivo
 Indicar el resultado del proceso de formulación y evaluación del proyecto — **viable o no viable** — y sustentarlo.
@@ -648,7 +716,7 @@ c. Emitir un juicio técnico sobre la calidad y pertinencia del nivel de profund
 MD,
             ],
             'ANEXOS' => [
-                'globales' => [],
+                'globales' => ['Estructura de datos — Fichas técnicas', ],
                 'markdown' => <<<'MD'
 ## Objetivo
 Listar y adjuntar todos los anexos requeridos por la Ficha Técnica Estándar, firmados, visados y sellados por los especialistas correspondientes.

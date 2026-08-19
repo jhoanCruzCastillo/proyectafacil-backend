@@ -43,6 +43,7 @@ $routes->group('api', ['filter' => 'auth'], static function (RouteCollection $ro
     $routes->post('ejemplos', 'EjemplosController::create');
     $routes->put('ejemplos/(:num)', 'EjemplosController::update/$1');
     $routes->delete('ejemplos/(:num)', 'EjemplosController::delete/$1');
+    $routes->put('ejemplos/(:num)/referencia-ia', 'EjemplosController::marcarReferenciaIA/$1');
     $routes->get('plantillas/(:num)/ejemplos', 'EjemplosController::listByPlantilla/$1');
 
     $routes->get('ejemplos/(:num)/excel', 'ExcelEjemplosController::get/$1');
@@ -53,6 +54,8 @@ $routes->group('api', ['filter' => 'auth'], static function (RouteCollection $ro
     $routes->delete('ejemplos/(:num)/fuente-verdad/archivos/(:num)', 'FuenteVerdadController::eliminarArchivo/$1/$2');
     $routes->put('ejemplos/(:num)/fuente-verdad/texto', 'FuenteVerdadController::guardarTexto/$1');
     $routes->post('ejemplos/(:num)/llenar-ia', 'LlenadoIAController::llenarFicha/$1');
+    $routes->post('ejemplos/(:num)/llenar-tabla-ia', 'LlenadoIAController::llenarTabla/$1');
+    $routes->get('plantillas/(:num)/preview-prompt', 'LlenadoIAController::previsualizarPrompt/$1');
 
     $routes->get('usuarios', 'UsuariosController::index');
     $routes->post('usuarios', 'UsuariosController::create');

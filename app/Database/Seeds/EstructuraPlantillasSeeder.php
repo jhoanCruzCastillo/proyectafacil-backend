@@ -96,6 +96,9 @@ class EstructuraPlantillasSeeder extends Seeder
                 'creado_por_usuario_id'   => null,
                 'compartida'              => $e['compartida'] ? 1 : 0,
                 'estado'                  => $e['estado'] ?? 'archivado',
+                // A lo más uno por plantilla (ver EjemplosController::marcarReferenciaIA) — el
+                // ejemplo de referencia few-shot que usa LlenadoIAController al llenar con IA.
+                'es_referencia_ia'        => ($e['esReferenciaIA'] ?? false) ? 1 : 0,
                 'created_at'              => $ahora,
                 'updated_at'              => $ahora,
             ]);
