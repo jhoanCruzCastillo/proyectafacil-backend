@@ -29,19 +29,36 @@ class GoogleMeetService
     {
         $config = config(GoogleConfig::class);
 
-        if ($config->meetServiceAccountKeyPath === '' || $config->meetImpersonateEmail === '') {
-            throw new RuntimeException(
-                'Google Meet no está configurado — completa google.meetServiceAccountKeyPath/meetImpersonateEmail en backend/.env',
-            );
-        }
-
-        $rutaClave = rtrim(ROOTPATH, '/\\') . '/' . ltrim($config->meetServiceAccountKeyPath, '/\\');
-        if (! is_file($rutaClave)) {
-            throw new RuntimeException("No se encontró la clave de la Service Account en {$rutaClave}");
+        if ($config->meetImpersonateEmail === '') {
+            throw new RuntimeException('Google Meet no está configurado — falta google.meetImpersonateEmail en backend/.env');
         }
 
         $client = new Client();
-        $client->setAuthConfig($rutaClave);
+
+        // Railway (y plataformas similares) no tienen el JSON de la Service Account en el
+        // filesystem del contenedor — solo vive en git localmente, gitignoreado por ser un
+        // secreto real. meetServiceAccountKeyBase64 evita depender de un archivo: se decodifica
+        // acá mismo y se pasa el array ya parseado, que Client::setAuthConfig() acepta igual que
+        // una ruta de archivo.
+        if ($config->meetServiceAccountKeyBase64 !== '') {
+            $json          = base64_decode($config->meetServiceAccountKeyBase64, true);
+            $credenciales  = $json !== false ? json_decode($json, true) : null;
+            if (! is_array($credenciales)) {
+                throw new RuntimeException('google.meetServiceAccountKeyBase64 no es un JSON de Service Account válido (¿está bien codificado en base64?).');
+            }
+            $client->setAuthConfig($credenciales);
+        } elseif ($config->meetServiceAccountKeyPath !== '') {
+            $rutaClave = rtrim(ROOTPATH, '/\\') . '/' . ltrim($config->meetServiceAccountKeyPath, '/\\');
+            if (! is_file($rutaClave)) {
+                throw new RuntimeException("No se encontró la clave de la Service Account en {$rutaClave}");
+            }
+            $client->setAuthConfig($rutaClave);
+        } else {
+            throw new RuntimeException(
+                'Google Meet no está configurado — completa google.meetServiceAccountKeyBase64 (o meetServiceAccountKeyPath) en backend/.env',
+            );
+        }
+
         $client->addScope(Calendar::CALENDAR);
         $client->addScope(Meet::MEETINGS_SPACE_READONLY);
         $client->setSubject($config->meetImpersonateEmail);
