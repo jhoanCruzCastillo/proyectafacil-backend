@@ -13,8 +13,10 @@
         "php": "^8.2",
         "cloudinary/cloudinary_php": "^3.1",
         "codeigniter4/framework": "^4.7",
+        "google/apiclient": "^2.18",
         "guzzlehttp/guzzle": "^7.15.2",
-        "smalot/pdfparser": "^2.12"
+        "smalot/pdfparser": "^2.12",
+        "stripe/stripe-php": "^21.2"
     },
     "require-dev": {
         "fakerphp/faker": "^1.9",

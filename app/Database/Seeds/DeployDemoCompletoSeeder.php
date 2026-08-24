@@ -58,10 +58,12 @@ class DeployDemoCompletoSeeder extends Seeder
             ContextosIACuidadoDiurnoSeeder::class,
             ContextoGeneralCuidadoDiurnoSeeder::class,
             PromptSistemaCuidadoDiurnoSeeder::class,
+            CorregirEspaciosInfraestructuraCuidadoDiurnoSeeder::class,
             CronogramaDemoAsesor1Seeder::class,
             NoAtendidasDemoAsesor1Seeder::class,
             LiquidacionDemoAsesor1Seeder::class,
             ChatsActivosPruebaJuanSeeder::class,
+            BeneficiosDemoSeeder::class,
         ];
 
         foreach ($pasos as $seeder) {

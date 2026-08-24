@@ -5,6 +5,7 @@ namespace App\Controllers;
 use App\Libraries\UbigeoResolver;
 use App\Models\ArchivoModel;
 use App\Models\EjemploModel;
+use App\Models\LoteLlenadoIAModel;
 use CodeIgniter\HTTP\ResponseInterface;
 use Config\Services;
 
@@ -59,13 +60,24 @@ class LlenadoIAController extends BaseController
      */
     private const TABLAS_UBIGEO = ['2.01.01', '2.02.01', '3.03.01'];
 
+    /**
+     * Tablas que dependen del Excel vivo del cliente (catálogo en cascada, ver
+     * opcionesLlenadoCascada() en el frontend) y por eso quedan FUERA del lote de "Llenar toda la
+     * ficha" (ver enviarLoteFicha) — un lote server-side no tiene forma de leer el Excel del
+     * navegador ni de ver el borrador de la tabla anterior antes de pedir la siguiente. El cliente las
+     * sigue llenando de una en una, síncrono, en cuanto el lote termina.
+     */
+    private const TABLAS_CASCADA_FUERA_DE_LOTE = [
+        'FTE-CUIDADO-DIURNO' => ['5.01.02', '5.02.02', '5.02.04'],
+    ];
+
     public function llenarFicha($ejemploId = null): ResponseInterface
     {
-        set_time_limit(180); // 1 sección por petición (el cliente itera); margen para Gemini + contexto.
+        set_time_limit(180); // 1 sección por petición (el cliente itera); margen para OpenAI + contexto.
         $ejemploId = (int) $ejemploId;
 
         $config = config('Ia');
-        if ($config->anthropicApiKey === '') {
+        if ($config->openaiApiKey === '') {
             return $this->response->setStatusCode(503)->setJSON(['error' => 'El llenado con IA todavía no está configurado en el servidor.']);
         }
 
@@ -222,8 +234,8 @@ class LlenadoIAController extends BaseController
      */
     public function llenarTabla($ejemploId = null): ResponseInterface
     {
-        // El margen de PHP debe superar el timeout del curl a Claude (170s, ver la llamada a
-        // llamarClaudeCrudo() más abajo) con margen: con set_time_limit(60) == timeout de curl, tablas
+        // El margen de PHP debe superar el timeout del curl a OpenAI (170s, ver la llamada a
+        // llamarOpenAICrudo() más abajo) con margen: con set_time_limit(60) == timeout de curl, tablas
         // grandes/lentas hacían que PHP matara el script ANTES de que curl devolviera null con gracia
         // — eso salía como HTTP 500 crudo en vez de un 502 "no se pudo consultar", confirmado en logs
         // reales (ErrorException: Maximum execution time of 60 seconds exceeded) durante una prueba con
@@ -232,7 +244,7 @@ class LlenadoIAController extends BaseController
         $ejemploId = (int) $ejemploId;
 
         $config = config('Ia');
-        if ($config->anthropicApiKey === '') {
+        if ($config->openaiApiKey === '') {
             return $this->response->setStatusCode(503)->setJSON(['error' => 'El llenado con IA todavía no está configurado en el servidor.']);
         }
 
@@ -340,22 +352,21 @@ class LlenadoIAController extends BaseController
         $sistema = $this->construirSistemaTabla($reglas, $generales, $contextoSeccion, $fuenteVerdad);
         $usuario = $this->construirPromptTabla($campo, $subtipo, $agrupador, $columnas, $valorActual, $opcionesPorColumna, $contextoAdicional, $valorReferencia, $otrasSeccionesConfirmadas);
 
-        // Vuelta a Claude (2026-08-19, crédito disponible) — llamarModeloCrudo() (Gemini) se deja
-        // intacta por si hace falta volver a swapear. Modelo híbrido: Haiku 4.5 (barato) para el
-        // grueso de las tablas, pero cuando el frontend manda `contextoAdicional` (guía condicional de
-        // cascada — hoy solo las 3 tablas de la Sección 5 Problema-Objetivo) se usa Sonnet 5 (más caro,
-        // `$config->modelo`). Encontrado en vivo probando 5.01.02 con Haiku: dejó "Causas indirectas"/
-        // "Evidencias" en blanco en 2 intentos reales seguidos, y en uno repitió la misma Causa Directa
-        // en ambos nodos raíz — la guía condicional de este caso es el prompt más denso/exigente de
-        // toda la ficha (árbol + reglas por rama), y Haiku no la sigue de forma confiable.
-        $modeloParaEstaTabla = $contextoAdicional !== '' ? $config->modelo : $config->modeloLlenado;
+        // Cambiado a OpenAI (2026-08-19, usar créditos de OpenAI en vez de Anthropic) —
+        // llamarClaudeCrudo()/llamarModeloCrudo() (Gemini) se dejan intactas por si hace falta volver
+        // a swapear. Modelo híbrido: gpt-5-mini (barato) para el grueso de las tablas, pero cuando el
+        // frontend manda `contextoAdicional` (guía condicional de cascada — hoy solo las 3 tablas de la
+        // Sección 5 Problema-Objetivo) se usa gpt-5 (más caro, `$config->openaiModelo`) — ese es el
+        // prompt más denso/exigente de toda la ficha (árbol + reglas por rama) y el modelo barato no lo
+        // seguía de forma confiable con Claude Haiku; se mantiene el mismo criterio de split con OpenAI.
+        $modeloParaEstaTabla = $contextoAdicional !== '' ? $config->openaiModelo : $config->openaiModeloLlenado;
         // 8000 se quedaba corto para tablas grandes (ej. 16.01.1 "Plan de implementación": 12 columnas
-        // × varios grupos) — encontrado en vivo (2026-08-19): Claude cortaba la respuesta a mitad del
-        // primer grupo (stop_reason "max_tokens"), el JSON quedaba incompleto y el parseo fallaba, lo
+        // × varios grupos) — encontrado en vivo (2026-08-19): el modelo cortaba la respuesta a mitad del
+        // primer grupo (finish_reason "length"), el JSON quedaba incompleto y el parseo fallaba, lo
         // que el cliente veía como un 502 genérico sin pista de la causa real (estaba en el log, no en
-        // la respuesta HTTP). No hay downside de subir el techo: max_tokens es un tope, no un objetivo
-        // — una tabla chica sigue costando/tardando lo mismo que antes.
-        $respuesta = $this->llamarClaudeCrudo($config, $sistema, $usuario, 32000, 170, $modeloParaEstaTabla, "tabla {$identificador}");
+        // la respuesta HTTP). No hay downside de subir el techo: max_completion_tokens es un tope, no
+        // un objetivo — una tabla chica sigue costando/tardando lo mismo que antes.
+        $respuesta = $this->llamarOpenAICrudo($config, $sistema, $usuario, 32000, 170, $modeloParaEstaTabla, "tabla {$identificador}");
         if ($respuesta === null) {
             return $this->response->setStatusCode(502)->setJSON(['error' => 'No se pudo consultar a la IA. Intenta de nuevo.']);
         }
@@ -372,14 +383,8 @@ class LlenadoIAController extends BaseController
         $ultimaColumnaCalculada = $columnas !== [] && ((array_values($columnas)[count($columnas) - 1]['tipo'] ?? '') === 'calculado');
 
         // Catálogo por columna (para validar que la IA no "casi acertó" una opción con mayúscula o
-        // acento distinto — eso rompería el VLOOKUP en Excel en silencio).
-        $catalogoPorColumna = [];
-        foreach ($columnas as $c) {
-            $opciones = $opcionesPorColumna[$c['id']] ?? $c['opciones'] ?? null;
-            if (is_array($opciones) && $opciones !== []) {
-                $catalogoPorColumna[$c['id']] = $opciones;
-            }
-        }
+        // acento distinto — eso rompería el VLOOKUP en Excel en silencio). Incluye columnas booleano.
+        $catalogoPorColumna = $this->catalogoPorColumnaDe($columnas, $opcionesPorColumna);
         // En filas_dinamicas el valor hoja ya viene con su id de columna al lado ({col_id: valor}),
         // así que $catalogoPorColumna solo alcanza para validarlo ahí. En jerárquica el árbol no trae
         // esa referencia por nivel — el "value" de cada nodo no dice de qué columna es — pero SÍ se
@@ -393,7 +398,8 @@ class LlenadoIAController extends BaseController
             $columnaIdPorProfundidad[$profundidad]    = (string) ($c['id'] ?? '');
         }
 
-        $resultado = $this->validarFormaTabla($valorActual, $valorPropuesto['valor'] ?? null, $columnasCalculadas, $ultimaColumnaCalculada, $catalogoPorColumna, $columnaIdPorProfundidad);
+        $columnasConSubcolumnas = $this->columnasConSubcolumnasDe($columnas);
+        $resultado = $this->validarFormaTabla($valorActual, $valorPropuesto['valor'] ?? null, $columnasCalculadas, $ultimaColumnaCalculada, $catalogoPorColumna, $columnaIdPorProfundidad, $columnasConSubcolumnas);
         if (! $resultado['valido']) {
             log_message('warning', '[llenado-tabla-ia] rechazado {id}: {motivo}', ['id' => $identificador, 'motivo' => $resultado['motivo']]);
 
@@ -513,6 +519,572 @@ class LlenadoIAController extends BaseController
             ],
             'tablas' => $tablas,
         ]);
+    }
+
+    /**
+     * Envía TODA la ficha (secciones + tablas elegibles) como un LOTE (Batch API de OpenAI) en vez de
+     * una llamada síncrona por sección/tabla — ~50% más barato, a cambio de no tener respuesta
+     * inmediata (ver estadoLoteFicha()). Pedido explícito del usuario (2026-08-2x): usar esto SOLO
+     * para "Llenar toda la ficha"; el botón individual "Llenar con IA" de un campo/tabla suelto sigue
+     * yendo por llenarFicha()/llenarTabla() (síncronas, sin tocar) — un lote de una sola línea no
+     * tiene sentido y perdería la iteración rápida que ese botón necesita para poder corregir la guía
+     * en el momento, como se hizo toda la sesión de hoy.
+     *
+     * Deliberadamente NO se reusa el código de llenarFicha()/llenarTabla() (que sí llaman a la API) —
+     * se duplica la parte de "armar el prompt" a propósito para no arriesgar esas dos rutas ya
+     * probadas; si en algún momento diverge demasiado, vale la pena extraer un helper común.
+     */
+    public function enviarLoteFicha($ejemploId = null): ResponseInterface
+    {
+        $ejemploId = (int) $ejemploId;
+
+        $config = config('Ia');
+        if ($config->openaiApiKey === '') {
+            return $this->response->setStatusCode(503)->setJSON(['error' => 'El llenado con IA todavía no está configurado en el servidor.']);
+        }
+
+        $ejemplo = (new EjemploModel())->find($ejemploId);
+        if (! $ejemplo) {
+            return $this->response->setStatusCode(404)->setJSON(['error' => 'Ficha no encontrada']);
+        }
+        $plantillaId = (int) $ejemplo['plantilla_id'];
+
+        $plantilla = db_connect()->table('plantillas')->where('id', $plantillaId)->get()->getRowArray();
+        if ($plantilla === null) {
+            return $this->response->setStatusCode(404)->setJSON(['error' => 'Plantilla no encontrada']);
+        }
+
+        $body             = $this->request->getJSON(true) ?? [];
+        $seccionIdsFiltro = is_array($body['seccionIds'] ?? null) ? array_map('strval', $body['seccionIds']) : null;
+
+        $todasLasSecciones = $this->seccionesDe($plantillaId);
+        $secciones = $seccionIdsFiltro === null
+            ? $todasLasSecciones
+            : array_values(array_filter($todasLasSecciones, static fn (array $s): bool => in_array((string) ($s['id'] ?? ''), $seccionIdsFiltro, true)));
+        if ($secciones === []) {
+            return $this->response->setStatusCode(400)->setJSON(['error' => 'Ninguna de las secciones indicadas existe en esta ficha']);
+        }
+
+        $fuenteVerdad = $this->fuenteDeLaVerdad($ejemploId, $ejemplo['fuente_verdad_texto'] ?? '');
+        if (trim($fuenteVerdad) === '') {
+            return $this->response->setStatusCode(400)->setJSON(['error' => 'Carga al menos un documento o escribe información del proyecto antes de llenar con IA']);
+        }
+
+        $reglas         = $this->contenidoGlobalPorNombre('Reglas de llenado automático con IA');
+        $generales      = $this->contextosGeneralesDe($plantillaId);
+        $referencia     = $this->valoresEjemploReferencia($plantillaId);
+        $yaConfirmados  = $this->valoresYaConfirmados($ejemploId);
+        $excluidosTabla = self::CAMPOS_TABLA_EXCLUIDOS[$plantilla['codigo']] ?? [];
+        // Las 3 tablas de catálogo en cascada de la Sección 5 (ver opcionesLlenadoCascada() en el
+        // frontend) dependen de que el cliente resuelva en VIVO las opciones vigentes contra su Excel
+        // cargado, y de ver el borrador recién propuesto de la tabla anterior antes de pedir la
+        // siguiente (ver el fix de resolverValorExcel del 2026-08-19) — nada de eso existe en un lote
+        // server-side sin ida y vuelta al navegador. Se excluyen del lote y el cliente las llena
+        // igual que hoy (síncrono, secuencial) en cuanto el lote termina — ver useLlenadoIALote.ts.
+        $excluidosCascada = self::TABLAS_CASCADA_FUERA_DE_LOTE[$plantilla['codigo']] ?? [];
+
+        $lineas = [];
+        $mapeo  = [];
+
+        foreach ($secciones as $seccion) {
+            $seccionId = (string) ($seccion['id'] ?? '');
+            $campos    = $this->camposLlenables($seccion);
+
+            if ($campos !== []) {
+                $contextoSeccion = $this->contextoDeSeccion($plantillaId, $seccionId);
+                $sistema         = $this->construirSistema($reglas, $generales, $contextoSeccion, $fuenteVerdad);
+                $idsSeccion      = array_column($campos, 'identificador');
+                $referenciaSeccion = array_intersect_key($referencia, array_flip($idsSeccion));
+                // A diferencia de llenarFicha() síncrono, $yaConfirmados NO se va actualizando sección
+                // por sección dentro del MISMO lote (todas las líneas se mandan juntas, sin orden
+                // garantizado de procesamiento) — solo ve lo que ya estaba confirmado ANTES de enviar
+                // el lote. Diferencia real y aceptada: es la misma razón por la que las 3 tablas de
+                // cascada quedan fuera del lote.
+                $otrasSeccionesConfirmadas = array_diff_key($yaConfirmados, array_flip($idsSeccion));
+                $usuario  = $this->construirPromptSeccion($seccionId, (string) ($seccion['nombre'] ?? ''), $campos, $referenciaSeccion, $otrasSeccionesConfirmadas);
+                $customId = 'seccion__' . $seccionId;
+                $lineas[] = $this->lineaLoteOpenAI($customId, $config->openaiModeloLlenado, 8000, $sistema, $usuario);
+                $mapeo[$customId] = [
+                    'tipo'      => 'seccion',
+                    'seccionId' => $seccionId,
+                    'nombre'    => (string) ($seccion['nombre'] ?? ''),
+                    'modelo'    => $config->openaiModeloLlenado,
+                    'totalCampos' => count($campos),
+                    // Igual que $opcionesPorIdentif en llenarFicha() — sin esto, procesarResultadosLote()
+                    // no tenía forma de saber qué campos tienen catálogo cerrado y guardaba lo que la IA
+                    // respondiera tal cual (encontrado en vivo: 3.06.11 guardó un valor fuera de las
+                    // opciones del Excel).
+                    'opcionesPorIdentificador' => array_column(
+                        array_filter($campos, static fn (array $c): bool => is_array($c['opciones'] ?? null) && $c['opciones'] !== []),
+                        'opciones',
+                        'identificador',
+                    ),
+                ];
+            }
+
+            foreach ($seccion['subsecciones'] ?? [] as $sub) {
+                foreach ($sub['campos'] ?? [] as $campo) {
+                    $identificador = (string) ($campo['identificador'] ?? '');
+                    if (($campo['tipo'] ?? '') !== 'tabla' || empty($campo['configTabla'])) {
+                        continue;
+                    }
+                    if (in_array($identificador, $excluidosTabla, true) || in_array($identificador, $excluidosCascada, true)) {
+                        continue;
+                    }
+
+                    $configTabla = $campo['configTabla'];
+                    $subtipo     = (string) ($configTabla['subtipo'] ?? 'filas_dinamicas');
+                    $agrupador   = (bool) ($configTabla['agrupador'] ?? false);
+                    $columnas    = $configTabla['columnas'] ?? [];
+
+                    $valorActualCrudo = $this->valorActualDeEjemplo($ejemploId, $identificador) ?? ($campo['valorEjemplo'] ?? null);
+                    $valorActual      = $valorActualCrudo !== null ? json_decode((string) $valorActualCrudo, true) : null;
+                    if (! is_array($valorActual)) {
+                        continue; // sin base válida para comparar forma — mismo motivo de rechazo que llenarTabla()
+                    }
+
+                    $contextoSeccionTabla = $this->contextoDeSeccion($plantillaId, $seccionId);
+                    $sistemaTabla = $this->construirSistemaTabla($reglas, $generales, $contextoSeccionTabla, $fuenteVerdad);
+
+                    $valorReferencia = null;
+                    $refCrudo = $referencia[$identificador] ?? null;
+                    if ($refCrudo !== null) {
+                        $decoded = json_decode((string) $refCrudo, true);
+                        if (is_array($decoded)) {
+                            $valorReferencia = $decoded;
+                        }
+                    }
+
+                    $otrasSeccionesConfirmadasTabla = $yaConfirmados;
+                    unset($otrasSeccionesConfirmadasTabla[$identificador]);
+
+                    // Sin opcionesPorColumna/contextoAdicional del frontend (no hay Excel vivo en un
+                    // lote server-side) — igual que previsualizarPrompt() para esta misma tabla, y
+                    // exactamente lo que ya pasa hoy para cualquier tabla que NO sea una de las 3 de
+                    // cascada (esas nunca llegan aquí, ver $excluidosCascada arriba).
+                    $usuarioTabla = $this->construirPromptTabla($campo, $subtipo, $agrupador, $columnas, $valorActual, [], '', $valorReferencia, $otrasSeccionesConfirmadasTabla);
+                    $customId     = 'tabla__' . $identificador;
+                    $lineas[]     = $this->lineaLoteOpenAI($customId, $config->openaiModeloLlenado, 32000, $sistemaTabla, $usuarioTabla);
+
+                    $columnasCalculadas = array_values(array_filter(array_map(
+                        static fn (array $c): ?string => ($c['tipo'] ?? '') === 'calculado' ? (string) ($c['id'] ?? '') : null,
+                        $columnas,
+                    )));
+                    $ultimaColumnaCalculada = $columnas !== [] && ((array_values($columnas)[count($columnas) - 1]['tipo'] ?? '') === 'calculado');
+                    $catalogoPorColumna = $this->catalogoPorColumnaDe($columnas);
+                    $columnaIdPorProfundidad = [];
+                    foreach ($columnas as $i => $c) {
+                        $columnaIdPorProfundidad[$i + ($agrupador ? 1 : 0)] = (string) ($c['id'] ?? '');
+                    }
+
+                    $mapeo[$customId] = [
+                        'tipo'                    => 'tabla',
+                        'identificador'           => $identificador,
+                        'modelo'                  => $config->openaiModeloLlenado,
+                        'valorActual'             => $valorActual,
+                        'columnasCalculadas'      => $columnasCalculadas,
+                        'ultimaColumnaCalculada'  => $ultimaColumnaCalculada,
+                        'catalogoPorColumna'      => $catalogoPorColumna,
+                        'columnaIdPorProfundidad' => $columnaIdPorProfundidad,
+                        'columnasConSubcolumnas'  => $this->columnasConSubcolumnasDe($columnas),
+                    ];
+                }
+            }
+        }
+
+        if ($lineas === []) {
+            return $this->response->setStatusCode(400)->setJSON(['error' => 'No hay nada que llenar en las secciones indicadas (o todo lo que había quedó fuera del lote — revisa el botón individual para esos campos).']);
+        }
+
+        $fileId = $this->subirArchivoLoteOpenAI($config, implode("\n", $lineas));
+        if ($fileId === null) {
+            return $this->response->setStatusCode(502)->setJSON(['error' => 'No se pudo preparar el lote para la IA. Intenta de nuevo.']);
+        }
+        $batchId = $this->crearLoteOpenAI($config, $fileId);
+        if ($batchId === null) {
+            return $this->response->setStatusCode(502)->setJSON(['error' => 'No se pudo enviar el lote a la IA. Intenta de nuevo.']);
+        }
+
+        $loteModel = new LoteLlenadoIAModel();
+        $loteId    = $loteModel->insert([
+            'ejemplo_id'      => $ejemploId,
+            'openai_batch_id' => $batchId,
+            'openai_file_id'  => $fileId,
+            'estado'          => 'enviado',
+            'mapeo_json'      => json_encode($mapeo, JSON_UNESCAPED_UNICODE),
+        ], true);
+
+        log_message('info', '[llenado-ia-lote] Lote {loteId} enviado a OpenAI (batch {batchId}): {n} solicitudes.', [
+            'loteId' => $loteId, 'batchId' => $batchId, 'n' => count($lineas),
+        ]);
+
+        return $this->response->setJSON(['loteId' => $loteId, 'estado' => 'enviado', 'totalSolicitudes' => count($lineas)]);
+    }
+
+    /**
+     * Consulta el estado de un lote enviado con enviarLoteFicha(). Si OpenAI ya terminó de
+     * procesarlo, descarga el archivo de resultados UNA sola vez, aplica cada resultado (persiste los
+     * campos de texto de sección igual que llenarFicha(), arma las propuestas de tabla igual que
+     * llenarTabla() — sin persistirlas, quedan como borrador para que el cliente las confirme) y dej
+     * el resultado final guardado en `resultado_json` para que un poll repetido no vuelva a bajar ni
+     * reprocesar nada.
+     */
+    public function estadoLoteFicha($ejemploId = null, $loteId = null): ResponseInterface
+    {
+        $ejemploId = (int) $ejemploId;
+        $loteId    = (int) $loteId;
+
+        $config    = config('Ia');
+        $loteModel = new LoteLlenadoIAModel();
+        $lote      = $loteModel->find($loteId);
+        if ($lote === null || (int) $lote['ejemplo_id'] !== $ejemploId) {
+            return $this->response->setStatusCode(404)->setJSON(['error' => 'Lote no encontrado']);
+        }
+
+        if ($lote['estado'] === 'completado') {
+            $resultado = json_decode((string) $lote['resultado_json'], true);
+
+            return $this->response->setJSON(['estado' => 'completado'] + (is_array($resultado) ? $resultado : []));
+        }
+        if ($lote['estado'] === 'error') {
+            return $this->response->setJSON(['estado' => 'error', 'error' => 'La IA no pudo procesar el lote. Intenta de nuevo.', 'detalle' => $lote['error'] ?? null]);
+        }
+
+        $estadoBatch = $this->consultarLoteOpenAI($config, $lote['openai_batch_id']);
+        if ($estadoBatch === null) {
+            return $this->response->setJSON(['estado' => 'procesando']); // hipo de red consultando el estado — no es que el lote haya fallado
+        }
+
+        $estadoOpenAI = (string) ($estadoBatch['status'] ?? '');
+        if (in_array($estadoOpenAI, ['validating', 'in_progress', 'finalizing'], true)) {
+            $loteModel->update($loteId, ['estado' => 'procesando']);
+
+            return $this->response->setJSON([
+                'estado'      => 'procesando',
+                'progreso'    => $estadoBatch['request_counts'] ?? null,
+            ]);
+        }
+        if (in_array($estadoOpenAI, ['failed', 'expired', 'cancelled', 'cancelling'], true)) {
+            $motivo = $estadoOpenAI === 'failed'
+                ? json_encode($estadoBatch['errors'] ?? null, JSON_UNESCAPED_UNICODE)
+                : "estado de OpenAI: {$estadoOpenAI}";
+            $loteModel->update($loteId, ['estado' => 'error', 'error' => $motivo]);
+            log_message('error', '[llenado-ia-lote] Lote {loteId} (batch {batchId}) terminó en {estado}: {motivo}', [
+                'loteId' => $loteId, 'batchId' => $lote['openai_batch_id'], 'estado' => $estadoOpenAI, 'motivo' => $motivo,
+            ]);
+
+            return $this->response->setJSON(['estado' => 'error', 'error' => 'La IA no pudo procesar el lote. Intenta de nuevo.', 'detalle' => $motivo]);
+        }
+        if ($estadoOpenAI !== 'completed') {
+            // Estado no reconocido — se trata como "sigue procesando" en vez de fallar de una, por si
+            // OpenAI agrega un estado intermedio nuevo que no está en las listas de arriba.
+            return $this->response->setJSON(['estado' => 'procesando']);
+        }
+
+        $outputFileId = $estadoBatch['output_file_id'] ?? null;
+        if (! is_string($outputFileId) || $outputFileId === '') {
+            // "completed" sin output_file_id: las líneas fallaron todas a nivel de OpenAI (ver
+            // error_file_id) — no hay nada que procesar, pero tampoco es un 'failed' del batch en sí.
+            $loteModel->update($loteId, ['estado' => 'error', 'error' => 'El lote terminó sin resultados (revisar error_file_id en OpenAI).']);
+
+            return $this->response->setJSON(['estado' => 'error', 'error' => 'La IA no devolvió resultados para este lote.', 'detalle' => 'El lote terminó sin resultados (revisar error_file_id en OpenAI).']);
+        }
+
+        $contenido = $this->descargarArchivoOpenAI($config, $outputFileId);
+        if ($contenido === null) {
+            return $this->response->setJSON(['estado' => 'procesando']); // hipo bajando el archivo — se reintenta en el próximo poll
+        }
+
+        $mapeo = json_decode((string) $lote['mapeo_json'], true);
+        if (! is_array($mapeo)) {
+            $mapeo = [];
+        }
+
+        $resultado = $this->procesarResultadosLote($ejemploId, $mapeo, $contenido);
+
+        $loteModel->update($loteId, [
+            'estado'         => 'completado',
+            'resultado_json' => json_encode($resultado, JSON_UNESCAPED_UNICODE),
+        ]);
+
+        log_message('info', '[llenado-ia-lote] Lote {loteId} completado: {secciones} secciones, {tablas} tablas propuestas — costo total estimado USD {costo}.', [
+            'loteId' => $loteId, 'secciones' => count($resultado['secciones'] ?? []), 'tablas' => count($resultado['tablas'] ?? []),
+            'costo' => number_format($resultado['costoTotalUsd'] ?? 0.0, 5),
+        ]);
+
+        return $this->response->setJSON(['estado' => 'completado'] + $resultado);
+    }
+
+    /**
+     * Recorre cada línea del archivo de resultados del lote (JSONL, un objeto por `custom_id`),
+     * aplica el mismo procesamiento que llenarFicha() (normalizarPropuesta + persistir) para las
+     * secciones de texto, y el mismo que llenarTabla() (validarFormaTabla + UBIGEO) para las tablas —
+     * estas últimas NO se persisten, se devuelven para que el cliente las aplique como borrador igual
+     * que hoy.
+     *
+     * @param array<string,array<string,mixed>> $mapeo custom_id => metadata guardada en enviarLoteFicha()
+     * @return array{secciones: list<array<string,mixed>>, tablas: list<array<string,mixed>>, costoTotalUsd: float}
+     */
+    private function procesarResultadosLote(int $ejemploId, array $mapeo, string $contenidoJsonl): array
+    {
+        $valoresFinal  = [];
+        $estadosFinal  = [];
+        $confianzaFinal = [];
+        $fuentesFinal  = [];
+        $idsAfectados  = [];
+        $resumenSecciones = [];
+        $tablas        = [];
+        $costoTotalUsd = 0.0;
+
+        foreach (preg_split('/\r?\n/', trim($contenidoJsonl)) as $linea) {
+            $linea = trim($linea);
+            if ($linea === '') {
+                continue;
+            }
+            $item = json_decode($linea, true);
+            if (! is_array($item)) {
+                continue;
+            }
+            $customId = (string) ($item['custom_id'] ?? '');
+            $meta     = $mapeo[$customId] ?? null;
+            if ($meta === null) {
+                continue; // línea que no reconocemos — no debería pasar, pero no tumbar el lote entero por una
+            }
+
+            $respuestaJson = $item['response']['body'] ?? null;
+            $propuesta = is_array($respuestaJson)
+                ? $this->procesarRespuestaChatOpenAI($respuestaJson, (string) ($meta['modelo'] ?? ''), $customId)
+                : null;
+
+            if ($meta['tipo'] === 'seccion') {
+                $idsAfectados[$meta['seccionId']] = true; // marcador; se resuelve a ids reales más abajo vía camposLlenables si hiciera falta
+                $aceptados = 0;
+                $costoSeccionUsd = 0.0;
+                if ($propuesta !== null) {
+                    $costoSeccionUsd = $propuesta['costoUsd'] ?? 0.0;
+                    $costoTotalUsd  += $costoSeccionUsd;
+                    $normalizado = $this->normalizarPropuesta($propuesta['valor']);
+                    $opcionesPorIdentif = $meta['opcionesPorIdentificador'] ?? [];
+                    foreach ($normalizado['valores'] as $identificador => $texto) {
+                        $texto = trim((string) $texto);
+                        if ($texto === '') {
+                            continue;
+                        }
+                        // Mismo criterio que llenarFicha(): un campo con catálogo cerrado no puede
+                        // guardar cualquier texto — si "casi acertó" se normaliza al canónico, si no
+                        // calza con ninguna opción se descarta (no rompe el resto de la sección).
+                        $opciones = $opcionesPorIdentif[$identificador] ?? null;
+                        if (is_array($opciones)) {
+                            $match = $this->matchearOpcionOpcional($texto, $opciones);
+                            if ($match === null) {
+                                log_message('warning', '[llenado-ia-lote] {id}: "{texto}" no calza con ninguna opción del catálogo ({opciones}) — descartado.', [
+                                    'id' => $identificador, 'texto' => $texto, 'opciones' => implode(' | ', $opciones),
+                                ]);
+                                continue;
+                            }
+                            $texto = $match;
+                        }
+                        $valoresFinal[$identificador] = $texto;
+                        $idsAfectados[$identificador] = true;
+                        if (isset($normalizado['estados'][$identificador])) {
+                            $estadosFinal[$identificador] = $normalizado['estados'][$identificador];
+                        }
+                        if (isset($normalizado['confianza'][$identificador])) {
+                            $confianzaFinal[$identificador] = $normalizado['confianza'][$identificador];
+                        }
+                        if (isset($normalizado['fuentes'][$identificador]) && $normalizado['fuentes'][$identificador] !== '') {
+                            $fuentesFinal[$identificador] = $normalizado['fuentes'][$identificador];
+                        }
+                        $aceptados++;
+                    }
+                }
+                $resumenSecciones[] = [
+                    'seccionId' => $meta['seccionId'],
+                    'nombre'    => $meta['nombre'],
+                    'campos'    => (int) ($meta['totalCampos'] ?? 0),
+                    'llenados'  => $aceptados,
+                    'costoUsd'  => round($costoSeccionUsd, 5),
+                ];
+                continue;
+            }
+
+            // tabla
+            $identificador = (string) $meta['identificador'];
+            if ($propuesta === null) {
+                $tablas[] = ['identificador' => $identificador, 'error' => 'No se pudo consultar a la IA para esta tabla.'];
+                continue;
+            }
+            $costoTotalUsd += $propuesta['costoUsd'] ?? 0.0;
+
+            $resultado = $this->validarFormaTabla(
+                $meta['valorActual'],
+                $propuesta['valor']['valor'] ?? null,
+                $meta['columnasCalculadas'],
+                $meta['ultimaColumnaCalculada'],
+                $meta['catalogoPorColumna'],
+                $meta['columnaIdPorProfundidad'],
+                $meta['columnasConSubcolumnas'] ?? [],
+            );
+            if (! $resultado['valido']) {
+                log_message('warning', '[llenado-ia-lote] tabla {id} rechazada: {motivo}', ['id' => $identificador, 'motivo' => $resultado['motivo']]);
+                $tablas[] = ['identificador' => $identificador, 'error' => $resultado['motivo']];
+                continue;
+            }
+            if (in_array($identificador, self::TABLAS_UBIGEO, true)) {
+                [$resultado['valorSaneado'], $advertenciasUbigeo] = $this->resolverUbigeoEnTabla($resultado['valorSaneado']);
+                $resultado['advertencias'] = array_merge($resultado['advertencias'], $advertenciasUbigeo);
+            }
+            $tablas[] = [
+                'identificador' => $identificador,
+                'valor'         => $resultado['valorSaneado'],
+                'advertencias'  => $resultado['advertencias'],
+                'fuente'        => mb_substr(trim((string) ($propuesta['valor']['fuente'] ?? '')), 0, 240),
+                'costoUsd'      => round($propuesta['costoUsd'] ?? 0.0, 5),
+            ];
+        }
+
+        if ($valoresFinal !== []) {
+            $this->guardarValores($ejemploId, $valoresFinal, $fuentesFinal, array_keys($idsAfectados));
+        }
+
+        return [
+            // Mismo shape que ResultadoLlenadoIA (frontend) — valores/estados/confianza/fuentes es lo
+            // que construirResumenResultadoLlenado() necesita para armar el informe de "Ver resumen",
+            // igual que con el flujo síncrono de llenarFicha().
+            'valores'       => (object) $valoresFinal,
+            'estados'       => (object) $estadosFinal,
+            'confianza'     => (object) $confianzaFinal,
+            'fuentes'       => (object) $fuentesFinal,
+            'secciones'     => $resumenSecciones,
+            // Extra respecto a ResultadoLlenadoIA — las tablas propuestas de este lote, para que el
+            // cliente las aplique como borrador (ver useLlenadoIALote.ts). No forman parte del shape
+            // síncrono porque llenarFicha() nunca toca tablas.
+            'tablas'        => $tablas,
+            'costoTotalUsd' => round($costoTotalUsd, 5),
+        ];
+    }
+
+    /** Una línea del archivo JSONL que espera la Batch API de OpenAI. */
+    private function lineaLoteOpenAI(string $customId, string $modelo, int $maxTokens, array $sistema, string $usuario): string
+    {
+        return json_encode([
+            'custom_id' => $customId,
+            'method'    => 'POST',
+            'url'       => '/v1/chat/completions',
+            'body'      => [
+                'model'                 => $modelo,
+                'max_completion_tokens' => $maxTokens,
+                'response_format'       => ['type' => 'json_object'],
+                'messages'              => [
+                    ['role' => 'system', 'content' => $sistema['variable'] !== '' ? "{$sistema['cacheable']}\n\n{$sistema['variable']}" : $sistema['cacheable']],
+                    ['role' => 'user', 'content' => $usuario],
+                ],
+            ],
+        ], JSON_UNESCAPED_UNICODE);
+    }
+
+    /** Sube el .jsonl del lote a OpenAI (Files API, purpose=batch). Devuelve el file_id, o null si falló. */
+    private function subirArchivoLoteOpenAI(object $config, string $jsonl): ?string
+    {
+        $limite = tempnam(sys_get_temp_dir(), 'lote_ia_');
+        file_put_contents($limite, $jsonl);
+
+        $ch = curl_init('https://api.openai.com/v1/files');
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_POST           => true,
+            CURLOPT_HTTPHEADER     => ['authorization: Bearer ' . $config->openaiApiKey],
+            CURLOPT_POSTFIELDS     => [
+                'purpose' => 'batch',
+                'file'    => new \CURLFile($limite, 'application/jsonl', 'lote.jsonl'),
+            ],
+            CURLOPT_TIMEOUT => 60,
+        ]);
+        $cuerpo = curl_exec($ch);
+        $estado = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $error  = curl_error($ch);
+        curl_close($ch);
+        @unlink($limite);
+
+        if ($cuerpo === false || $estado < 200 || $estado >= 300) {
+            log_message('error', '[llenado-ia-lote] Subida de archivo a OpenAI falló ({estado}): {cuerpo} {error}', [
+                'estado' => $estado, 'cuerpo' => is_string($cuerpo) ? substr($cuerpo, 0, 500) : '(sin cuerpo)', 'error' => $error,
+            ]);
+
+            return null;
+        }
+        $json = json_decode((string) $cuerpo, true);
+
+        return is_string($json['id'] ?? null) ? $json['id'] : null;
+    }
+
+    /** Crea el batch job en OpenAI a partir de un file_id ya subido. Devuelve el batch_id, o null si falló. */
+    private function crearLoteOpenAI(object $config, string $fileId): ?string
+    {
+        $ch = curl_init('https://api.openai.com/v1/batches');
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_POST           => true,
+            CURLOPT_HTTPHEADER     => ['content-type: application/json', 'authorization: Bearer ' . $config->openaiApiKey],
+            CURLOPT_POSTFIELDS     => json_encode([
+                'input_file_id'    => $fileId,
+                'endpoint'         => '/v1/chat/completions',
+                'completion_window' => '24h',
+            ]),
+            CURLOPT_TIMEOUT => 30,
+        ]);
+        $cuerpo = curl_exec($ch);
+        $estado = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $error  = curl_error($ch);
+        curl_close($ch);
+
+        if ($cuerpo === false || $estado < 200 || $estado >= 300) {
+            log_message('error', '[llenado-ia-lote] Creación del batch en OpenAI falló ({estado}): {cuerpo} {error}', [
+                'estado' => $estado, 'cuerpo' => is_string($cuerpo) ? substr($cuerpo, 0, 500) : '(sin cuerpo)', 'error' => $error,
+            ]);
+
+            return null;
+        }
+        $json = json_decode((string) $cuerpo, true);
+
+        return is_string($json['id'] ?? null) ? $json['id'] : null;
+    }
+
+    /** Consulta el estado actual de un batch en OpenAI. Devuelve el objeto tal cual, o null si la consulta falló. */
+    private function consultarLoteOpenAI(object $config, string $batchId): ?array
+    {
+        $ch = curl_init("https://api.openai.com/v1/batches/{$batchId}");
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_HTTPHEADER     => ['authorization: Bearer ' . $config->openaiApiKey],
+            CURLOPT_TIMEOUT        => 20,
+        ]);
+        $cuerpo = curl_exec($ch);
+        $estado = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($cuerpo === false || $estado < 200 || $estado >= 300) {
+            return null;
+        }
+        $json = json_decode((string) $cuerpo, true);
+
+        return is_array($json) ? $json : null;
+    }
+
+    /** Descarga el contenido de un archivo de OpenAI (el output_file_id de un batch completado). */
+    private function descargarArchivoOpenAI(object $config, string $fileId): ?string
+    {
+        $ch = curl_init("https://api.openai.com/v1/files/{$fileId}/content");
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_HTTPHEADER     => ['authorization: Bearer ' . $config->openaiApiKey],
+            CURLOPT_TIMEOUT        => 60,
+        ]);
+        $cuerpo = curl_exec($ch);
+        $estado = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        return ($cuerpo !== false && $estado >= 200 && $estado < 300) ? (string) $cuerpo : null;
     }
 
     /**
@@ -695,6 +1267,24 @@ class LlenadoIAController extends BaseController
             if (($c['tipo'] ?? '') === 'booleano' && is_array($etiquetasBooleano)) {
                 $linea .= " — responder exactamente \"{$etiquetasBooleano['true']}\" o \"{$etiquetasBooleano['false']}\"";
             }
+            if (in_array($c['tipo'] ?? '', ['numero', 'decimal'], true)) {
+                // Encontrado en vivo (4.01.01 "Cantidad" = "2,450"): la app interpreta la coma como
+                // separador DECIMAL (convención local), no de miles — "2,450" se leyó como 2.45, no
+                // 2450, y rompió en cascada cualquier fórmula del Excel que dependiera de esa celda.
+                $linea .= ' — escribe el número SIN separador de miles (ej. "2450", nunca "2,450" ni "2.450"); si de verdad necesitas decimales, usa punto (ej. "2450.5").';
+            }
+            if (! empty($c['subcolumnas']) && is_array($c['subcolumnas'])) {
+                // Encontrado en vivo (4.01.01 "%"): esta columna normalmente es un objeto con estas
+                // subcolumnas en cada fila — verificado contra el .xlsx real, esa celda es una FÓRMULA
+                // de Excel (divide la fila contra la de arriba), no algo que la IA deba calcular; el
+                // validador la fuerza al valor original pase lo que pase, así que intentar llenarla es
+                // esfuerzo perdido. La ÚNICA excepción es la fila de la población/categoría TOTAL o
+                // BASE (la que no es porcentaje de ninguna otra): ahí aparece como texto plano en vez
+                // de objeto, y ese texto SÍ lo llena la IA con la FUENTE del dato (ej. "Padrón SISFOH
+                // 2025", "Censo INEI 2022"), nunca un porcentaje ni "100%".
+                $nombresSub = implode(', ', array_map(static fn (array $s): string => (string) ($s['nombre'] ?? $s['id'] ?? ''), $c['subcolumnas']));
+                $linea .= " — es un objeto con subcolumnas ({$nombresSub}) que el Excel calcula solo: NO propongas nada ahí, se ignora cualquier valor que pongas. Solo en la fila TOTAL/BASE de la tabla aparece como texto plano en vez de objeto — esa fila sí la llenas tú, con la FUENTE del dato.";
+            }
             if (($c['tipo'] ?? '') === 'coordenadas') {
                 // Encontrado en vivo (2026-08-19, 3.03.01): el modelo devolvió {"lat":...,"lng":...}
                 // para esta celda — objeto válido para un campo `mapa_coordenadas` suelto, pero esta
@@ -751,13 +1341,14 @@ class LlenadoIAController extends BaseController
      * @param array<string,list<string>> $catalogoPorColumna id de columna -> opciones válidas.
      * @param array<int,string> $columnaIdPorProfundidad profundidad del árbol (0-based) -> id de
      *   columna, para validar catálogo también en tablas jerárquicas (ver llenarTabla()).
+     * @param list<string> $columnasConSubcolumnas ver compararForma().
      * @return array{valido: bool, motivo?: string, valorSaneado?: mixed, advertencias: list<string>}
      */
-    private function validarFormaTabla(mixed $actual, mixed $propuesto, array $columnasCalculadas, bool $ultimaColumnaCalculada, array $catalogoPorColumna = [], array $columnaIdPorProfundidad = []): array
+    private function validarFormaTabla(mixed $actual, mixed $propuesto, array $columnasCalculadas, bool $ultimaColumnaCalculada, array $catalogoPorColumna = [], array $columnaIdPorProfundidad = [], array $columnasConSubcolumnas = []): array
     {
         $advertencias = [];
         try {
-            $saneado = $this->compararForma($actual, $propuesto, $columnasCalculadas, $ultimaColumnaCalculada, 'valor', $advertencias, $catalogoPorColumna, $columnaIdPorProfundidad);
+            $saneado = $this->compararForma($actual, $propuesto, $columnasCalculadas, $ultimaColumnaCalculada, 'valor', $advertencias, $catalogoPorColumna, $columnaIdPorProfundidad, 0, $columnasConSubcolumnas);
         } catch (\RuntimeException $e) {
             return ['valido' => false, 'motivo' => $e->getMessage(), 'advertencias' => []];
         }
@@ -800,8 +1391,13 @@ class LlenadoIAController extends BaseController
      *   su id de columna al lado (a diferencia de filas_dinamicas, `{col_id: valor}`).
      * @param int $profundidad profundidad actual dentro de un árbol jerárquico (0 = raíz). Solo se usa
      *   cuando el nodo actual es un nodo de árbol; en cualquier otra forma no significa nada.
+     * @param list<string> $columnasConSubcolumnas ids de columna con `subcolumnas` (ej. "%" de
+     *   4.01.01) — si la celda actual de esa columna YA está en forma de objeto, se fuerza siempre al
+     *   valor original (ver el porqué en la rama de abajo). Distinto de $columnasCalculadas: esa lista
+     *   es para columnas 100% calculadas SIEMPRE; esta es para columnas donde la mayoría de filas son
+     *   calculadas pero alguna fila específica (forma de texto plano, no de objeto) sigue editable.
      */
-    private function compararForma(mixed $actual, mixed $propuesto, array $columnasCalculadas, bool $ultimaColumnaCalculada, string $ruta, array &$advertencias, array $catalogoPorColumna = [], array $columnaIdPorProfundidad = [], int $profundidad = 0): mixed
+    private function compararForma(mixed $actual, mixed $propuesto, array $columnasCalculadas, bool $ultimaColumnaCalculada, string $ruta, array &$advertencias, array $catalogoPorColumna = [], array $columnaIdPorProfundidad = [], int $profundidad = 0, array $columnasConSubcolumnas = []): mixed
     {
         if (is_array($actual) && array_is_list($actual)) {
             if (! is_array($propuesto) || ! array_is_list($propuesto)) {
@@ -817,7 +1413,7 @@ class LlenadoIAController extends BaseController
             // contar el nivel dos veces para las hojas de un árbol.
             $out = [];
             foreach ($actual as $i => $item) {
-                $out[] = $this->compararForma($item, $propuesto[$i], $columnasCalculadas, $ultimaColumnaCalculada, "{$ruta}[{$i}]", $advertencias, $catalogoPorColumna, $columnaIdPorProfundidad, $profundidad);
+                $out[] = $this->compararForma($item, $propuesto[$i], $columnasCalculadas, $ultimaColumnaCalculada, "{$ruta}[{$i}]", $advertencias, $catalogoPorColumna, $columnaIdPorProfundidad, $profundidad, $columnasConSubcolumnas);
             }
 
             return $out;
@@ -869,7 +1465,7 @@ class LlenadoIAController extends BaseController
             }
             $children = [];
             foreach ($actual['children'] as $i => $hijo) {
-                $children[] = $this->compararForma($hijo, $propuesto['children'][$i], $columnasCalculadas, $ultimaColumnaCalculada, "{$ruta}.children[{$i}]", $advertencias, $catalogoPorColumna, $columnaIdPorProfundidad, $profundidad + 1);
+                $children[] = $this->compararForma($hijo, $propuesto['children'][$i], $columnasCalculadas, $ultimaColumnaCalculada, "{$ruta}.children[{$i}]", $advertencias, $catalogoPorColumna, $columnaIdPorProfundidad, $profundidad + 1, $columnasConSubcolumnas);
             }
 
             return ['value' => $valorSaneado, 'children' => $children];
@@ -895,7 +1491,19 @@ class LlenadoIAController extends BaseController
                     $out[$clave] = $valor; // columna calculada: siempre el valor original
                     continue;
                 }
-                $resultado = $this->compararForma($valor, $propuesto[$clave], $columnasCalculadas, $ultimaColumnaCalculada, "{$ruta}.{$clave}", $advertencias, $catalogoPorColumna, $columnaIdPorProfundidad, $profundidad);
+                // Columna con subcolumnas (ej. "%" de 4.01.01: {parte1, parte2}) cuya celda YA está
+                // en forma de objeto: en el Excel real esto es una fórmula que divide contra la fila
+                // de arriba (verificado en vivo en el .xlsx real, ej. J9 "=+IF(I8>0,I9/I8,"")") — la
+                // IA no tiene forma de saber ese cálculo y proponía un porcentaje inventado (llegó a
+                // devolver "200%"). Se fuerza el valor original completo (ambas subcolumnas) igual
+                // que una columna calculada de verdad. La fila EXCEPCIÓN de esa misma columna (texto
+                // plano en vez de objeto, ej. la fila de población TOTAL con una fuente/nota) no entra
+                // aquí — sigue siendo editable por la IA, ver la rama de abajo.
+                if (in_array((string) $clave, $columnasConSubcolumnas, true) && is_array($valor)) {
+                    $out[$clave] = $valor;
+                    continue;
+                }
+                $resultado = $this->compararForma($valor, $propuesto[$clave], $columnasCalculadas, $ultimaColumnaCalculada, "{$ruta}.{$clave}", $advertencias, $catalogoPorColumna, $columnaIdPorProfundidad, $profundidad, $columnasConSubcolumnas);
 
                 // Solo se valida contra el catálogo cuando la IA de verdad PROPUSO un cambio (si dejó
                 // el valor tal cual, puede que ya viniera mal de antes — eso no es un error nuevo de
@@ -953,6 +1561,79 @@ class LlenadoIAController extends BaseController
         }
 
         throw new \RuntimeException("En \"{$ruta}\": \"{$valor}\" no es una de las opciones válidas (" . implode(' | ', $opciones) . ').');
+    }
+
+    /**
+     * Como matchearOpcion(), pero para un campo SUELTO de sección (no una celda de tabla): ahí no
+     * tiene sentido tirar toda la sección por un solo campo que no calzó — se trata como
+     * "no_encontrado" en vez de rechazar el resto de campos ya bien extraídos. Usado por
+     * llenarFicha()/procesarResultadosLote() para los campos con `opciones` (ej. 3.06.11), que hasta
+     * ahora el prompt le pasaba a la IA pero nada validaba la respuesta contra ellas.
+     *
+     * @param list<string> $opciones
+     */
+    private function matchearOpcionOpcional(string $valor, array $opciones): ?string
+    {
+        $normalizado = $this->normalizarOpcion($valor);
+        foreach ($opciones as $opcion) {
+            if ($this->normalizarOpcion($opcion) === $normalizado) {
+                return $opcion;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Mapa id de columna -> opciones válidas, para matchearOpcion()/compararForma(). Incluye tanto
+     * columnas `catalogo`/`catalogo_encadenado` (su `opciones` propia, o el override del Excel vivo
+     * del cliente) como columnas `booleano` (sus dos `etiquetasBooleano` como catálogo de 2 valores)
+     * — sin esto último, el prompt le pedía a la IA responder EXACTAMENTE "Sí" o "No" pero nada
+     * rechazaba una respuesta como "Parcial" (encontrado en vivo, tabla 3.05.01 columna Sí/No).
+     *
+     * @param array<string,list<string>> $opcionesPorColumnaOverride ver $opcionesPorColumna en llenarTabla().
+     * @return array<string,list<string>>
+     */
+    private function catalogoPorColumnaDe(array $columnas, array $opcionesPorColumnaOverride = []): array
+    {
+        $catalogo = [];
+        foreach ($columnas as $c) {
+            $id = (string) ($c['id'] ?? '');
+            if ($id === '') {
+                continue;
+            }
+            $etiquetasBooleano = $c['etiquetasBooleano'] ?? null;
+            if (($c['tipo'] ?? '') === 'booleano' && is_array($etiquetasBooleano) && isset($etiquetasBooleano['true'], $etiquetasBooleano['false'])) {
+                $catalogo[$id] = [(string) $etiquetasBooleano['true'], (string) $etiquetasBooleano['false']];
+                continue;
+            }
+            $opciones = $opcionesPorColumnaOverride[$id] ?? $c['opciones'] ?? null;
+            if (is_array($opciones) && $opciones !== []) {
+                $catalogo[$id] = $opciones;
+            }
+        }
+
+        return $catalogo;
+    }
+
+    /**
+     * Ids de columna que declaran `subcolumnas` (ej. "%" de 4.01.01: {parte1, parte2}) — ver
+     * compararForma(), que fuerza el valor original cuando la celda actual de esa columna ya está en
+     * forma de objeto (verificado en vivo contra el .xlsx real: esa celda es una fórmula de Excel que
+     * divide contra la fila de arriba, no algo que la IA deba calcular).
+     *
+     * @return list<string>
+     */
+    private function columnasConSubcolumnasDe(array $columnas): array
+    {
+        $ids = [];
+        foreach ($columnas as $c) {
+            if (! empty($c['subcolumnas']) && is_array($c['subcolumnas'])) {
+                $ids[] = (string) ($c['id'] ?? '');
+            }
+        }
+
+        return $ids;
     }
 
     /** @return array<int,array> secciones crudas (mismo JSON que usa PlantillasController::toDto) */
@@ -1131,6 +1812,12 @@ class LlenadoIAController extends BaseController
             if (($c['tipo'] ?? '') === 'booleano' && is_array($etiquetasBooleano)) {
                 $linea .= " — responder exactamente \"{$etiquetasBooleano['true']}\" o \"{$etiquetasBooleano['false']}\"";
             }
+            if (in_array($c['tipo'] ?? '', ['numero', 'decimal'], true)) {
+                // Mismo motivo que en construirPromptTabla(): la app lee la coma como separador
+                // DECIMAL, no de miles — "2,450" se interpretó como 2.45 y rompió en cascada las
+                // fórmulas del Excel que dependían de esa celda (encontrado en vivo, 4.01.01 "Cantidad").
+                $linea .= ' — escribe el número SIN separador de miles (ej. "2450", nunca "2,450" ni "2.450"); si de verdad necesitas decimales, usa punto (ej. "2450.5").';
+            }
             if (! empty($c['descripcion'])) {
                 $linea .= " — {$c['descripcion']}";
             }
@@ -1248,9 +1935,11 @@ class LlenadoIAController extends BaseController
     /** @param array{cacheable: string, variable: string} $sistema */
     private function llamarModeloJson(object $config, array $sistema, string $usuario, ?string $etiqueta = null): ?array
     {
-        // Vuelta a Claude (2026-08-19, crédito disponible) — llamarModeloCrudo() (Gemini) se deja
-        // intacta por si hace falta volver a swapear (ver nota en llenarTabla()).
-        $respuesta = $this->llamarClaudeCrudo($config, $sistema, $usuario, 8000, 120, null, $etiqueta);
+        // Cambiado a OpenAI (2026-08-19) — llamarClaudeCrudo()/llamarModeloCrudo() (Gemini) se dejan
+        // intactas por si hace falta volver a swapear (ver nota en llenarTabla()). Los campos de texto
+        // de sección usan el modelo barato siempre (no hay caso de cascada aquí, a diferencia de
+        // llenarTabla()).
+        $respuesta = $this->llamarOpenAICrudo($config, $sistema, $usuario, 8000, 120, $config->openaiModeloLlenado, $etiqueta);
         if ($respuesta === null) {
             return null;
         }
@@ -1599,9 +2288,197 @@ class LlenadoIAController extends BaseController
     }
 
     /**
+     * Llama a la API Chat Completions de OpenAI y devuelve el objeto JSON crudo que propuso el
+     * modelo (sin normalización específica de flujo — la usan tanto el llenado de sección, vía
+     * llamarModeloJson()/normalizarPropuesta(), como el llenado de una tabla en llenarTabla(), que
+     * necesita el objeto tal cual para validar su forma) — junto con el costo estimado de esta
+     * consulta. Mismo contrato de retorno que llamarClaudeCrudo() (dormida, ver arriba) y
+     * llamarModeloCrudo() (Gemini, dormida) — cualquiera de las tres es intercambiable en los call
+     * sites de llenarFicha()/llenarTabla().
+     *
+     * Diferencias con Claude: el system prompt va como un mensaje más (`role: system`, primero en la
+     * lista) en vez de un array de bloques con cache_control explícito — OpenAI cachea
+     * automáticamente el prefijo repetido entre llamadas (sin anotación), así que basta con mandar
+     * `$sistema['cacheable']` siempre en el mismo orden/contenido para beneficiarse igual; el ahorro
+     * real aparece en `usage.prompt_tokens_details.cached_tokens` (ver registrarUsoOpenAI()). Se pide
+     * `response_format: {type: json_object}` para forzar salida JSON válida (requiere que la palabra
+     * "JSON" aparezca en el prompt — ya la piden construirSistema()/construirSistemaTabla() para los
+     * otros proveedores, así que no hace falta agregarla aparte). `max_completion_tokens` es el
+     * nombre del parámetro para modelos gpt-5 (max_tokens quedó deprecado con esta familia — mismo
+     * parámetro que ya usa AsistenteIAController::llamarOpenAI() para el asesor).
+     *
+     * @param array{cacheable: string, variable: string} $sistema Mismo split que llamarClaudeCrudo().
+     * @return array{valor: array, usage: array, costoUsd: float}|null
+     */
+    private function llamarOpenAICrudo(object $config, array $sistema, string $usuario, int $maxTokens, int $timeout, ?string $modelo = null, ?string $etiqueta = null): ?array
+    {
+        $modelo       = $modelo ?? $config->openaiModeloLlenado;
+        $sistemaTexto = $sistema['variable'] !== '' ? "{$sistema['cacheable']}\n\n{$sistema['variable']}" : $sistema['cacheable'];
+        $body = json_encode([
+            'model'                 => $modelo,
+            'max_completion_tokens' => $maxTokens,
+            'response_format'       => ['type' => 'json_object'],
+            'messages'              => [
+                ['role' => 'system', 'content' => $sistemaTexto],
+                ['role' => 'user', 'content' => $usuario],
+            ],
+        ]);
+
+        $limiteAbsoluto = microtime(true) + $timeout;
+        $margenMinimo   = 5.0;
+        $intentosMax    = 4;
+        for ($intento = 1; $intento <= $intentosMax; $intento++) {
+            $restante = $limiteAbsoluto - microtime(true);
+            if ($restante < $margenMinimo) {
+                log_message('warning', '[llenado-ia] OpenAI: sin presupuesto de tiempo para otro intento (quedan {restante}s) — se da por fallida.', [
+                    'restante' => round($restante, 1),
+                ]);
+                return null;
+            }
+
+            $cabecerasCrudas = [];
+            $ch = curl_init($config->openaiEndpoint);
+            curl_setopt_array($ch, [
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_POST           => true,
+                CURLOPT_POSTFIELDS     => $body,
+                CURLOPT_TIMEOUT        => (int) ceil($restante),
+                CURLOPT_HTTPHEADER     => [
+                    'content-type: application/json',
+                    'authorization: Bearer ' . $config->openaiApiKey,
+                ],
+                CURLOPT_HEADERFUNCTION => function ($curl, $linea) use (&$cabecerasCrudas) {
+                    $cabecerasCrudas[] = $linea;
+                    return strlen($linea);
+                },
+            ]);
+            $cuerpo    = curl_exec($ch);
+            $estado    = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $errorCurl = curl_error($ch);
+            curl_close($ch);
+
+            if ($estado === 429 && $intento < $intentosMax) {
+                $espera = $this->retryAfterDeHeaders($cabecerasCrudas) ?? (2 ** $intento);
+                if ($limiteAbsoluto - microtime(true) - $espera < $margenMinimo) {
+                    log_message('warning', '[llenado-ia] OpenAI 429 y no queda presupuesto para esperar {espera}s más — se da por fallida.', ['espera' => $espera]);
+                    return null;
+                }
+                log_message('warning', '[llenado-ia] OpenAI 429 (intento {intento}/{max}) — reintentando en {espera}s.', [
+                    'intento' => $intento, 'max' => $intentosMax, 'espera' => $espera,
+                ]);
+                usleep((int) ($espera * 1_000_000));
+                continue;
+            }
+
+            if ($cuerpo === false || $estado < 200 || $estado >= 300) {
+                log_message('error', '[llenado-ia] OpenAI ({etiqueta}) respondió {estado}: {cuerpo} {curl}', [
+                    'etiqueta' => $etiqueta ?? '?',
+                    'estado' => $estado,
+                    'cuerpo' => is_string($cuerpo) ? substr($cuerpo, 0, 500) : '(sin cuerpo)',
+                    'curl'   => $errorCurl,
+                ]);
+                return null;
+            }
+
+            break;
+        }
+
+        $json = json_decode((string) $cuerpo, true);
+
+        return $this->procesarRespuestaChatOpenAI($json, $modelo, $etiqueta);
+    }
+
+    /**
+     * Extrae y valida el objeto JSON propuesto por el modelo a partir de una respuesta YA RECIBIDA
+     * de la API Chat Completions de OpenAI — separado de llamarOpenAICrudo() (que además hace la
+     * llamada curl con reintentos) para que el mismo parseo sirva tanto ahí como al procesar los
+     * resultados de un LOTE (Batch API): ahí la respuesta de cada línea llega ya completa desde el
+     * archivo de resultados descargado, sin ninguna llamada HTTP que hacer en ese momento — ver
+     * procesarLoteFicha().
+     *
+     * @return array{valor: array, usage: array, costoUsd: float}|null
+     */
+    private function procesarRespuestaChatOpenAI(array $json, string $modelo, ?string $etiqueta = null): ?array
+    {
+        $finishReason = $json['choices'][0]['finish_reason'] ?? null;
+        if ($finishReason === 'content_filter') {
+            log_message('warning', '[llenado-ia] OpenAI ({etiqueta}) rechazó la solicitud (finish_reason: content_filter).', [
+                'etiqueta' => $etiqueta ?? '?',
+            ]);
+            return null;
+        }
+
+        $texto = (string) ($json['choices'][0]['message']['content'] ?? '');
+        $valor = json_decode($this->limpiarCercoMarkdown($texto), true);
+        $usage = is_array($json['usage'] ?? null) ? $json['usage'] : [];
+
+        if (! is_array($valor)) {
+            // Se registra el costo/caché igual que en un éxito — esta llamada se cobró aunque el
+            // parseo haya fallado (mismo criterio que llamarClaudeCrudo()).
+            $this->registrarUsoOpenAI($modelo, $usage, $etiqueta);
+            log_message('error', '[llenado-ia] OpenAI ({etiqueta}) devolvió JSON no parseable (finish_reason: {razon}): {texto}', [
+                'etiqueta' => $etiqueta ?? '?',
+                'razon' => $finishReason ?? '(ninguno)',
+                'texto' => substr($texto, 0, 500),
+            ]);
+            return null;
+        }
+
+        log_message('debug', '[llenado-ia] OpenAI ({etiqueta}) propuso: {preview}', [
+            'etiqueta' => $etiqueta ?? '?',
+            'preview'  => mb_substr(json_encode($valor, JSON_UNESCAPED_UNICODE), 0, 1000),
+        ]);
+
+        return [
+            'valor'    => $valor,
+            'usage'    => $usage,
+            'costoUsd' => $this->registrarUsoOpenAI($modelo, $usage, $etiqueta),
+        ];
+    }
+
+    /**
+     * Precio por millón de tokens (USD) — OpenAI, precios de lanzamiento de la familia GPT-5
+     * (platform.openai.com/docs/pricing) — verificar que sigan vigentes si ha pasado mucho tiempo
+     * desde el 2026-08-19. Si el modelo configurado no está en esta lista, se usa el precio de
+     * gpt-5-mini como referencia (evita que el costo estimado quede en cero por un modelo no listado).
+     */
+    private const PRECIOS_OPENAI_POR_MTOK = [
+        'gpt-5'      => ['input' => 1.25, 'output' => 10.00],
+        'gpt-5-mini' => ['input' => 0.25, 'output' => 2.00],
+        'gpt-5-nano' => ['input' => 0.05, 'output' => 0.40],
+    ];
+
+    private function registrarUsoOpenAI(string $modelo, array $usage, ?string $etiqueta = null): float
+    {
+        $entrada = (int) ($usage['prompt_tokens'] ?? 0);
+        $salida  = (int) ($usage['completion_tokens'] ?? 0);
+        // Caché automático de OpenAI (sin cache_control explícito, a diferencia de Anthropic): los
+        // tokens cacheados vienen incluidos DENTRO de prompt_tokens, no aparte — hay que restarlos del
+        // precio normal de entrada y cobrarlos a su tarifa reducida (~10% del precio de input), o el
+        // costo estimado saldría inflado contando esos tokens dos veces a precio completo.
+        $cacheLectura  = (int) ($usage['prompt_tokens_details']['cached_tokens'] ?? 0);
+        $entradaNormal = max(0, $entrada - $cacheLectura);
+        $precios       = self::PRECIOS_OPENAI_POR_MTOK[$modelo] ?? self::PRECIOS_OPENAI_POR_MTOK['gpt-5-mini'];
+        $costo = ($entradaNormal * $precios['input'] + $cacheLectura * $precios['input'] * 0.1 + $salida * $precios['output']) / 1_000_000;
+
+        log_message('info', '[llenado-ia] Consulta ({etiqueta}) a {modelo}: {entrada} tok. entrada + {salida} tok. salida{cache} — costo estimado USD {costo}', [
+            'etiqueta' => $etiqueta ?? '?',
+            'modelo'  => $modelo,
+            'entrada' => $entrada,
+            'salida'  => $salida,
+            'cache'   => $cacheLectura > 0 ? sprintf(' (caché: %d leídos)', $cacheLectura) : '',
+            'costo'   => number_format($costo, 5),
+        ]);
+
+        return $costo;
+    }
+
+    /**
      * Precio por millón de tokens (USD) — Anthropic, agosto 2026 (platform.claude.com/docs/en/pricing).
      * Sonnet 5 tiene precio de lanzamiento vigente hasta 2026-08-31 ($2/$10 en vez de $3/$15) — hoy
      * (2026-08-18) todavía aplica. Revisar esta tabla si se sigue usando Claude después de esa fecha.
+     * DORMIDA junto con llamarClaudeCrudo() desde el 2026-08-19 (ver Config\Ia) — el llenado con IA
+     * usa OpenAI ahora; esto se conserva por si hay que volver a swapear.
      */
     private const PRECIOS_CLAUDE_POR_MTOK = [
         'claude-sonnet-5' => ['input' => 2.00, 'output' => 10.00],

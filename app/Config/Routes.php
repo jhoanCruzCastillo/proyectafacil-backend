@@ -10,6 +10,10 @@ $routes->group('api', static function (RouteCollection $routes) {
     $routes->post('auth/login', 'AuthController::login');
     $routes->get('auth/me', 'AuthController::me');
     $routes->post('auth/logout', 'AuthController::logout');
+
+    // Stripe llama a esto directo — no manda sesión, no puede ir detrás del filtro 'auth'. La
+    // firma en el header Stripe-Signature es la única verificación (ver PagosController::webhook).
+    $routes->post('pagos/webhook', 'PagosController::webhook');
 });
 
 // Todo lo demás requiere sesión activa (Módulo 1 en adelante).
@@ -56,6 +60,10 @@ $routes->group('api', ['filter' => 'auth'], static function (RouteCollection $ro
     $routes->post('ejemplos/(:num)/llenar-ia', 'LlenadoIAController::llenarFicha/$1');
     $routes->post('ejemplos/(:num)/llenar-tabla-ia', 'LlenadoIAController::llenarTabla/$1');
     $routes->get('plantillas/(:num)/preview-prompt', 'LlenadoIAController::previsualizarPrompt/$1');
+    // "Llenar toda la ficha" vía Batch API de OpenAI (~50% más barato, sin respuesta inmediata) — ver
+    // enviarLoteFicha(). El botón individual sigue en llenar-ia/llenar-tabla-ia de arriba, sin tocar.
+    $routes->post('ejemplos/(:num)/llenar-ia-lote', 'LlenadoIAController::enviarLoteFicha/$1');
+    $routes->get('ejemplos/(:num)/llenar-ia-lote/(:num)', 'LlenadoIAController::estadoLoteFicha/$1/$2');
 
     $routes->get('usuarios', 'UsuariosController::index');
     $routes->post('usuarios', 'UsuariosController::create');
@@ -98,6 +106,16 @@ $routes->group('api', ['filter' => 'auth'], static function (RouteCollection $ro
 
     $routes->get('asesoria/solicitudes', 'AsesoriaController::misSolicitudes');
     $routes->get('asesoria/no-atendidas', 'AsesoriaController::noAtendidas');
+    $routes->get('asesoria/agendados-por-rango', 'AsesoriaController::agendadosPorRango');
+
+    $routes->get('beneficios', 'BeneficiosController::index');
+    $routes->get('beneficios/mios', 'BeneficiosController::misBeneficios');
+    $routes->post('pagos/checkout', 'PagosController::checkout');
+    $routes->post('pagos/checkout-plan', 'PagosController::checkoutPlan');
+    $routes->post('pagos/cambiar-plan', 'PagosController::cambiarPlan');
+    $routes->post('pagos/checkout-addon', 'PagosController::checkoutAddon');
+    $routes->post('pagos/quitar-addon', 'PagosController::quitarAddon');
+    $routes->get('pagos/portal', 'PagosController::portal');
 
     $routes->get('plantillas/(:num)/contextos-ia', 'ContextosIAController::index/$1');
     // Rutas de "generales" van ANTES que el (:segment) genérico de sección: si no, "generales" se
@@ -121,6 +139,7 @@ $routes->group('api', ['filter' => 'auth'], static function (RouteCollection $ro
     $routes->post('asesoria/solicitudes', 'AsesoriaController::crear');
     $routes->post('asesoria/solicitudes/(:num)/aceptar', 'AsesoriaController::aceptar/$1');
     $routes->post('asesoria/solicitudes/(:num)/finalizar', 'AsesoriaController::finalizar/$1');
+    $routes->post('asesoria/solicitudes/(:num)/completar-video', 'AsesoriaController::completarVideo/$1');
     $routes->post('asesoria/solicitudes/(:num)/cancelar', 'AsesoriaController::cancelarPropia/$1');
     $routes->post('asesoria/solicitudes/(:num)/calificar', 'AsesoriaController::calificar/$1');
 
@@ -128,6 +147,7 @@ $routes->group('api', ['filter' => 'auth'], static function (RouteCollection $ro
     $routes->get('asesoria/tickets', 'TicketsAsesoriaController::index');
     $routes->get('asesoria/tickets-mismo-horario', 'TicketsAsesoriaController::mismoHorario');
     $routes->get('asesoria/tickets/(:num)', 'TicketsAsesoriaController::detalle/$1');
+    $routes->get('asesoria/tickets/(:num)/historial-conexion', 'TicketsAsesoriaController::historialConexion/$1');
     $routes->get('asesoria/tickets/(:num)/docentes-disponibles', 'TicketsAsesoriaController::docentesDisponibles/$1');
     $routes->post('asesoria/tickets/(:num)/asignar', 'TicketsAsesoriaController::asignar/$1');
     $routes->post('asesoria/tickets/(:num)/en-espera', 'TicketsAsesoriaController::marcarEnEspera/$1');
@@ -136,6 +156,8 @@ $routes->group('api', ['filter' => 'auth'], static function (RouteCollection $ro
     $routes->get('asesoria/cobertura-horarios', 'TicketsAsesoriaController::coberturaHorarios');
     $routes->get('asesoria/liquidaciones', 'TicketsAsesoriaController::liquidaciones');
     $routes->post('asesoria/liquidaciones/autorizar', 'TicketsAsesoriaController::autorizarPago');
+    $routes->get('asesoria/configuracion-sla', 'TicketsAsesoriaController::configuracionSla');
+    $routes->put('asesoria/configuracion-sla', 'TicketsAsesoriaController::actualizarConfiguracionSla');
     $routes->get('asesoria/solicitudes/(:num)/mensajes', 'AsesoriaController::mensajes/$1');
     $routes->post('asesoria/solicitudes/(:num)/mensajes', 'AsesoriaController::enviarMensaje/$1');
 

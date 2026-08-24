@@ -41,7 +41,7 @@ Reglas generales (ya cubiertas por el contexto global "Reglas de llenado automá
 - **1.04.03** — Unidad de medida: **NO LLENAR** — lo calcula el Excel automáticamente.
 - **1.04.04** — Espacio geográfico: **NO LLENAR** — lo calcula el Excel automáticamente.
 - **1.04.05** — Año: **NO LLENAR** — lo calcula el Excel automáticamente.
-- **1.04.06** — Valor: valor numérico. Ejemplo real: "60%".
+- **1.04.06** — Valor: es un PORCENTAJE — el valor SIEMPRE debe llevar el símbolo %, nunca un número plano (correcto: "68%" — incorrecto: "68"). Ejemplo real: "60%".
 - **1.04.07** — Contribución del Cierre de Brecha (Valor): valor numérico. Ejemplo real: "1".
 
 ## Sección 2: SECCIÓN N°02: DIAGNÓSTICO DEL TERRITORIO
@@ -131,7 +131,7 @@ Reglas generales (ya cubiertas por el contexto global "Reglas de llenado automá
 
 ### 4.01 Descripción de la población afectada
 
-- **4.01.01** — Descripción de la población afectada: tabla. Columnas: Tipo de población, Descripción, Unidad de medida, Cantidad, %.
+- **4.01.01** — Descripción de la población afectada: tabla. Columnas: Tipo de población, Descripción, Unidad de medida, Cantidad, %. Las 5 filas de datos van SIEMPRE en este orden fijo: Población Total, Población de Referencia, Población Demandante Potencial, Población Demandante Efectiva, Población Objetivo — cada etapa es un SUBCONJUNTO de la anterior, así que las Cantidades deben ser decrecientes (Total ≥ Referencia ≥ Potencial ≥ Efectiva ≥ Objetivo); nunca pongas un número mayor al de la fila anterior, o la columna % (que se calcula como fila÷fila_anterior) da un resultado absurdo por encima de 100%. La columna "Tipo de población" va SIEMPRE vacía en estas 5 filas de datos — el orden de la fila ya identifica la población, no repitas la etiqueta ahí (solo el agrupador de "Tasa de crecimiento" lleva texto en esa columna).
 
 ### 4.02 Caracterización de la población afectada
 
@@ -228,7 +228,7 @@ Reglas generales (ya cubiertas por el contexto global "Reglas de llenado automá
 
 ### 8.03 ANÁLISIS DE TECNOLOGÍA (¿CÓMO PRODUCIR?)
 
-- **08.03.1** — Descripción del proceso de producción del servicio (con proyecto): tabla. Columnas: Servicio, Tipo Factor Productivo, Activo del CIAI, Descripción, ¿Se incluye como parte del PI?, Normativa aplicable (del PNCM o RNE, según corresponda).
+- **08.03.1** — Descripción del proceso de producción del servicio (con proyecto): tabla. Columnas: Servicio, Tipo Factor Productivo, Activo del CIAI, Descripción, ¿Se incluye como parte del PI?, Normativa aplicable (del PNCM o RNE, según corresponda). La columna "¿Se incluye como parte del PI?" NO es una pregunta de sí/no libre — el Excel solo acepta exactamente dos textos: "Se incluye en el PI" o "No se incluye en el PI". Aunque la pregunta suene a sí/no, NUNCA respondas "Sí"/"No" en esta columna — usa siempre una de esas dos frases completas, tal cual, o la celda queda con un valor que el Excel no reconoce.
 
 ### 8.04 IDENTIficación de medidas de reducción del riesgo de desastres
 

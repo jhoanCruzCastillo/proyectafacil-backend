@@ -971,7 +971,11 @@ Decimal.
 Extrae el valor del indicador de brecha desde la documentación
 proporcionada por el cliente.
 
-Conserva el significado del valor y su unidad de medida.
+Este indicador (PCIAICI y similares) se expresa como PORCENTAJE.
+El valor que escribas debe incluir siempre el símbolo %, nunca un
+número plano — escribe "68%", no "68". El sistema acepta e inserta
+correctamente valores con "%" en este campo; omitir el símbolo es
+un error de formato, no una simplificación válida.
 
 **Ejemplo de llenado:**
 
