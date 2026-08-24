@@ -7,8 +7,21 @@ use CodeIgniter\Database\Seeder;
 // Espejo exacto de frontend/src/data/planes.ts — catálogo estático de planes y add-ons.
 // `Plan.id`/`AddOn.id` (slugs 'nivel-N', 'consultoria-1a1', etc.) no se guardan como PK aquí:
 // planes se referencia por `numero_nivel` y add_ons por `nombre` (ver FacturacionController).
+// `stripe_price_id`: Producto+Price de PRUEBA ya creados en la cuenta de Stripe del usuario (ver
+// PagosController::checkoutPlan/checkoutAddon) — sin esto, comprar ese plan/add-on no es posible.
 class PlanesYAddOnsSeeder extends Seeder
 {
+    private const STRIPE_PRICE_IDS_PLANES = [
+        0 => 'price_1U7twFGzUEUBDTFM5cXH56vp',
+        1 => 'price_1U7twGGzUEUBDTFMjOZCraKZ',
+        2 => 'price_1U7twGGzUEUBDTFMnZZzQCpz',
+    ];
+    private const STRIPE_PRICE_IDS_ADDONS = [
+        'Consultoría 1 a 1'   => 'price_1U7twHGzUEUBDTFM9KQolr2k',
+        'Usuario adicional'   => 'price_1U7twIGzUEUBDTFMCxxDwDuC',
+        'Plantilla adicional' => 'price_1U7twIGzUEUBDTFMRZCi98jT',
+    ];
+
     public function run(): void
     {
         $planes = [
@@ -52,6 +65,9 @@ class PlanesYAddOnsSeeder extends Seeder
 
             $this->db->table('planes')->ignore(true)->insert($plan);
             $planId = $this->db->table('planes')->where('numero_nivel', $plan['numero_nivel'])->get()->getRow('id');
+            $this->db->table('planes')->where('id', $planId)->update([
+                'stripe_price_id' => self::STRIPE_PRICE_IDS_PLANES[$plan['numero_nivel']],
+            ]);
 
             foreach ($features as $orden => $texto) {
                 $this->db->table('plan_features')->ignore(true)->insert([
@@ -86,6 +102,9 @@ class PlanesYAddOnsSeeder extends Seeder
 
             $this->db->table('add_ons')->ignore(true)->insert($addOn);
             $addOnId = $this->db->table('add_ons')->where('nombre', $addOn['nombre'])->get()->getRow('id');
+            $this->db->table('add_ons')->where('id', $addOnId)->update([
+                'stripe_price_id' => self::STRIPE_PRICE_IDS_ADDONS[$addOn['nombre']],
+            ]);
 
             foreach ($niveles as $nivel) {
                 $this->db->table('add_on_niveles_disponibles')->ignore(true)->insert([

@@ -3,7 +3,9 @@
 namespace App\Controllers;
 
 use App\Controllers\Support\SolicitudAsesoriaHelpersTrait;
+use App\Libraries\GoogleMeetService;
 use CodeIgniter\HTTP\ResponseInterface;
+use Throwable;
 
 // Solicitudes de asesoría 1:1 cliente↔docente (chat o videollamada por link externo) y sus
 // mensajes. Desde el Módulo 2 el cliente ya no elige un docente al crear la solicitud: el chatbot
@@ -48,6 +50,7 @@ class AsesoriaController extends BaseController
         }
 
         $filas = $builder->orderBy('sa.created_at', 'DESC')->get()->getResultArray();
+        $filas = array_map([$this, 'resolverAsistenciaSiCorresponde'], $filas);
 
         return $this->response->setJSON(array_map([$this, 'toDtoSolicitud'], $filas));
     }
@@ -131,6 +134,32 @@ class AsesoriaController extends BaseController
         return 'vencida_sin_respuesta';
     }
 
+    // Bloques de video ya agendados (con docente asignado) dentro de un rango de fechas — usado
+    // por el selector de horario del cliente para no ofrecer un bloque que YA está tomado por el
+    // único docente que lo cubre. Si otro docente distinto ofrece ese mismo horario recurrente y
+    // sigue libre esa fecha, el bloque se sigue mostrando (el cruce lo hace el frontend contra
+    // disponibilidadAgregada, comparando por docenteId).
+    public function agendadosPorRango(): ResponseInterface
+    {
+        $desde = (string) ($this->request->getGet('desde') ?? '');
+        $hasta = (string) ($this->request->getGet('hasta') ?? '');
+
+        $filas = db_connect()->table('solicitudes_asesoria')
+            ->select('docente_id, horario_fecha, horario_hora_inicio, horario_hora_fin')
+            ->where('tipo', 'video')
+            ->where('estado', 'agendado')
+            ->where('horario_fecha >=', $desde)
+            ->where('horario_fecha <=', $hasta)
+            ->get()->getResultArray();
+
+        return $this->response->setJSON(array_map(static fn (array $f) => [
+            'docenteId'  => (string) $f['docente_id'],
+            'fecha'      => $f['horario_fecha'],
+            'horaInicio' => substr((string) $f['horario_hora_inicio'], 0, 5),
+            'horaFin'    => substr((string) $f['horario_hora_fin'], 0, 5),
+        ], $filas));
+    }
+
     public function crear(): ResponseInterface
     {
         $dto               = $this->request->getJSON(true) ?? [];
@@ -207,9 +236,26 @@ class AsesoriaController extends BaseController
 
         $esVideo     = $solicitudPrevia['tipo'] === 'video';
         $nuevoEstado = $esVideo ? 'agendado' : 'asignado';
-        // El link ya no se pide a mano — se genera automáticamente al confirmar (simulado, ver
-        // generarLinkSimulado() hasta tener credenciales reales de Zoom/Meet).
-        $linkReunion = $esVideo ? $this->generarLinkSimulado($id) : null;
+        // El link ya no se pide a mano — se genera automáticamente al confirmar, con un evento real
+        // de Google Calendar (Meet) vía GoogleMeetService. Si Google falla, se prefiere devolver el
+        // error ahora (en vez de guardar un link simulado en silencio) — estamos verificando que la
+        // integración real funcione, un fallo silencioso solo escondería el problema.
+        $linkReunion = null;
+        if ($esVideo) {
+            try {
+                $linkReunion = (new GoogleMeetService())->crearLinkReunion(
+                    "Asesoría Proyecta Fácil #{$id}",
+                    (string) $solicitudPrevia['horario_fecha'],
+                    (string) $solicitudPrevia['horario_hora_inicio'],
+                    (string) $solicitudPrevia['horario_hora_fin'],
+                    $this->correosParaInvitar((int) $solicitudPrevia['cliente_id'], $asesorId),
+                );
+            } catch (Throwable $e) {
+                log_message('error', 'GoogleMeetService: no se pudo generar el link de Meet para la solicitud {id}: {msg}', ['id' => $id, 'msg' => $e->getMessage()]);
+
+                return $this->response->setStatusCode(502)->setJSON(['error' => 'No se pudo generar el link de la videollamada. Intenta de nuevo en unos minutos.']);
+            }
+        }
 
         // Carrera resuelta de forma atómica: el WHERE estado='pendiente' hace que solo el primer
         // UPDATE que llegue afecte una fila — los siguientes intentos (mismo id) afectan 0 filas.
@@ -231,6 +277,28 @@ class AsesoriaController extends BaseController
         $this->notificar((int) $solicitud['cliente_id'], 'solicitud_aceptada', 'Tu solicitud de asesoría fue aceptada', $id);
 
         return $this->response->setJSON($this->toDtoSolicitud($solicitud));
+    }
+
+    // Cierre manual explícito de una videollamada 'agendada' ya terminada — atajo para el asesor,
+    // que no tiene por qué esperar a que la pantalla vuelva a hacer polling (misSolicitudes ya
+    // resuelve esto solo, cada 15s, una vez pasado el horario + margen de salida). Reusa la misma
+    // verificación real de asistencia que la resolución automática — a diferencia de finalizar()
+    // (incondicional, pero solo válido para chat, que no tiene horario que verificar), este nunca
+    // marca "completado" a ciegas por el solo hecho de que alguien apretó el botón.
+    public function completarVideo($id = null): ResponseInterface
+    {
+        $id        = (int) $id;
+        $solicitud = $this->fila($id);
+        if (! $solicitud || $solicitud['tipo'] !== 'video' || $solicitud['estado'] !== 'agendado') {
+            return $this->response->setStatusCode(422)->setJSON(['error' => 'Esta solicitud no se puede completar']);
+        }
+
+        $resultado = $this->resolverAsistenciaManual($solicitud);
+        if ($resultado['estado'] === 'agendado') {
+            return $this->response->setStatusCode(422)->setJSON(['error' => 'Todavía no se puede completar esta asesoría. Espera a que termine el horario agendado (con su margen de salida) e inténtalo de nuevo.']);
+        }
+
+        return $this->response->setJSON($this->toDtoSolicitud($resultado));
     }
 
     public function finalizar($id = null): ResponseInterface
@@ -259,7 +327,22 @@ class AsesoriaController extends BaseController
     // 'disponible' — solo aplica antes de que un docente acepte.
     public function cancelarPropia($id = null): ResponseInterface
     {
-        $id = (int) $id;
+        $id        = (int) $id;
+        $solicitud = $this->fila($id);
+        if (! $solicitud) {
+            return $this->response->setStatusCode(404)->setJSON(['error' => 'Solicitud no encontrada']);
+        }
+
+        // null en configuracion_sla.cancelacion_limite_minutos = el alumno puede cancelar en
+        // cualquier momento ("permanentemente" habilitado, ver Configuración de SLA).
+        $limiteMin = db_connect()->table('configuracion_sla')->get()->getRowArray()['cancelacion_limite_minutos'] ?? null;
+        if ($limiteMin !== null) {
+            $creadoEn = strtotime($solicitud['created_at'] . ' UTC');
+            if (time() > $creadoEn + (int) $limiteMin * 60) {
+                return $this->response->setStatusCode(422)->setJSON(['error' => "Ya pasó el tiempo permitido para cancelar esta solicitud ({$limiteMin} min desde que la enviaste)."]);
+            }
+        }
+
         db_connect()->table('solicitudes_asesoria')->where('id', $id)->update([
             'estado'     => 'cancelado',
             'updated_at' => date('Y-m-d H:i:s'),

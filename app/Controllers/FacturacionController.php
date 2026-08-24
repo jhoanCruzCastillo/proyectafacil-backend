@@ -6,11 +6,17 @@ use App\Models\AddOnModel;
 use App\Models\FacturacionModel;
 use App\Models\PlanModel;
 use CodeIgniter\HTTP\ResponseInterface;
+use Stripe\StripeClient;
+use Throwable;
 
-// Espejo de `FacturacionMock` en frontend/src/types/index.ts. `planId`/`addons` usan los mismos
-// slugs que el catálogo estático frontend/src/data/planes.ts ('nivel-N', 'consultoria-1a1', etc.)
-// — se resuelven contra `planes.numero_nivel` y `add_ons.nombre` (ver ADDON_SLUGS) en vez de
-// guardar esos slugs como PK real, porque `planes.id`/`add_ons.id` son auto_increment.
+// Espejo de `FacturacionMock` en frontend/src/types/index.ts. `addons` usa los mismos slugs que
+// el catálogo estático frontend/src/data/planes.ts ('consultoria-1a1', etc.) — se resuelven contra
+// `add_ons.nombre` (ver ADDON_SLUGS) en vez de guardar esos slugs como PK real, porque
+// `add_ons.id` es auto_increment. El cambio de plan, la compra de add-ons, el método de pago, y
+// las facturas ya NO se escriben acá — eso ahora es 100% Stripe real (ver PagosController):
+// Checkout para la primera compra, ajuste directo de la suscripción para cambios posteriores, y el
+// Customer Portal de Stripe para tarjeta/cancelación/historial. Este controller queda para
+// lectura (get()) y el único toggle que no depende de un Checkout nuevo: cancelar/reactivar.
 class FacturacionController extends BaseController
 {
     private const ADDON_SLUGS = [
@@ -32,57 +38,42 @@ class FacturacionController extends BaseController
     public function update($usuarioId = null): ResponseInterface
     {
         $usuarioId = (int) $usuarioId;
-        $model      = new FacturacionModel();
+        $model     = new FacturacionModel();
         if (! $model->find($usuarioId)) {
             $this->crearDefault($usuarioId);
         }
 
-        $dto     = $this->request->getJSON(true) ?? [];
-        $cambios = [];
-
-        if (array_key_exists('planId', $dto)) {
-            $plan = (new PlanModel())->where('numero_nivel', $this->planIdANumeroNivel((string) $dto['planId']))->first();
-            if ($plan) {
-                $cambios['plan_id'] = $plan['id'];
-            }
-        }
+        $dto = $this->request->getJSON(true) ?? [];
         if (array_key_exists('cancelada', $dto)) {
-            $cambios['cancelada'] = $dto['cancelada'] ? 1 : 0;
-        }
-        if (array_key_exists('fechaRenovacion', $dto) && $dto['fechaRenovacion'] !== null) {
-            $cambios['fecha_renovacion'] = $this->fechaClienteAIso((string) $dto['fechaRenovacion']);
-        }
-        if (array_key_exists('fechaInicioPlan', $dto) && $dto['fechaInicioPlan'] !== null) {
-            $cambios['fecha_inicio_plan'] = $this->datetimeClienteAMysql((string) $dto['fechaInicioPlan']);
-        }
-        if (array_key_exists('metodoPago', $dto)) {
-            $cambios['metodo_pago'] = $dto['metodoPago'];
-        }
-        if (array_key_exists('tarjetaMarca', $dto)) {
-            $cambios['tarjeta_marca'] = $dto['tarjetaMarca'];
-        }
-        if (array_key_exists('tarjetaUltimos4', $dto)) {
-            $cambios['tarjeta_ultimos4'] = $dto['tarjetaUltimos4'];
-        }
-        if (array_key_exists('telefonoPago', $dto)) {
-            $cambios['telefono_pago'] = $dto['telefonoPago'];
-        }
-
-        if ($cambios !== []) {
-            $model->update($usuarioId, $cambios);
-        }
-        if (isset($cambios['plan_id'])) {
-            TicketsConsultaController::emitirTicketsDePlan($usuarioId, (int) $cambios['plan_id']);
-        }
-
-        if (array_key_exists('addons', $dto)) {
-            $this->sincronizarAddons($usuarioId, (array) $dto['addons']);
-        }
-        if (array_key_exists('facturas', $dto)) {
-            $this->sincronizarFacturas($usuarioId, (array) $dto['facturas']);
+            $this->actualizarCancelacion($usuarioId, (bool) $dto['cancelada']);
         }
 
         return $this->response->setJSON($this->toDto($usuarioId));
+    }
+
+    // Único toggle que sigue viviendo acá en vez de en PagosController: si ya hay una suscripción
+    // real de Stripe, la cancela/reactiva de verdad (cancel_at_period_end) antes de guardar la
+    // bandera local — igual gestionable desde el Customer Portal, esto es el atajo rápido que ya
+    // existía en la UI ("Cancelar plan"/"Volver a suscribirse").
+    private function actualizarCancelacion(int $usuarioId, bool $cancelada): void
+    {
+        $db   = db_connect();
+        $fila = $db->table('facturaciones')->where('usuario_id', $usuarioId)->get()->getRowArray();
+
+        if ($fila && ! empty($fila['stripe_subscription_id'])) {
+            $config = config('Stripe');
+            if ($config->secretKey !== '') {
+                try {
+                    (new StripeClient($config->secretKey))->subscriptions->update($fila['stripe_subscription_id'], [
+                        'cancel_at_period_end' => $cancelada,
+                    ]);
+                } catch (Throwable $e) {
+                    log_message('error', 'FacturacionController::actualizarCancelacion falló contra Stripe: {msg}', ['msg' => $e->getMessage()]);
+                }
+            }
+        }
+
+        $db->table('facturaciones')->where('usuario_id', $usuarioId)->update(['cancelada' => $cancelada ? 1 : 0, 'updated_at' => date('Y-m-d H:i:s')]);
     }
 
     private function crearDefault(int $usuarioId): void
@@ -137,18 +128,20 @@ class FacturacionController extends BaseController
         }
 
         return [
-            'planId'          => 'nivel-' . $plan['numero_nivel'],
-            'plan'            => 'Nivel ' . $plan['numero_nivel'] . ' — ' . $plan['nombre'],
-            'precio'          => $this->formatMonto((float) $plan['precio']),
-            'periodicidad'    => $plan['periodicidad'],
-            'cancelada'       => (bool) $fila['cancelada'],
-            'fechaRenovacion' => $this->fechaIsoACliente($fila['fecha_renovacion']),
-            'fechaInicioPlan' => $fila['fecha_inicio_plan'],
-            'metodoPago'      => $fila['metodo_pago'],
-            'tarjetaMarca'    => $fila['tarjeta_marca'],
-            'tarjetaUltimos4' => $fila['tarjeta_ultimos4'],
-            'telefonoPago'    => $fila['telefono_pago'],
-            'facturas'        => array_map(static fn (array $f) => [
+            'planId'               => 'nivel-' . $plan['numero_nivel'],
+            'plan'                 => 'Nivel ' . $plan['numero_nivel'] . ' — ' . $plan['nombre'],
+            'precio'               => $this->formatMonto((float) $plan['precio']),
+            'periodicidad'         => $plan['periodicidad'],
+            'cancelada'            => (bool) $fila['cancelada'],
+            'fechaRenovacion'      => $this->fechaIsoACliente($fila['fecha_renovacion']),
+            'fechaInicioPlan'      => $fila['fecha_inicio_plan'],
+            'metodoPago'           => $fila['metodo_pago'],
+            'tarjetaMarca'         => $fila['tarjeta_marca'],
+            'tarjetaUltimos4'      => $fila['tarjeta_ultimos4'],
+            'telefonoPago'         => $fila['telefono_pago'],
+            'stripeCustomerId'     => $fila['stripe_customer_id'] ?? null,
+            'stripeSubscriptionId' => $fila['stripe_subscription_id'] ?? null,
+            'facturas'             => array_map(static fn (array $f) => [
                 'id'     => (string) $f['id'],
                 'fecha'  => $f['fecha'],
                 'total'  => '$' . number_format((float) $f['total'], 2),
@@ -158,88 +151,9 @@ class FacturacionController extends BaseController
         ];
     }
 
-    private function sincronizarAddons(int $usuarioId, array $addons): void
-    {
-        $db = db_connect();
-        $db->table('facturacion_addons')->where('facturacion_usuario_id', $usuarioId)->delete();
-
-        foreach ($addons as $slug => $cantidad) {
-            if ((int) $cantidad <= 0) {
-                continue;
-            }
-            $nombre = self::ADDON_SLUGS[$slug] ?? null;
-            if ($nombre === null) {
-                continue;
-            }
-            $addOn = (new AddOnModel())->where('nombre', $nombre)->first();
-            if (! $addOn) {
-                continue;
-            }
-            $db->table('facturacion_addons')->insert([
-                'facturacion_usuario_id' => $usuarioId,
-                'add_on_id'              => $addOn['id'],
-                'cantidad'               => (int) $cantidad,
-            ]);
-
-            if ($slug === 'consultoria-1a1') {
-                TicketsConsultaController::emitirTicketsDeAddon($usuarioId, (int) $cantidad);
-            }
-        }
-    }
-
-    private function sincronizarFacturas(int $usuarioId, array $facturas): void
-    {
-        $db         = db_connect();
-        $existentes = $db->table('facturas')->select('id')->where('facturacion_usuario_id', $usuarioId)->get()->getResultArray();
-        $idsExistentes = array_map(static fn (array $f) => (string) $f['id'], $existentes);
-
-        foreach ($facturas as $f) {
-            $id = (string) ($f['id'] ?? '');
-            if (in_array($id, $idsExistentes, true)) {
-                continue;
-            }
-            $db->table('facturas')->insert([
-                'facturacion_usuario_id' => $usuarioId,
-                'fecha'                  => $this->fechaClienteAIso((string) $f['fecha']),
-                'total'                  => $this->parseMonto($f['total']),
-                'estado'                 => $f['estado'],
-            ]);
-        }
-    }
-
-    private function planIdANumeroNivel(string $planId): int
-    {
-        return (int) str_replace('nivel-', '', $planId);
-    }
-
-    private function parseMonto($valor): float
-    {
-        if (is_numeric($valor)) {
-            return (float) $valor;
-        }
-
-        return (float) preg_replace('/[^0-9.\-]/', '', (string) $valor);
-    }
-
     private function formatMonto(float $valor): string
     {
         return $valor === floor($valor) ? '$' . (int) $valor : '$' . number_format($valor, 2);
-    }
-
-    // Acepta 'd/m/Y' (Date.toLocaleDateString('es-PE') del frontend) o 'Y-m-d' ya ISO.
-    private function fechaClienteAIso(string $valor): string
-    {
-        if (preg_match('/^\d{4}-\d{2}-\d{2}/', $valor)) {
-            return substr($valor, 0, 10);
-        }
-        $partes = explode('/', $valor);
-        if (count($partes) === 3) {
-            [$d, $m, $y] = $partes;
-
-            return sprintf('%04d-%02d-%02d', (int) $y, (int) $m, (int) $d);
-        }
-
-        return $valor;
     }
 
     private function fechaIsoACliente(?string $iso): ?string
@@ -250,12 +164,5 @@ class FacturacionController extends BaseController
         $ts = strtotime($iso);
 
         return $ts === false ? $iso : ((int) date('j', $ts) . '/' . (int) date('n', $ts) . '/' . date('Y', $ts));
-    }
-
-    private function datetimeClienteAMysql(string $valor): string
-    {
-        $ts = strtotime($valor);
-
-        return $ts === false ? $valor : date('Y-m-d H:i:s', $ts);
     }
 }

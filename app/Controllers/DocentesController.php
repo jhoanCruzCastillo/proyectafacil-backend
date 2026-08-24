@@ -80,12 +80,15 @@ class DocentesController extends BaseController
 
     // Unión de disponibilidad de TODOS los asesores activos (toggle 'disponible'), sin nombres —
     // usada por la grilla de horario del alumno en la solicitud guiada de videollamada (docs
-    // §4 Fase 1: "no verás qué docente te atenderá hasta que se confirme tu cita").
+    // §4 Fase 1: "no verás qué docente te atenderá hasta que se confirme tu cita"). Incluye
+    // `docenteId` (antes era `distinct()` sin él) para que el cliente pueda saber, cuando dos o
+    // más asesores comparten el mismo bloque recurrente, si TODOS ya están ocupados esa fecha
+    // puntual o si todavía queda alguno libre — ver AsesoriaController::agendadosPorRango, que
+    // cruza esto contra lo ya agendado.
     public function disponibilidadAgregada(): ResponseInterface
     {
         $filas = db_connect()->table('horarios_docente hd')
-            ->distinct()
-            ->select('hd.dia_semana, hd.hora_inicio, hd.hora_fin')
+            ->select('hd.usuario_id as docente_id, hd.dia_semana, hd.hora_inicio, hd.hora_fin')
             ->join('usuarios u', 'u.id = hd.usuario_id')
             ->where('u.rol', 'asesor')
             ->where('u.estado', 'activo')
@@ -95,6 +98,7 @@ class DocentesController extends BaseController
             ->get()->getResultArray();
 
         return $this->response->setJSON(array_map(static fn (array $h) => [
+            'docenteId'  => (string) $h['docente_id'],
             'diaSemana'  => (int) $h['dia_semana'],
             'horaInicio' => substr((string) $h['hora_inicio'], 0, 5),
             'horaFin'    => substr((string) $h['hora_fin'], 0, 5),

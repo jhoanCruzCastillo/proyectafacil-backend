@@ -5,8 +5,11 @@ namespace Config;
 use CodeIgniter\Config\BaseConfig;
 
 // Acceso a las APIs de IA (Gemini, Anthropic/Claude y OpenAI/ChatGPT). El llenado automático
-// (LlenadoIAController) usa Anthropic/Claude; Gemini/OpenAI quedan configurados pero sin uso activo
-// — se conservan por si hay que volver a cambiar de proveedor.
+// (LlenadoIAController) usa OpenAI/ChatGPT (cambiado el 2026-08-19 para usar créditos de OpenAI en
+// vez de Anthropic); Gemini/Anthropic quedan configurados pero sin uso activo — se conservan por si
+// hay que volver a cambiar de proveedor (ver llamarModeloCrudo()/llamarClaudeCrudo() en el
+// controlador, ambas intactas). El asesor de IA (AsistenteIAController, chat del cliente) ya usaba
+// OpenAI desde antes — ambos flujos comparten `openaiApiKey`/`openaiEndpoint`.
 //
 // Las API keys se leen SIEMPRE del entorno del servidor — nunca se escriben aquí ni llegan al
 // navegador. Ponerlas en el frontend no serviría de nada: Vite hornea las variables VITE_* dentro
@@ -49,11 +52,19 @@ class Ia extends BaseConfig
 
     public string $anthropicVersion = '2023-06-01';
 
-    /** Clave de la API de OpenAI. Vacía = todavía no configurada — sin uso funcional aún, solo disponible en el entorno. */
+    /** Clave de la API de OpenAI — usada por el asesor de IA (chat) y, desde el 2026-08-19, también por el llenado automático. */
     public string $openaiApiKey = '';
 
-    /** Modelo de OpenAI a usar el día que se conecte un flujo a esta clave. */
+    /** Modelo del asesor de IA (chat) y de las tablas con catálogo en cascada del llenado automático (ver openaiModeloLlenado abajo) — respuestas más matizadas/instrucciones más densas, vale la pena el costo mayor. */
     public string $openaiModelo = 'gpt-5';
+
+    /**
+     * Modelo del llenado automático de fichas (LlenadoIAController) — extracción determinista contra
+     * un schema fijo, no conversación matizada, así que un modelo más barato rinde igual de bien por
+     * mucho menos costo. Mismo criterio que `modeloLlenado` (Claude, dormido) — ver
+     * PRECIOS_OPENAI_POR_MTOK en el controlador para el detalle de precio.
+     */
+    public string $openaiModeloLlenado = 'gpt-5-mini';
 
     public string $openaiEndpoint = 'https://api.openai.com/v1/chat/completions';
 }

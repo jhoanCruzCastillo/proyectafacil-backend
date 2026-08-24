@@ -3,7 +3,9 @@
 namespace App\Controllers;
 
 use App\Controllers\Support\SolicitudAsesoriaHelpersTrait;
+use App\Libraries\GoogleMeetService;
 use CodeIgniter\HTTP\ResponseInterface;
+use Throwable;
 
 // Lado Administrativo de Asesorías (Módulo 4, docs/proyectafacil-asesorias.md §5 "administrador"):
 // dashboard con KPIs, tabla de todos los tickets, detalle con línea de tiempo + docentes
@@ -20,19 +22,11 @@ class TicketsAsesoriaController extends BaseController
         $hoy = date('Y-m-d') . ' 00:00:00';
 
         $pendientes     = $db->table('solicitudes_asesoria')->where('estado', 'pendiente')->countAllResults();
-        $enEspera       = $db->table('solicitudes_asesoria')->where('estado', 'en_espera')->countAllResults();
         $completadosHoy = $db->table('solicitudes_asesoria')->where('estado', 'completado')->where('updated_at >=', $hoy)->countAllResults();
-        $slaPorVencer   = $db->table('solicitudes_asesoria')
-            ->where('estado', 'pendiente')
-            ->where('sla_vence_en IS NOT NULL')
-            ->where('sla_vence_en <=', date('Y-m-d H:i:s', time() + 2 * 3600))
-            ->countAllResults();
 
         return $this->response->setJSON([
             'pendientes'     => $pendientes,
-            'enEspera'       => $enEspera,
             'completadosHoy' => $completadosHoy,
-            'slaPorVencer'   => $slaPorVencer,
         ]);
     }
 
@@ -45,6 +39,7 @@ class TicketsAsesoriaController extends BaseController
             ->join('sectores s', 's.id = sa.sector_id', 'left')
             ->orderBy('sa.created_at', 'DESC')
             ->get()->getResultArray();
+        $filas = array_map([$this, 'resolverAsistenciaSiCorresponde'], $filas);
 
         return $this->response->setJSON(array_map([$this, 'toDtoSolicitud'], $filas));
     }
@@ -64,6 +59,8 @@ class TicketsAsesoriaController extends BaseController
             return $this->response->setStatusCode(404)->setJSON(['error' => 'Ticket no encontrado']);
         }
 
+        $fila = $this->resolverAsistenciaSiCorresponde($fila);
+
         $notificados = db_connect()->table('solicitud_notificaciones sn')
             ->select('sn.asesor_id, u.nombre, u.foto_url, sn.created_at')
             ->join('usuarios u', 'u.id = sn.asesor_id')
@@ -81,6 +78,86 @@ class TicketsAsesoriaController extends BaseController
         ], $notificados);
 
         return $this->response->setJSON($dto);
+    }
+
+    // Historial real de conexión a la videollamada (Meet API) — quién entró y cuándo, para el
+    // ticket ya completado. Sin tabla propia: se consulta a Google en el momento, usando el
+    // código de reunión que ya vive en `link_reunion`. Devuelve una lista vacía (nunca un error
+    // visible al admin) si el ticket no es de video, si el link no es de Meet, o si Google
+    // todavía no tiene ningún registro — cualquiera de esos casos simplemente significa "nada que
+    // mostrar aún".
+    public function historialConexion($id = null): ResponseInterface
+    {
+        $id     = (int) $id;
+        $vacio  = ['participantes' => [], 'tiempoCoincidenteSegundos' => 0];
+        $fila   = db_connect()->table('solicitudes_asesoria sa')
+            ->select('sa.tipo, sa.link_reunion, c.nombre as cliente_nombre, c.correo as cliente_correo, c.foto_url as cliente_foto_url, d.nombre as docente_nombre, d.correo as docente_correo, d.foto_url as docente_foto_url')
+            ->join('usuarios c', 'c.id = sa.cliente_id')
+            ->join('usuarios d', 'd.id = sa.docente_id', 'left')
+            ->where('sa.id', $id)
+            ->get()->getRowArray();
+
+        if (! $fila || $fila['tipo'] !== 'video' || empty($fila['link_reunion'])) {
+            return $this->response->setJSON($vacio);
+        }
+
+        if (! preg_match('#meet\.google\.com/([a-z]+-[a-z]+-[a-z]+)#', (string) $fila['link_reunion'], $m)) {
+            return $this->response->setJSON($vacio);
+        }
+
+        try {
+            $porNombre = (new GoogleMeetService())->historialConexion($m[1]);
+        } catch (Throwable $e) {
+            log_message('error', 'GoogleMeetService::historialConexion falló para la solicitud {id}: {msg}', ['id' => $id, 'msg' => $e->getMessage()]);
+
+            return $this->response->setJSON($vacio);
+        }
+
+        // El nombre que da Meet es el de la cuenta de Google real que entró (puede ser cualquier
+        // cosa: apodo, cuenta personal distinta al nombre registrado) — nunca se muestra tal cual.
+        // Se empareja por nombre contra el cliente/asesor de este ticket cuando calza; si no calza
+        // con uno de los dos (o ninguno), se cae al mismo criterio que evaluarAsistenciaReal: la
+        // pareja de participantes reales con mayor superposición entre sí. En cualquier caso, lo
+        // que se muestra siempre es la identidad conocida en la plataforma (nombre + correo
+        // configurado), no el nombre que reportó Google.
+        $normalizar      = static fn (string $s) => mb_strtolower(trim($s));
+        $sesionesCliente = [];
+        $sesionesAsesor  = [];
+        foreach ($porNombre as $p) {
+            if ($normalizar($p['nombre']) === $normalizar($fila['cliente_nombre'])) {
+                $sesionesCliente = array_merge($sesionesCliente, $p['sesiones']);
+            } elseif ($fila['docente_nombre'] && $normalizar($p['nombre']) === $normalizar($fila['docente_nombre'])) {
+                $sesionesAsesor = array_merge($sesionesAsesor, $p['sesiones']);
+            }
+        }
+        if ($sesionesCliente === [] || $sesionesAsesor === []) {
+            [$sesionesCliente, $sesionesAsesor] = $this->dosParticipantesConMasSuperposicion($porNombre);
+        }
+
+        $participantes = [];
+        if ($sesionesCliente !== []) {
+            $participantes[] = [
+                'nombre'   => $fila['cliente_nombre'],
+                'correo'   => $fila['cliente_correo'] ?? null,
+                'rol'      => 'Alumno',
+                'fotoUrl'  => $fila['cliente_foto_url'] ?? null,
+                'sesiones' => $sesionesCliente,
+            ];
+        }
+        if ($sesionesAsesor !== [] && $fila['docente_nombre']) {
+            $participantes[] = [
+                'nombre'   => $fila['docente_nombre'],
+                'correo'   => $fila['docente_correo'] ?? null,
+                'rol'      => 'Docente',
+                'fotoUrl'  => $fila['docente_foto_url'] ?? null,
+                'sesiones' => $sesionesAsesor,
+            ];
+        }
+
+        return $this->response->setJSON([
+            'participantes'             => $participantes,
+            'tiempoCoincidenteSegundos' => $this->calcularSuperposicion($sesionesCliente, $sesionesAsesor)['segundos'],
+        ]);
     }
 
     // Elegibles AHORA (no al momento del broadcast — la disponibilidad pudo cambiar) para la
@@ -166,10 +243,28 @@ class TicketsAsesoriaController extends BaseController
 
         $esVideo     = $solicitud['tipo'] === 'video';
         $nuevoEstado = $esVideo ? 'agendado' : 'asignado';
+
+        $linkReunion = null;
+        if ($esVideo) {
+            try {
+                $linkReunion = (new GoogleMeetService())->crearLinkReunion(
+                    "Asesoría Proyecta Fácil #{$id}",
+                    (string) $solicitud['horario_fecha'],
+                    (string) $solicitud['horario_hora_inicio'],
+                    (string) $solicitud['horario_hora_fin'],
+                    $this->correosParaInvitar((int) $solicitud['cliente_id'], $asesorId),
+                );
+            } catch (Throwable $e) {
+                log_message('error', 'GoogleMeetService: no se pudo generar el link de Meet para la solicitud {id}: {msg}', ['id' => $id, 'msg' => $e->getMessage()]);
+
+                return $this->response->setStatusCode(502)->setJSON(['error' => 'No se pudo generar el link de la videollamada. Intenta de nuevo en unos minutos.']);
+            }
+        }
+
         $db->table('solicitudes_asesoria')->where('id', $id)->update([
             'docente_id'   => $asesorId,
             'estado'       => $nuevoEstado,
-            'link_reunion' => $esVideo ? $this->generarLinkSimulado($id) : null,
+            'link_reunion' => $linkReunion,
             'updated_at'   => date('Y-m-d H:i:s'),
         ]);
 
@@ -436,5 +531,72 @@ class TicketsAsesoriaController extends BaseController
         $inicio = sprintf('%04d-%02d-01 00:00:00', $anio ?: (int) date('Y'), $mes);
 
         return [$inicio, date('Y-m-d H:i:s', strtotime($inicio . ' +1 month'))];
+    }
+
+    public function configuracionSla(): ResponseInterface
+    {
+        $fila = db_connect()->table('configuracion_sla')->get()->getRowArray();
+
+        return $this->response->setJSON($this->configuracionSlaADto($fila));
+    }
+
+    // Solo tiempoEsperaChatHoras y tiempoAceptacionVideoMinutos alimentan hoy calcularSlaVenceEn()
+    // (SolicitudAsesoriaHelpersTrait). Los otros dos campos existen en la tabla desde
+    // 2026-08-04-000024_AddMatchmakingASolicitudAsesoria pero ninguna lógica los lee todavía — se
+    // exponen igual porque son parte del mismo registro de configuración, y el frontend avisa que
+    // aún no tienen efecto.
+    public function actualizarConfiguracionSla(): ResponseInterface
+    {
+        $dto = $this->request->getJSON(true) ?? [];
+
+        $campos = [
+            'tiempoEsperaChatHoras'        => 'tiempo_espera_chat_horas',
+            'tiempoAceptacionVideoMinutos' => 'tiempo_aceptacion_video_minutos',
+            'tiempoExtraConexionMinutos'   => 'tiempo_extra_conexion_minutos',
+            'vigenciaHorarioDias'          => 'vigencia_horario_dias',
+        ];
+
+        $cambios = [];
+        foreach ($campos as $campoDto => $columna) {
+            if (! array_key_exists($campoDto, $dto)) {
+                continue;
+            }
+            $valor = (int) $dto[$campoDto];
+            if ($valor <= 0) {
+                return $this->response->setStatusCode(422)->setJSON(['error' => "El valor de \"{$campoDto}\" debe ser mayor que cero"]);
+            }
+            $cambios[$columna] = $valor;
+        }
+
+        // null = el alumno puede cancelar su solicitud en cualquier momento ("permanentemente"
+        // habilitado) — a diferencia de los campos de arriba, null es un valor válido acá, no un
+        // error.
+        if (array_key_exists('cancelacionLimiteMinutos', $dto)) {
+            $valor = $dto['cancelacionLimiteMinutos'];
+            if ($valor !== null && (! is_numeric($valor) || (int) $valor <= 0)) {
+                return $this->response->setStatusCode(422)->setJSON(['error' => 'El límite de cancelación debe ser un número mayor que cero, o null para "sin límite"']);
+            }
+            $cambios['cancelacion_limite_minutos'] = $valor === null ? null : (int) $valor;
+        }
+
+        $db   = db_connect();
+        $fila = $db->table('configuracion_sla')->get()->getRowArray();
+        if ($cambios !== []) {
+            $db->table('configuracion_sla')->where('id', $fila['id'])->update($cambios);
+            $fila = $db->table('configuracion_sla')->get()->getRowArray();
+        }
+
+        return $this->response->setJSON($this->configuracionSlaADto($fila));
+    }
+
+    private function configuracionSlaADto(array $fila): array
+    {
+        return [
+            'tiempoEsperaChatHoras'        => (int) $fila['tiempo_espera_chat_horas'],
+            'tiempoAceptacionVideoMinutos' => (int) $fila['tiempo_aceptacion_video_minutos'],
+            'tiempoExtraConexionMinutos'   => (int) $fila['tiempo_extra_conexion_minutos'],
+            'vigenciaHorarioDias'          => (int) $fila['vigencia_horario_dias'],
+            'cancelacionLimiteMinutos'     => $fila['cancelacion_limite_minutos'] !== null ? (int) $fila['cancelacion_limite_minutos'] : null,
+        ];
     }
 }

@@ -63,6 +63,9 @@ Vagrantfile
 /writable/debugbar/*
 !/writable/debugbar/index.html
 
+# Claves de Service Account (Google, etc.) — nunca deben llegar al repositorio.
+/writable/credentials/*
+
 php_errors.log
 
 #-------------------------
