@@ -4,9 +4,11 @@ namespace App\Controllers;
 
 use CodeIgniter\HTTP\ResponseInterface;
 
-// Lista de asesores (rol='asesor', activos) con su horario semanal de referencia — usada por el
-// cliente para elegir a quién solicitarle asesoría — y el endpoint con el que un asesor reemplaza
-// su propio horario completo. `dia_semana` es 1=lunes .. 7=domingo.
+// Lista de asesores (rol='asesor', activos) con sus reglas de disponibilidad recurrente
+// (fecha_inicio + tipo_repeticion) — usada por el cliente para elegir a quién solicitarle
+// asesoría — y el endpoint con el que un asesor reemplaza su horario completo. La expansión de
+// cada regla a ocurrencias concretas (qué días cae) vive en el frontend
+// (src/lib/horarioRecurrencia.ts), no acá — este controlador solo guarda/lee las reglas tal cual.
 class DocentesController extends BaseController
 {
     public function index(): ResponseInterface
@@ -21,8 +23,8 @@ class DocentesController extends BaseController
             ->get()->getResultArray();
 
         $horarios = $db->table('horarios_docente')
-            ->select('id, usuario_id, dia_semana, hora_inicio, hora_fin')
-            ->orderBy('dia_semana', 'ASC')
+            ->select('id, usuario_id, fecha_inicio, hora_inicio, hora_fin, todo_el_dia, tipo_repeticion')
+            ->orderBy('fecha_inicio', 'ASC')
             ->orderBy('hora_inicio', 'ASC')
             ->get()->getResultArray();
 
@@ -88,21 +90,19 @@ class DocentesController extends BaseController
     public function disponibilidadAgregada(): ResponseInterface
     {
         $filas = db_connect()->table('horarios_docente hd')
-            ->select('hd.usuario_id as docente_id, hd.dia_semana, hd.hora_inicio, hd.hora_fin')
+            ->select('hd.usuario_id as docente_id, hd.fecha_inicio, hd.hora_inicio, hd.hora_fin, hd.todo_el_dia, hd.tipo_repeticion')
             ->join('usuarios u', 'u.id = hd.usuario_id')
             ->where('u.rol', 'asesor')
             ->where('u.estado', 'activo')
             ->where('u.disponible', 1)
-            ->orderBy('hd.dia_semana', 'ASC')
+            ->orderBy('hd.fecha_inicio', 'ASC')
             ->orderBy('hd.hora_inicio', 'ASC')
             ->get()->getResultArray();
 
-        return $this->response->setJSON(array_map(static fn (array $h) => [
-            'docenteId'  => (string) $h['docente_id'],
-            'diaSemana'  => (int) $h['dia_semana'],
-            'horaInicio' => substr((string) $h['hora_inicio'], 0, 5),
-            'horaFin'    => substr((string) $h['hora_fin'], 0, 5),
-        ], $filas));
+        return $this->response->setJSON(array_map(fn (array $h) => array_merge(
+            ['docenteId' => (string) $h['docente_id']],
+            $this->toDtoBloque($h),
+        ), $filas));
     }
 
     public function actualizarHorario($docenteId = null): ResponseInterface
@@ -115,12 +115,17 @@ class DocentesController extends BaseController
         $db->transStart();
         $db->table('horarios_docente')->where('usuario_id', $docenteId)->delete();
         foreach ($bloques as $b) {
+            $todoElDia = (bool) ($b['todoElDia'] ?? false);
             $db->table('horarios_docente')->insert([
-                'usuario_id'  => $docenteId,
-                'dia_semana'  => (int) ($b['diaSemana'] ?? 1),
-                'hora_inicio' => $this->conSegundos((string) ($b['horaInicio'] ?? '00:00')),
-                'hora_fin'    => $this->conSegundos((string) ($b['horaFin'] ?? '00:00')),
-                'created_at'  => date('Y-m-d H:i:s'),
+                'usuario_id'      => $docenteId,
+                'fecha_inicio'    => (string) ($b['fechaInicio'] ?? date('Y-m-d')),
+                // Server-side, no confiamos en horaInicio/horaFin que mande el cliente cuando
+                // todoElDia es true.
+                'hora_inicio'     => $todoElDia ? '00:00:00' : $this->conSegundos((string) ($b['horaInicio'] ?? '00:00')),
+                'hora_fin'        => $todoElDia ? '23:59:00' : $this->conSegundos((string) ($b['horaFin'] ?? '00:00')),
+                'todo_el_dia'     => $todoElDia ? 1 : 0,
+                'tipo_repeticion' => (string) ($b['tipoRepeticion'] ?? 'semanal'),
+                'created_at'      => date('Y-m-d H:i:s'),
             ]);
         }
         $db->transComplete();
@@ -190,7 +195,7 @@ class DocentesController extends BaseController
     {
         $filas = db_connect()->table('horarios_docente')
             ->where('usuario_id', $docenteId)
-            ->orderBy('dia_semana', 'ASC')->orderBy('hora_inicio', 'ASC')
+            ->orderBy('fecha_inicio', 'ASC')->orderBy('hora_inicio', 'ASC')
             ->get()->getResultArray();
 
         return array_map([$this, 'toDtoBloque'], $filas);
@@ -199,10 +204,12 @@ class DocentesController extends BaseController
     private function toDtoBloque(array $h): array
     {
         return [
-            'id'         => (string) $h['id'],
-            'diaSemana'  => (int) $h['dia_semana'],
-            'horaInicio' => substr((string) $h['hora_inicio'], 0, 5),
-            'horaFin'    => substr((string) $h['hora_fin'], 0, 5),
+            'id'             => isset($h['id']) ? (string) $h['id'] : null,
+            'fechaInicio'    => substr((string) $h['fecha_inicio'], 0, 10),
+            'horaInicio'     => substr((string) $h['hora_inicio'], 0, 5),
+            'horaFin'        => substr((string) $h['hora_fin'], 0, 5),
+            'todoElDia'      => (bool) $h['todo_el_dia'],
+            'tipoRepeticion' => (string) $h['tipo_repeticion'],
         ];
     }
 
