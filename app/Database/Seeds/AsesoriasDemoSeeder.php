@@ -163,17 +163,30 @@ class AsesoriasDemoSeeder extends Seeder
             if (! $tieneHorario) {
                 foreach ($a['horario'] as [$dia, $inicio, $fin]) {
                     $this->db->table('horarios_docente')->insert([
-                        'usuario_id'  => $id,
-                        'dia_semana'  => $dia,
-                        'hora_inicio' => "{$inicio}:00",
-                        'hora_fin'    => "{$fin}:00",
-                        'created_at'  => date('Y-m-d H:i:s'),
+                        'usuario_id'      => $id,
+                        'fecha_inicio'    => $this->fechaRecienteConDiaSemana($dia),
+                        'hora_inicio'     => "{$inicio}:00",
+                        'hora_fin'        => "{$fin}:00",
+                        'todo_el_dia'     => 0,
+                        'tipo_repeticion' => 'semanal',
+                        'created_at'      => date('Y-m-d H:i:s'),
                     ]);
                 }
             }
         }
 
         return $asesores;
+    }
+
+    /** Fecha más reciente <= hoy cuyo día de semana (1=lunes..7=domingo) coincide con $diaSemana. */
+    private function fechaRecienteConDiaSemana(int $diaSemana): string
+    {
+        $hoy   = new \DateTimeImmutable('today');
+        $jsHoy = (int) $hoy->format('w');
+        $hoyDia = $jsHoy === 0 ? 7 : $jsHoy;
+        $atras  = ($hoyDia - $diaSemana + 7) % 7;
+
+        return $hoy->modify("-{$atras} days")->format('Y-m-d');
     }
 
     // Réplica de FacturacionController::crearDefault() + TicketsConsultaController::emitirTicketsDePlan()

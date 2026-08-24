@@ -3,6 +3,7 @@
 namespace App\Controllers\Support;
 
 use App\Libraries\GoogleMeetService;
+use App\Libraries\HorarioRecurrencia;
 use DateTime;
 use DateTimeZone;
 use Throwable;
@@ -69,20 +70,23 @@ trait SolicitudAsesoriaHelpersTrait
             return [];
         }
 
-        $diaSemana = (int) date('N', strtotime($fecha)); // 1=lunes..7=domingo, igual que horarios_docente
-
+        // Por contención, no igualdad exacta: el cliente elige una cápsula de 1 hora (ver
+        // SolicitarAsesoriaModal.vue) que puede ser un sub-rango de un bloque más largo que el
+        // docente marcó como disponible (ej. docente disponible 09:00-12:00, cliente elige la
+        // cápsula 10:00-11:00) — con igualdad exacta ningún docente calzaría nunca.
         $filas = db_connect()->table('usuarios u')
-            ->select('u.id')
+            ->select('u.id, hd.fecha_inicio, hd.tipo_repeticion')
             ->join('horarios_docente hd', 'hd.usuario_id = u.id')
             ->where('u.rol', 'asesor')
             ->where('u.estado', 'activo')
             ->where('u.disponible', 1)
-            ->where('hd.dia_semana', $diaSemana)
-            ->where('hd.hora_inicio', $horaInicio)
-            ->where('hd.hora_fin', $horaFin)
+            ->where('hd.hora_inicio <=', $horaInicio)
+            ->where('hd.hora_fin >=', $horaFin)
             ->get()->getResultArray();
 
-        return array_map(static fn (array $f) => (int) $f['id'], $filas);
+        $filas = array_filter($filas, static fn (array $f) => HorarioRecurrencia::ocurreEnFecha($f, $fecha));
+
+        return array_values(array_unique(array_map(static fn (array $f) => (int) $f['id'], $filas)));
     }
 
     private function calcularSlaVenceEn(string $tipo): string

@@ -4,6 +4,7 @@ namespace App\Controllers;
 
 use App\Controllers\Support\SolicitudAsesoriaHelpersTrait;
 use App\Libraries\GoogleMeetService;
+use App\Libraries\HorarioRecurrencia;
 use CodeIgniter\HTTP\ResponseInterface;
 use Throwable;
 
@@ -331,9 +332,10 @@ class TicketsAsesoriaController extends BaseController
     }
 
     // Mapa de calor de cobertura (Módulo 5): grilla semanal (lunes-domingo) de franjas de 30 min
-    // entre 08:00-20:00, con la cantidad de asesores disponibles AHORA MISMO (recurrente por
-    // dia_semana, igual que el matchmaking) por franja, y una marca cuando esa franja+fecha exacta
-    // tiene un ticket de video pendiente/en espera sin resolver.
+    // entre 08:00-20:00, con la cantidad de asesores disponibles AHORA MISMO (expandiendo cada
+    // regla de horarios_docente a sus ocurrencias reales en la semana visible, ver
+    // HorarioRecurrencia) por franja, y una marca cuando esa franja+fecha exacta tiene un ticket
+    // de video pendiente/en espera sin resolver.
     public function coberturaHorarios(): ResponseInterface
     {
         $fechaParam  = (string) ($this->request->getGet('fecha') ?? date('Y-m-d'));
@@ -348,7 +350,7 @@ class TicketsAsesoriaController extends BaseController
 
         $dias = [];
         for ($i = 0; $i < 7; $i++) {
-            $dias[] = ['fecha' => date('Y-m-d', $lunesTs + $i * 86400), 'diaSemana' => $i + 1];
+            $dias[] = ['fecha' => date('Y-m-d', $lunesTs + $i * 86400)];
         }
 
         $franjas = [];
@@ -359,7 +361,7 @@ class TicketsAsesoriaController extends BaseController
 
         $db      = db_connect();
         $builder = $db->table('horarios_docente hd')
-            ->select('hd.dia_semana, hd.hora_inicio, hd.hora_fin, u.id as usuario_id, u.nombre, u.foto_url')
+            ->select('hd.fecha_inicio, hd.tipo_repeticion, hd.hora_inicio, hd.hora_fin, u.id as usuario_id, u.nombre, u.foto_url')
             ->join('usuarios u', 'u.id = hd.usuario_id')
             ->where('u.rol', 'asesor')
             ->where('u.estado', 'activo')
@@ -367,19 +369,24 @@ class TicketsAsesoriaController extends BaseController
         if ($sectorId !== null) {
             $builder->join('asesor_especialidades ae', 'ae.usuario_id = u.id')->where('ae.sector_id', $sectorId);
         }
+        $reglas = $builder->get()->getResultArray();
 
         // Un bloque "09:00-12:00" cubre TODAS las franjas de 30 min dentro de ese rango
         // (09:00, 09:30, ..., 11:30) — antes solo se marcaba el minuto exacto de inicio, dejando el
         // resto del bloque como "sin cobertura" en el mapa de calor.
         $porFranja = [];
-        foreach ($builder->get()->getResultArray() as $f) {
-            $dia         = (int) $f['dia_semana'];
-            $docente     = ['id' => (string) $f['usuario_id'], 'nombre' => $f['nombre'], 'fotoUrl' => $f['foto_url'] ?? null];
-            [$hI, $mI]   = array_map('intval', explode(':', substr((string) $f['hora_inicio'], 0, 5)));
-            [$hF, $mF]   = array_map('intval', explode(':', substr((string) $f['hora_fin'], 0, 5)));
-            for ($t = $hI * 60 + $mI; $t < $hF * 60 + $mF; $t += 30) {
-                $hora                        = sprintf('%02d:%02d', intdiv($t, 60), $t % 60);
-                $porFranja[$dia][$hora][]    = $docente;
+        foreach ($dias as $dia) {
+            foreach ($reglas as $f) {
+                if (! HorarioRecurrencia::ocurreEnFecha($f, $dia['fecha'])) {
+                    continue;
+                }
+                $docente   = ['id' => (string) $f['usuario_id'], 'nombre' => $f['nombre'], 'fotoUrl' => $f['foto_url'] ?? null];
+                [$hI, $mI] = array_map('intval', explode(':', substr((string) $f['hora_inicio'], 0, 5)));
+                [$hF, $mF] = array_map('intval', explode(':', substr((string) $f['hora_fin'], 0, 5)));
+                for ($t = $hI * 60 + $mI; $t < $hF * 60 + $mF; $t += 30) {
+                    $hora                                     = sprintf('%02d:%02d', intdiv($t, 60), $t % 60);
+                    $porFranja[$dia['fecha']][$hora][]         = $docente;
+                }
             }
         }
 
@@ -401,7 +408,7 @@ class TicketsAsesoriaController extends BaseController
                 $celdas[] = [
                     'fecha'      => $dia['fecha'],
                     'horaInicio' => $hora,
-                    'docentes'   => $porFranja[$dia['diaSemana']][$hora] ?? [],
+                    'docentes'   => $porFranja[$dia['fecha']][$hora] ?? [],
                     'pendiente'  => isset($pendientesSet[$dia['fecha'] . '|' . $hora]),
                 ];
             }
