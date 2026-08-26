@@ -2,8 +2,11 @@
 
 namespace App\Controllers;
 
+use App\Libraries\CorreoService;
+use App\Models\ActividadModel;
 use App\Models\UsuarioModel;
 use CodeIgniter\HTTP\ResponseInterface;
+use Throwable;
 
 // Espejo de `Usuario` en frontend/src/types/index.ts. `password` nunca se lee del cliente en el
 // GET (siempre viaja como '' — la UI tampoco la usa para mostrar) y nunca se guarda en texto
@@ -72,8 +75,31 @@ class UsuariosController extends BaseController
             $cambios['origen_cambiado_en'] = date('Y-m-d H:i:s');
         }
 
+        // Tab "Información" del panel de detalles: cualquier cambio real a los 3 campos editables
+        // ahí (nombre/correo/teléfono) deja rastro en "Últimas modificaciones del perfil" — sin
+        // importar quién lo edite, el rastro es del perfil (objetivo_id), no del editor.
+        $camposPerfil = ['nombre', 'correo', 'telefono'];
+        $cambioPerfil = false;
+        foreach ($camposPerfil as $campo) {
+            if (array_key_exists($campo, $dto) && $dto[$campo] !== ($actual[$campo] ?? null)) {
+                $cambioPerfil = true;
+                break;
+            }
+        }
+
         if ($cambios !== []) {
             $model->update($id, $cambios);
+        }
+
+        if ($cambioPerfil) {
+            (new ActividadModel())->insert([
+                'mensaje'     => 'Actualizó su información de perfil',
+                'color'       => 'blue',
+                'categoria'   => 'Perfil',
+                'actor_id'    => session()->get('usuario_id'),
+                'objetivo_id' => (int) $id,
+                'created_at'  => date('Y-m-d H:i:s'),
+            ]);
         }
 
         if (array_key_exists('permisos', $dto)) {
@@ -88,6 +114,63 @@ class UsuariosController extends BaseController
         (new UsuarioModel())->delete($id);
 
         return $this->response->setJSON((object) []);
+    }
+
+    // Usado desde el modal "Editar usuario": no hay forma de recuperar la contraseña original (se
+    // guarda cifrada, ver comentario de arriba de la clase) — genera una NUEVA en el momento, la
+    // guarda, y la manda por correo. Nadie ve ni guarda la anterior en ningún lado.
+    public function enviarAccesos($id = null): ResponseInterface
+    {
+        $model = new UsuarioModel();
+        $usuario = $model->find($id);
+        if (! $usuario) {
+            return $this->response->setStatusCode(404)->setJSON(['error' => 'Usuario no encontrado']);
+        }
+        if (empty($usuario['correo'])) {
+            return $this->response->setStatusCode(400)->setJSON(['error' => 'Este usuario no tiene un correo cargado.']);
+        }
+
+        $passwordTemporal = $this->generarPasswordTemporal();
+        $model->update($id, ['password_hash' => password_hash($passwordTemporal, PASSWORD_DEFAULT)]);
+
+        try {
+            (new CorreoService())->enviarAccesos($usuario['correo'], $usuario['nombre'], $usuario['usuario'], $passwordTemporal);
+        } catch (Throwable $e) {
+            log_message('error', '[usuarios] No se pudo enviar accesos a {correo}: {msg}', ['correo' => $usuario['correo'], 'msg' => $e->getMessage()]);
+
+            return $this->response->setStatusCode(502)->setJSON(['error' => 'No se pudo enviar el correo. Intenta de nuevo.']);
+        }
+
+        return $this->response->setJSON(['enviado' => true]);
+    }
+
+    // Usado desde el modal "Usuario creado" (justo después de create()): la contraseña temporal
+    // que el admin ya está viendo en pantalla todavía es válida (recién se guardó) — se manda ESA
+    // misma por correo, sin generar una nueva, para no invalidar por sorpresa lo que ya copió.
+    public function enviarAccesosDirecto($id = null): ResponseInterface
+    {
+        $usuario = (new UsuarioModel())->find($id);
+        if (! $usuario) {
+            return $this->response->setStatusCode(404)->setJSON(['error' => 'Usuario no encontrado']);
+        }
+        if (empty($usuario['correo'])) {
+            return $this->response->setStatusCode(400)->setJSON(['error' => 'Este usuario no tiene un correo cargado.']);
+        }
+
+        $password = trim((string) ($this->request->getJSON(true)['password'] ?? ''));
+        if ($password === '') {
+            return $this->response->setStatusCode(400)->setJSON(['error' => 'Falta la contraseña a enviar.']);
+        }
+
+        try {
+            (new CorreoService())->enviarAccesos($usuario['correo'], $usuario['nombre'], $usuario['usuario'], $password);
+        } catch (Throwable $e) {
+            log_message('error', '[usuarios] No se pudo enviar accesos a {correo}: {msg}', ['correo' => $usuario['correo'], 'msg' => $e->getMessage()]);
+
+            return $this->response->setStatusCode(502)->setJSON(['error' => 'No se pudo enviar el correo. Intenta de nuevo.']);
+        }
+
+        return $this->response->setJSON(['enviado' => true]);
     }
 
     private function toDto(array $fila): array
@@ -120,6 +203,11 @@ class UsuariosController extends BaseController
                 : null,
             'origenCambiadoEn' => $fila['origen_cambiado_en'] ?? null,
             'disponible'      => (bool) ($fila['disponible'] ?? true),
+            'chatAnchoPx'     => $fila['chat_ancho_px'] !== null ? (int) $fila['chat_ancho_px'] : null,
+            'chatAltoPx'      => $fila['chat_alto_px'] !== null ? (int) $fila['chat_alto_px'] : null,
+            'telefono'        => $fila['telefono'] ?? null,
+            'fechaRegistro'   => isset($fila['created_at']) ? date(DATE_ATOM, strtotime($fila['created_at'])) : null,
+            'ultimoAcceso'    => $fila['ultimo_acceso'] !== null ? date(DATE_ATOM, strtotime($fila['ultimo_acceso'])) : null,
         ];
     }
 
@@ -152,6 +240,9 @@ class UsuariosController extends BaseController
             'correo'          => 'correo',
             'fotoUrl'         => 'foto_url',
             'vigenciaAlumnoHasta' => 'vigencia_alumno_hasta',
+            'chatAnchoPx'     => 'chat_ancho_px',
+            'chatAltoPx'      => 'chat_alto_px',
+            'telefono'        => 'telefono',
         ];
 
         $fila = [];

@@ -2,6 +2,7 @@
 
 namespace App\Controllers;
 
+use App\Models\ActividadModel;
 use CodeIgniter\HTTP\ResponseInterface;
 use Stripe\StripeClient;
 use Stripe\Webhook;
@@ -531,6 +532,19 @@ class PagosController extends BaseController
                     'total'                  => $invoice->amount_paid / 100,
                     'estado'                 => 'Pagado',
                 ]);
+
+                // 'subscription_cycle' = renovación automática de un periodo ya vigente. El primer
+                // cobro de una suscripción nueva llega como 'subscription_create' y no es "renovó"
+                // — es la contratación inicial, ya reflejada por separado en checkout.session.completed.
+                if (($invoice->billing_reason ?? null) === 'subscription_cycle') {
+                    (new ActividadModel())->insert([
+                        'mensaje'    => 'Renovó su plan',
+                        'color'      => 'green',
+                        'categoria'  => 'Facturación',
+                        'actor_id'   => (int) $facturacion['usuario_id'],
+                        'created_at' => date('Y-m-d H:i:s'),
+                    ]);
+                }
             }
         }
 

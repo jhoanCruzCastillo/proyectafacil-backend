@@ -35,6 +35,25 @@ class FacturacionController extends BaseController
         return $this->response->setJSON($this->toDto($usuarioId));
     }
 
+    // Conteo de membresías activas por nivel — para el KPI de "Usuarios y permisos". A propósito
+    // NO usa crearDefault() ni toca ninguna cuenta: es una simple agregación de lectura sobre lo
+    // que ya existe en `facturaciones`.
+    public function resumenNiveles(): ResponseInterface
+    {
+        $filas = db_connect()->table('facturaciones f')
+            ->select('p.numero_nivel, COUNT(*) as total')
+            ->join('planes p', 'p.id = f.plan_id')
+            ->groupBy('p.numero_nivel')
+            ->get()->getResultArray();
+
+        $porNivel = ['0' => 0, '1' => 0, '2' => 0];
+        foreach ($filas as $f) {
+            $porNivel[(string) (int) $f['numero_nivel']] = (int) $f['total'];
+        }
+
+        return $this->response->setJSON($porNivel);
+    }
+
     public function update($usuarioId = null): ResponseInterface
     {
         $usuarioId = (int) $usuarioId;

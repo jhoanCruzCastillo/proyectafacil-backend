@@ -4,6 +4,7 @@ namespace App\Controllers\Support;
 
 use App\Libraries\GoogleMeetService;
 use App\Libraries\HorarioRecurrencia;
+use App\Models\ActividadModel;
 use DateTime;
 use DateTimeZone;
 use Throwable;
@@ -291,6 +292,16 @@ trait SolicitudAsesoriaHelpersTrait
         if ($nuevoEstado === 'completado') {
             $this->consumirTicket((int) $solicitud['id']);
             $this->notificar((int) $solicitud['cliente_id'], 'solicitud_completada', 'Tu asesoría fue marcada como completada — cuéntanos cómo estuvo', (int) $solicitud['id']);
+            // Resuelto "bajo demanda" (ver comentario de la clase) — puede correr en la request de
+            // cualquiera que consulte la lista después (cliente, docente o el admin de Módulo 4), así
+            // que el actor se toma de la propia solicitud, nunca de session().
+            (new ActividadModel())->insert([
+                'mensaje'    => 'Asistió a una sesión de asesoría',
+                'color'      => 'green',
+                'categoria'  => 'Sesiones',
+                'actor_id'   => (int) $solicitud['cliente_id'],
+                'created_at' => date('Y-m-d H:i:s'),
+            ]);
         } else {
             // Observada o vencida: la asesoría no ocurrió como debía — se libera el ticket de
             // consulta para que el alumno pueda volver a intentarlo, igual que en una cancelación.

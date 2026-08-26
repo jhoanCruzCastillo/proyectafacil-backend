@@ -163,4 +163,25 @@ class CloudinaryUploader
 
         return (string) $resultado['secure_url'];
     }
+
+    /**
+     * Adjunto de chat de asesoría — cualquier tipo de archivo, como un chat real. Imágenes suben
+     * como resource_type=image (para poder mostrarlas inline); todo lo demás como raw.
+     *
+     * @return string URL segura (https) del archivo subido
+     */
+    public function subirAdjuntoChat(string $fuente, string $nombreOriginal, string $mimeTipo): string
+    {
+        $esImagen = str_starts_with($mimeTipo, 'image/');
+
+        $resultado = $this->uploadApi->upload($fuente, [
+            'resource_type'     => $esImagen ? 'image' : 'raw',
+            'folder'            => 'proyecta-facil/asesoria-adjuntos',
+            'use_filename'      => true,
+            'unique_filename'   => true,
+            'filename_override' => $nombreOriginal,
+        ]);
+
+        return (string) $resultado['secure_url'];
+    }
 }

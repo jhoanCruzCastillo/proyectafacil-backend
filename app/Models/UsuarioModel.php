@@ -15,5 +15,7 @@ class UsuarioModel extends Model
         'nombre', 'usuario', 'password_hash', 'rol', 'apodo', 'tema', 'estado',
         'cuenta_cliente_id', 'tipo_usuario_id', 'origen', 'correo', 'foto_url', 'vigencia_alumno_hasta',
         'origen_cambiado_por_id', 'origen_cambiado_en', 'disponible',
+        'preferencia_registro', 'token_verificacion', 'token_verificacion_expira',
+        'chat_ancho_px', 'chat_alto_px', 'telefono', 'ultimo_acceso',
     ];
 }
