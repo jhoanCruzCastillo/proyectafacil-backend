@@ -10,6 +10,13 @@ $routes->group('api', static function (RouteCollection $routes) {
     $routes->post('auth/login', 'AuthController::login');
     $routes->get('auth/me', 'AuthController::me');
     $routes->post('auth/logout', 'AuthController::logout');
+    $routes->post('auth/registro', 'AuthController::register');
+    $routes->get('auth/verificar/(:segment)', 'AuthController::verificar/$1');
+
+    // Catálogo de sectores para el paso "temas de interés" del registro público — antes de tener
+    // sesión no se puede llamar al GET /sectores normal (detrás del filtro auth). Mismo método,
+    // sin nada sensible que proteger (es un catálogo, no datos de usuario).
+    $routes->get('sectores/publico', 'SectoresController::index');
 
     // Stripe llama a esto directo — no manda sesión, no puede ir detrás del filtro 'auth'. La
     // firma en el header Stripe-Signature es la única verificación (ver PagosController::webhook).
@@ -69,6 +76,8 @@ $routes->group('api', ['filter' => 'auth'], static function (RouteCollection $ro
     $routes->post('usuarios', 'UsuariosController::create');
     $routes->put('usuarios/(:num)', 'UsuariosController::update/$1');
     $routes->delete('usuarios/(:num)', 'UsuariosController::delete/$1');
+    $routes->post('usuarios/(:num)/enviar-accesos', 'UsuariosController::enviarAccesos/$1');
+    $routes->post('usuarios/(:num)/enviar-accesos-directo', 'UsuariosController::enviarAccesosDirecto/$1');
 
     $routes->get('tipos-usuario', 'TiposUsuarioController::index');
     $routes->post('tipos-usuario', 'TiposUsuarioController::create');
@@ -78,6 +87,7 @@ $routes->group('api', ['filter' => 'auth'], static function (RouteCollection $ro
     $routes->get('roles-permisos', 'RolesPermisosController::index');
     $routes->put('roles-permisos/(:segment)', 'RolesPermisosController::update/$1');
 
+    $routes->get('facturacion/resumen-niveles', 'FacturacionController::resumenNiveles');
     $routes->get('facturacion/(:num)', 'FacturacionController::get/$1');
     $routes->put('facturacion/(:num)', 'FacturacionController::update/$1');
 
@@ -92,6 +102,11 @@ $routes->group('api', ['filter' => 'auth'], static function (RouteCollection $ro
 
     $routes->get('actividad', 'ActividadController::index');
     $routes->post('actividad', 'ActividadController::push');
+    $routes->get('actividad/por-usuario/(:num)', 'ActividadController::porActor/$1');
+    $routes->get('actividad/ultima-modificacion-perfil/(:num)', 'ActividadController::ultimaModificacionPerfil/$1');
+
+    $routes->get('sesiones', 'SesionesController::misSesiones');
+    $routes->post('sesiones/(:num)/cerrar', 'SesionesController::cerrar/$1');
 
     $routes->get('historial-cambios', 'HistorialCambiosController::index');
     $routes->get('ejemplos/(:num)/historial-cambios', 'HistorialCambiosController::listByEjemplo/$1');
@@ -160,6 +175,7 @@ $routes->group('api', ['filter' => 'auth'], static function (RouteCollection $ro
     $routes->put('asesoria/configuracion-sla', 'TicketsAsesoriaController::actualizarConfiguracionSla');
     $routes->get('asesoria/solicitudes/(:num)/mensajes', 'AsesoriaController::mensajes/$1');
     $routes->post('asesoria/solicitudes/(:num)/mensajes', 'AsesoriaController::enviarMensaje/$1');
+    $routes->post('asesoria/adjuntos', 'AsesoriaController::subirAdjunto');
 
     $routes->get('notificaciones', 'NotificacionesController::index');
     $routes->post('notificaciones/(:num)/leida', 'NotificacionesController::marcarLeida/$1');

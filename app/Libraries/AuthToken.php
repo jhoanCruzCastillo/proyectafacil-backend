@@ -2,12 +2,18 @@
 
 namespace App\Libraries;
 
+use App\Models\SesionModel;
 use Config\Encryption;
 
 /**
  * Token Bearer firmado (HMAC-SHA256) para la API.
  * Evita depender de la cookie de sesión PHP — el SPA guarda el token en localStorage
  * y lo envía en Authorization en cada request.
+ *
+ * `sesionId` (jti) referencia una fila real en `sesiones` (ver SesionModel/SesionesController) —
+ * sin esto el JWT era válido hasta que expiraba solo, sin forma de revocar una sesión puntual
+ * ("Cerrar sesión" en el panel de detalles del usuario). hidratarSesionSiHay() valida en cada
+ * request que esa fila siga sin revocar.
  */
 class AuthToken
 {
@@ -17,7 +23,7 @@ class AuthToken
     /**
      * @param array{usuarioId: string, nombre: string, usuario: string, rol: string, iniciadaEn: string} $sesion
      */
-    public static function emitir(array $sesion): string
+    public static function emitir(array $sesion, string $sesionId): string
     {
         $now = time();
         $header  = self::b64(['alg' => 'HS256', 'typ' => 'JWT']);
@@ -27,6 +33,7 @@ class AuthToken
             'usuario'    => (string) $sesion['usuario'],
             'rol'        => (string) $sesion['rol'],
             'iniciadaEn' => (string) $sesion['iniciadaEn'],
+            'sesionId'   => $sesionId,
             'iat'        => $now,
             'exp'        => $now + self::TTL_SEGUNDOS,
         ]);
@@ -36,7 +43,7 @@ class AuthToken
     }
 
     /**
-     * @return array{usuarioId: string, nombre: string, usuario: string, rol: string, iniciadaEn: string}|null
+     * @return array{usuarioId: string, nombre: string, usuario: string, rol: string, iniciadaEn: string, sesionId: string}|null
      */
     public static function verificar(string $token): ?array
     {
@@ -73,13 +80,20 @@ class AuthToken
             'usuario'    => (string) $data['usuario'],
             'rol'        => (string) $data['rol'],
             'iniciadaEn' => (string) $data['iniciadaEn'],
+            // Tokens emitidos antes de que existiera `sesiones` no traen este claim — '' hace que
+            // la validación contra la BD (ver hidratarSesionSiHay) los rechace, forzando relogin.
+            'sesionId'   => isset($data['sesionId']) ? (string) $data['sesionId'] : '',
         ];
     }
 
     /**
-     * Lee Authorization: Bearer … del request actual.
+     * Lee Authorization: Bearer … del request actual y confirma contra `sesiones` que ese token no
+     * fue revocado. Punto único de verificación — tanto AuthFilter (hidratarSesionSiHay) como
+     * AuthController::me()/sesionActual() pasan por acá, así que "Cerrar sesión" desde el panel de
+     * detalles corta el acceso de verdad en cualquier endpoint, no solo en los que van detrás del
+     * filtro 'auth'.
      *
-     * @return array{usuarioId: string, nombre: string, usuario: string, rol: string, iniciadaEn: string}|null
+     * @return array{usuarioId: string, nombre: string, usuario: string, rol: string, iniciadaEn: string, sesionId: string}|null
      */
     public static function desdeRequest(): ?array
     {
@@ -88,11 +102,23 @@ class AuthToken
             return null;
         }
 
-        return self::verificar($m[1]);
+        $claims = self::verificar($m[1]);
+        if ($claims === null || $claims['sesionId'] === '') {
+            return null;
+        }
+
+        $fila = (new SesionModel())->find((int) $claims['sesionId']);
+        if (! $fila || (int) $fila['revocada'] === 1 || (int) $fila['usuario_id'] !== (int) $claims['usuarioId']) {
+            return null;
+        }
+
+        return $claims;
     }
 
     /**
      * Hidrata la sesión CI4 desde el Bearer (para código que aún lee session()->get('usuario_*')).
+     * La validación de revocación ya la hizo desdeRequest() — acá solo se refresca la marca de
+     * actividad de la fila en `sesiones`.
      */
     public static function hidratarSesionSiHay(): bool
     {
@@ -101,12 +127,15 @@ class AuthToken
             return false;
         }
 
+        (new SesionModel())->update((int) $claims['sesionId'], ['ultima_actividad' => date('Y-m-d H:i:s')]);
+
         session()->set([
             'usuario_id'          => $claims['usuarioId'],
             'usuario_nombre'      => $claims['nombre'],
             'usuario_usuario'     => $claims['usuario'],
             'usuario_rol'         => $claims['rol'],
             'usuario_iniciada_en' => $claims['iniciadaEn'],
+            'sesion_id'           => $claims['sesionId'],
         ]);
 
         return true;

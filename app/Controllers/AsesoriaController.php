@@ -3,7 +3,9 @@
 namespace App\Controllers;
 
 use App\Controllers\Support\SolicitudAsesoriaHelpersTrait;
+use App\Libraries\CloudinaryUploader;
 use App\Libraries\GoogleMeetService;
+use App\Models\ActividadModel;
 use CodeIgniter\HTTP\ResponseInterface;
 use Throwable;
 
@@ -203,6 +205,14 @@ class AsesoriaController extends BaseController
 
         $this->broadcast((int) $id, $tipo, $sectorId, $horarioFecha, $horarioHoraInicio, $horarioHoraFin);
 
+        (new ActividadModel())->insert([
+            'mensaje'    => 'Reservó una sesión de asesoría',
+            'color'      => 'blue',
+            'categoria'  => 'Sesiones',
+            'actor_id'   => $clienteId,
+            'created_at' => date('Y-m-d H:i:s'),
+        ]);
+
         // La respuesta alimenta el modal de confirmación del alumno (muestra la categoría elegida),
         // así que a diferencia de fila() acá sí hace falta el join a sectores.
         $fila = $db->table('solicitudes_asesoria sa')
@@ -378,6 +388,14 @@ class AsesoriaController extends BaseController
             'updated_at'              => date('Y-m-d H:i:s'),
         ]);
 
+        (new ActividadModel())->insert([
+            'mensaje'    => "Evaluó una sesión de asesoría con {$estrellas} estrellas",
+            'color'      => 'orange',
+            'categoria'  => 'Evaluación',
+            'actor_id'   => (int) $solicitud['cliente_id'],
+            'created_at' => date('Y-m-d H:i:s'),
+        ]);
+
         return $this->response->setJSON($this->toDtoSolicitud($this->fila($id)));
     }
 
@@ -396,22 +414,70 @@ class AsesoriaController extends BaseController
         $solicitudId = (int) $solicitudId;
         $dto         = $this->request->getJSON(true) ?? [];
         $autorId     = (int) ($dto['autorId'] ?? 0);
+        $texto       = (string) ($dto['texto'] ?? '');
+        $adjuntoUrl  = trim((string) ($dto['adjuntoUrl'] ?? ''));
         $db          = db_connect();
 
+        if ($texto === '' && $adjuntoUrl === '') {
+            return $this->response->setStatusCode(400)->setJSON(['error' => 'El mensaje está vacío']);
+        }
+
+        $solicitud = $this->fila($solicitudId);
+        // "Inició una conversación" (Actividad del cliente): su primer mensaje propio en esta
+        // solicitud — se decide ANTES de insertar el suyo, para no contarlo a sí mismo.
+        $esPrimerMensajeDelCliente = $solicitud
+            && $autorId === (int) $solicitud['cliente_id']
+            && $db->table('mensajes_asesoria')->where('solicitud_id', $solicitudId)->where('autor_id', $autorId)->countAllResults() === 0;
+
         $db->table('mensajes_asesoria')->insert([
-            'solicitud_id' => $solicitudId,
-            'autor_id'     => $autorId,
-            'texto'        => (string) ($dto['texto'] ?? ''),
-            'created_at'   => date('Y-m-d H:i:s'),
+            'solicitud_id'   => $solicitudId,
+            'autor_id'       => $autorId,
+            'texto'          => $texto,
+            'adjunto_url'    => $adjuntoUrl !== '' ? $adjuntoUrl : null,
+            'adjunto_nombre' => $adjuntoUrl !== '' ? trim((string) ($dto['adjuntoNombre'] ?? '')) ?: null : null,
+            'adjunto_tipo'   => $adjuntoUrl !== '' ? trim((string) ($dto['adjuntoTipo'] ?? '')) ?: null : null,
+            'created_at'     => date('Y-m-d H:i:s'),
         ]);
 
-        $solicitud   = $this->fila($solicitudId);
-        $destinoId   = $autorId === (int) $solicitud['cliente_id'] ? (int) $solicitud['docente_id'] : (int) $solicitud['cliente_id'];
+        if ($esPrimerMensajeDelCliente) {
+            (new ActividadModel())->insert([
+                'mensaje'    => 'Inició una conversación con su asesor',
+                'color'      => 'gray',
+                'categoria'  => 'Asesoría 1:1',
+                'actor_id'   => $autorId,
+                'created_at' => date('Y-m-d H:i:s'),
+            ]);
+        }
+
+        $destinoId = $autorId === (int) $solicitud['cliente_id'] ? (int) $solicitud['docente_id'] : (int) $solicitud['cliente_id'];
         $this->notificar($destinoId, 'nuevo_mensaje', 'Tienes un nuevo mensaje de asesoría', $solicitudId);
 
         $filas = $db->table('mensajes_asesoria')->where('solicitud_id', $solicitudId)->orderBy('created_at', 'ASC')->get()->getResultArray();
 
         return $this->response->setJSON(array_map([$this, 'toDtoMensaje'], $filas));
+    }
+
+    // Sube un adjunto de chat (cualquier tipo de archivo) a Cloudinary y devuelve su URL — el
+    // frontend la usa después en el POST de enviarMensaje(). Separado en dos pasos (subir, luego
+    // enviar) para poder mostrar progreso de subida antes de que el mensaje exista.
+    public function subirAdjunto(): ResponseInterface
+    {
+        $dto     = $this->request->getJSON(true) ?? [];
+        $dataUrl = (string) ($dto['dataUrl'] ?? '');
+        $nombre  = (string) ($dto['nombre'] ?? 'archivo');
+        $tipo    = (string) ($dto['tipo'] ?? 'application/octet-stream');
+
+        if ($dataUrl === '') {
+            return $this->response->setStatusCode(400)->setJSON(['error' => 'Falta el archivo (dataUrl)']);
+        }
+
+        try {
+            $url = (new CloudinaryUploader())->subirAdjuntoChat($dataUrl, $nombre, $tipo);
+        } catch (Throwable $e) {
+            return $this->response->setStatusCode(502)->setJSON(['error' => 'No se pudo subir el archivo: ' . $e->getMessage()]);
+        }
+
+        return $this->response->setJSON(['url' => $url]);
     }
 
     // Notifica (solicitud_notificaciones + inbox) a todos los asesores elegibles al crear.
@@ -456,11 +522,14 @@ class AsesoriaController extends BaseController
     private function toDtoMensaje(array $m): array
     {
         return [
-            'id'          => (string) $m['id'],
-            'solicitudId' => (string) $m['solicitud_id'],
-            'autorId'     => (string) $m['autor_id'],
-            'texto'       => $m['texto'],
-            'creadoEn'    => $this->datetimeAIso($m['created_at']),
+            'id'            => (string) $m['id'],
+            'solicitudId'   => (string) $m['solicitud_id'],
+            'autorId'       => (string) $m['autor_id'],
+            'texto'         => $m['texto'],
+            'adjuntoUrl'    => $m['adjunto_url'] ?? null,
+            'adjuntoNombre' => $m['adjunto_nombre'] ?? null,
+            'adjuntoTipo'   => $m['adjunto_tipo'] ?? null,
+            'creadoEn'      => $this->datetimeAIso($m['created_at']),
         ];
     }
 }

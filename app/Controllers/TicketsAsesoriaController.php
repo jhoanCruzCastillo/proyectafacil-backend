@@ -22,12 +22,14 @@ class TicketsAsesoriaController extends BaseController
         $db  = db_connect();
         $hoy = date('Y-m-d') . ' 00:00:00';
 
-        $pendientes     = $db->table('solicitudes_asesoria')->where('estado', 'pendiente')->countAllResults();
-        $completadosHoy = $db->table('solicitudes_asesoria')->where('estado', 'completado')->where('updated_at >=', $hoy)->countAllResults();
+        $pendientes      = $db->table('solicitudes_asesoria')->where('estado', 'pendiente')->countAllResults();
+        $completadosHoy  = $db->table('solicitudes_asesoria')->where('estado', 'completado')->where('updated_at >=', $hoy)->countAllResults();
+        $completadosTotal = $db->table('solicitudes_asesoria')->where('estado', 'completado')->countAllResults();
 
         return $this->response->setJSON([
-            'pendientes'     => $pendientes,
-            'completadosHoy' => $completadosHoy,
+            'pendientes'       => $pendientes,
+            'completadosHoy'   => $completadosHoy,
+            'completadosTotal' => $completadosTotal,
         ]);
     }
 

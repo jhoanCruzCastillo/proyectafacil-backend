@@ -1261,7 +1261,10 @@ class LlenadoIAController extends BaseController
                 $linea .= ' — SOLO estas opciones, copia el texto EXACTO de la que mejor corresponda: ' . implode(' | ', $opciones)
                     . '. Si la fuente de la verdad describe algo que corresponde conceptualmente a una de estas opciones aunque use'
                     . ' palabras distintas, ELIGE esa opción — no dejes la celda vacía solo porque la redacción exacta no aparece'
-                    . ' en el texto fuente. Solo déjala vacía si el tema de la fila no se menciona en absoluto en la fuente de la verdad.';
+                    . ' en el texto fuente. Solo déjala vacía si el tema de la fila no se menciona en absoluto en la fuente de la verdad.'
+                    . ' Si en la "tabla actual" de abajo esta columna YA tiene algo escrito, no asumas que está bien solo porque'
+                    . ' ya hay texto ahí — si no es EXACTAMENTE una de estas opciones (ej. "Sí"/"No" sueltos cuando las opciones'
+                    . ' reales son frases más largas), corrígelo a la opción correcta igual que si estuviera vacío.';
             }
             $etiquetasBooleano = $c['etiquetasBooleano'] ?? null;
             if (($c['tipo'] ?? '') === 'booleano' && is_array($etiquetasBooleano)) {
@@ -1448,8 +1451,27 @@ class LlenadoIAController extends BaseController
             // deduce de a qué columna corresponde este nivel, ver columnaIdPorProfundidad en llenarTabla()).
             $colId    = $columnaIdPorProfundidad[$profundidad] ?? null;
             $opciones = $colId !== null ? ($catalogoPorColumna[$colId] ?? null) : null;
-            if (is_array($opciones) && $valorSaneado !== '' && $valorSaneado !== $actual['value']) {
-                $valorSaneado = $this->matchearOpcion($valorSaneado, $opciones, "{$ruta}.value");
+            if (is_array($opciones) && $valorSaneado !== '') {
+                if ($valorSaneado !== $actual['value']) {
+                    // La IA propuso un cambio: si no calza con el catálogo, es un error NUEVO de esta
+                    // respuesta — se rechaza toda la tabla (como antes).
+                    $valorSaneado = $this->matchearOpcion($valorSaneado, $opciones, "{$ruta}.value");
+                } else {
+                    // Bug real encontrado en vivo (08.03.1 "¿Se incluye como parte del PI?"): el valor
+                    // YA VENÍA MAL de antes (placeholder tipo "Sí" en vez de "Se incluye en el PI") y,
+                    // como la IA lo devolvía sin tocar, este chequeo se saltaba SIEMPRE — el catálogo
+                    // nunca llegaba a validarse para esa celda, sin importar cuántas veces se regenerara.
+                    // No corresponde rechazar la tabla entera por algo que la IA no propuso, pero tampoco
+                    // hay que dejarlo pasar en silencio (rompería el VLOOKUP del Excel) — se intenta
+                    // normalizar (acentos/mayúsculas) y, si no calza con nada, se vacía y se avisa.
+                    $canonico = $this->matchearOpcionOpcional($valorSaneado, $opciones);
+                    if ($canonico !== null) {
+                        $valorSaneado = $canonico;
+                    } else {
+                        $advertencias[] = "\"{$ruta}.value\" tenía \"{$valorSaneado}\", que no es una de las opciones válidas (" . implode(' | ', $opciones) . ') — se vació para que lo elijas manualmente.';
+                        $valorSaneado = '';
+                    }
+                }
             }
 
             // Mismo chequeo que la rama de lista de arriba (líneas 810-811), pero para "children" de un
@@ -1505,12 +1527,26 @@ class LlenadoIAController extends BaseController
                 }
                 $resultado = $this->compararForma($valor, $propuesto[$clave], $columnasCalculadas, $ultimaColumnaCalculada, "{$ruta}.{$clave}", $advertencias, $catalogoPorColumna, $columnaIdPorProfundidad, $profundidad, $columnasConSubcolumnas);
 
-                // Solo se valida contra el catálogo cuando la IA de verdad PROPUSO un cambio (si dejó
-                // el valor tal cual, puede que ya viniera mal de antes — eso no es un error nuevo de
-                // esta consulta y no corresponde rechazar la tabla entera por algo que no tocó).
                 $opciones = $catalogoPorColumna[$clave] ?? null;
-                if (is_array($opciones) && is_string($resultado) && $resultado !== '' && $resultado !== $valor) {
-                    $resultado = $this->matchearOpcion($resultado, $opciones, "{$ruta}.{$clave}");
+                if (is_array($opciones) && is_string($resultado) && $resultado !== '') {
+                    if ($resultado !== $valor) {
+                        // La IA propuso un cambio: si no calza con el catálogo, es un error NUEVO de
+                        // esta respuesta — se rechaza toda la tabla (como antes).
+                        $resultado = $this->matchearOpcion($resultado, $opciones, "{$ruta}.{$clave}");
+                    } else {
+                        // Mismo bug que en la rama de árbol de arriba: si el valor YA venía mal de antes
+                        // y la IA lo devuelve sin tocar, este chequeo se saltaba siempre. No corresponde
+                        // rechazar la tabla entera por algo que la IA no propuso, pero tampoco dejarlo
+                        // pasar en silencio — se normaliza si calza (acentos/mayúsculas) o se vacía y se
+                        // avisa.
+                        $canonico = $this->matchearOpcionOpcional($resultado, $opciones);
+                        if ($canonico !== null) {
+                            $resultado = $canonico;
+                        } else {
+                            $advertencias[] = "\"{$ruta}.{$clave}\" tenía \"{$resultado}\", que no es una de las opciones válidas (" . implode(' | ', $opciones) . ') — se vació para que lo elijas manualmente.';
+                            $resultado = '';
+                        }
+                    }
                 }
 
                 $out[$clave] = $resultado;

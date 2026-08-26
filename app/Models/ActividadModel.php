@@ -10,5 +10,5 @@ class ActividadModel extends Model
     protected $primaryKey = 'id';
     protected $returnType = 'array';
 
-    protected $allowedFields = ['mensaje', 'color', 'created_at'];
+    protected $allowedFields = ['mensaje', 'color', 'created_at', 'actor_id', 'objetivo_id', 'categoria'];
 }
