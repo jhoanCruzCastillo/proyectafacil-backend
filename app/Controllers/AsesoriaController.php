@@ -259,6 +259,7 @@ class AsesoriaController extends BaseController
                     (string) $solicitudPrevia['horario_hora_inicio'],
                     (string) $solicitudPrevia['horario_hora_fin'],
                     $this->correosParaInvitar((int) $solicitudPrevia['cliente_id'], $asesorId),
+                    $this->correoAsesor($asesorId),
                 );
             } catch (Throwable $e) {
                 log_message('error', 'GoogleMeetService: no se pudo generar el link de Meet para la solicitud {id}: {msg}', ['id' => $id, 'msg' => $e->getMessage()]);
@@ -399,10 +400,24 @@ class AsesoriaController extends BaseController
         return $this->response->setJSON($this->toDtoSolicitud($this->fila($id)));
     }
 
+    // `visorId` (opcional) = quién está consultando este chat ahora mismo — si viene, marca como
+    // leídos (para el remitente, la segunda palomita) todos los mensajes ajenos que seguían sin
+    // leer. Sin `visorId` (ej. algún caller viejo) simplemente no marca nada, solo lista.
     public function mensajes($solicitudId = null): ResponseInterface
     {
+        $solicitudId = (int) $solicitudId;
+        $visorId     = $this->request->getGet('visorId');
+
+        if ($visorId !== null && $visorId !== '') {
+            db_connect()->table('mensajes_asesoria')
+                ->where('solicitud_id', $solicitudId)
+                ->where('autor_id !=', (int) $visorId)
+                ->where('leido_en', null)
+                ->update(['leido_en' => date('Y-m-d H:i:s')]);
+        }
+
         $filas = db_connect()->table('mensajes_asesoria')
-            ->where('solicitud_id', (int) $solicitudId)
+            ->where('solicitud_id', $solicitudId)
             ->orderBy('created_at', 'ASC')
             ->get()->getResultArray();
 
@@ -530,6 +545,7 @@ class AsesoriaController extends BaseController
             'adjuntoNombre' => $m['adjunto_nombre'] ?? null,
             'adjuntoTipo'   => $m['adjunto_tipo'] ?? null,
             'creadoEn'      => $this->datetimeAIso($m['created_at']),
+            'leidoEn'       => $m['leido_en'] !== null ? $this->datetimeAIso($m['leido_en']) : null,
         ];
     }
 }

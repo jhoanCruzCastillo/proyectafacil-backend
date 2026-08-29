@@ -256,6 +256,7 @@ class TicketsAsesoriaController extends BaseController
                     (string) $solicitud['horario_hora_inicio'],
                     (string) $solicitud['horario_hora_fin'],
                     $this->correosParaInvitar((int) $solicitud['cliente_id'], $asesorId),
+                    $this->correoAsesor($asesorId),
                 );
             } catch (Throwable $e) {
                 log_message('error', 'GoogleMeetService: no se pudo generar el link de Meet para la solicitud {id}: {msg}', ['id' => $id, 'msg' => $e->getMessage()]);

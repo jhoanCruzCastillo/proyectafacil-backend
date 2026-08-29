@@ -6,10 +6,11 @@ use CodeIgniter\Config\BaseConfig;
 
 // Credenciales de la Service Account de Google usada para generar links de Meet reales al
 // aceptar una solicitud de asesoría en videollamada (ver GoogleMeetService). La cuenta tiene
-// domain-wide delegation autorizada en admin.google.com (arkha.tech) solo para el scope de
-// Calendar — puede crear eventos "como si fuera" cualquier usuario del dominio, pero
-// `meetImpersonateEmail` fija cuál usar (una sola cuenta "sistema", no una por asesor: los
-// asesores de la app no son usuarios reales de Workspace).
+// domain-wide delegation autorizada en admin.google.com (arkha.tech) para Calendar y para Meet
+// (lectura + `meetings.space.created`, este último necesario para promover al asesor a co-host)
+// — puede crear eventos "como si fuera" cualquier usuario del dominio, pero `meetImpersonateEmail`
+// fija cuál usar (una sola cuenta "sistema", no una por asesor: los asesores de la app no son
+// usuarios reales de Workspace).
 //
 // En el .env del backend (local, con el archivo de la Service Account en disco):
 //   google.meetServiceAccountKeyPath = writable/credentials/proyectafacil-meet-....json
@@ -31,4 +32,13 @@ class Google extends BaseConfig
 
     /** Cuenta de arkha.tech que "posee" los eventos de Calendar creados — ver nota arriba. */
     public string $meetImpersonateEmail = '';
+
+    // Cómo se comparte el archivo de Drive de la grabación/resumen (ver GoogleMeetService::
+    // compartirGrabacion/compartirPublico y CerrarVideollamadasVencidasCommand). `true` (default
+    // actual, temporal) = "cualquiera con el link" puede verlo, sin login de Google — más simple,
+    // pero el link por sí solo alcanza para acceder si se reenvía. `false` = solo los correos
+    // reales del cliente/asesor de esa solicitud pueden verlo, cada uno con su propia cuenta de
+    // Google. Vive acá como config simple mientras no existe una sección de "Seguridad" en el
+    // panel — cuando exista, ese valor debería venir de ahí en vez de este archivo.
+    public bool $compartirGrabacionPublica = true;
 }

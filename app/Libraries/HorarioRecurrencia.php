@@ -23,6 +23,8 @@ class HorarioRecurrencia
         $objetivo = new DateTimeImmutable($fechaIso);
 
         switch ((string) $regla['tipo_repeticion']) {
+            case 'unica':
+                return $fechaIso === $fechaInicio;
             case 'diaria':
                 return true;
             case 'lunes_a_viernes':
