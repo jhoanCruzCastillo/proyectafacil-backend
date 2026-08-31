@@ -3,8 +3,11 @@
 namespace App\Controllers;
 
 use App\Controllers\Support\SolicitudAsesoriaHelpersTrait;
+use App\Libraries\AdjuntoChatStorage;
 use App\Libraries\CloudinaryUploader;
 use App\Libraries\GoogleMeetService;
+use App\Libraries\S3ObjectStore;
+use App\Libraries\StreamProxy;
 use App\Models\ActividadModel;
 use CodeIgniter\HTTP\ResponseInterface;
 use Throwable;
@@ -472,9 +475,15 @@ class AsesoriaController extends BaseController
         return $this->response->setJSON(array_map([$this, 'toDtoMensaje'], $filas));
     }
 
-    // Sube un adjunto de chat (cualquier tipo de archivo) a Cloudinary y devuelve su URL — el
-    // frontend la usa después en el POST de enviarMensaje(). Separado en dos pasos (subir, luego
-    // enviar) para poder mostrar progreso de subida antes de que el mensaje exista.
+    // Sube un adjunto de chat (cualquier tipo de archivo) y devuelve su URL — el frontend la usa
+    // después en el POST de enviarMensaje(). Separado en dos pasos (subir, luego enviar) para poder
+    // mostrar progreso de subida antes de que el mensaje exista.
+    //
+    // Imágenes siguen yendo a Cloudinary (resource_type=image, sin restricción de entrega — se
+    // muestran inline con <img> directo). Todo lo demás (PDF, Word, ZIP…) va a AdjuntoChatStorage:
+    // Cloudinary bloquea por defecto la entrega pública de raw PDF/ZIP desde 2025 (ver el comentario
+    // en esa clase) — el valor que devuelve acá puede ser `s3:{key}` (no es una URL usable todavía;
+    // toDtoMensaje() la traduce recién cuando ya existe el id del mensaje, ver urlParaCliente()).
     public function subirAdjunto(): ResponseInterface
     {
         $dto     = $this->request->getJSON(true) ?? [];
@@ -487,12 +496,41 @@ class AsesoriaController extends BaseController
         }
 
         try {
-            $url = (new CloudinaryUploader())->subirAdjuntoChat($dataUrl, $nombre, $tipo);
+            $url = str_starts_with($tipo, 'image/')
+                ? (new CloudinaryUploader())->subirAdjuntoChat($dataUrl, $nombre, $tipo)
+                : (new AdjuntoChatStorage())->subirDesdeDataUrl($dataUrl, $nombre, $tipo);
         } catch (Throwable $e) {
             return $this->response->setStatusCode(502)->setJSON(['error' => 'No se pudo subir el archivo: ' . $e->getMessage()]);
         }
 
         return $this->response->setJSON(['url' => $url]);
+    }
+
+    /** Proxy con Bearer del adjunto de un mensaje — ver el comentario en AdjuntoChatStorage. */
+    public function adjuntoMensaje($mensajeId = null): ResponseInterface
+    {
+        $m = db_connect()->table('mensajes_asesoria')->where('id', (int) $mensajeId)->get()->getRowArray();
+        $stored = (string) ($m['adjunto_url'] ?? '');
+        if ($m === null || $stored === '') {
+            return $this->response->setStatusCode(404)->setJSON(['error' => 'Adjunto no encontrado']);
+        }
+
+        $nombre = (string) ($m['adjunto_nombre'] ?? 'archivo');
+        $mime   = (string) ($m['adjunto_tipo'] ?? 'application/octet-stream');
+
+        if (! S3ObjectStore::esStoredS3($stored)) {
+            // Mensaje viejo con URL https de Cloudinary — no debería llegar acá (toDtoMensaje() ya
+            // devuelve la URL directa para ese caso), pero por las dudas se redirige en vez de fallar.
+            return $this->response->redirect($stored);
+        }
+
+        try {
+            $psr = (new S3ObjectStore())->getObjectPsrResponse(S3ObjectStore::claveDe($stored), true);
+        } catch (Throwable $e) {
+            return $this->response->setStatusCode(502)->setJSON(['error' => 'No se pudo obtener el adjunto: ' . $e->getMessage()]);
+        }
+        $len = $psr->getHeaderLine('Content-Length');
+        StreamProxy::pipe($psr->getBody(), $mime, $nombre, $len !== '' ? (int) $len : null);
     }
 
     // Notifica (solicitud_notificaciones + inbox) a todos los asesores elegibles al crear.
@@ -536,12 +574,16 @@ class AsesoriaController extends BaseController
 
     private function toDtoMensaje(array $m): array
     {
+        $adjuntoUrl = $m['adjunto_url'] ?? null;
+
         return [
             'id'            => (string) $m['id'],
             'solicitudId'   => (string) $m['solicitud_id'],
             'autorId'       => (string) $m['autor_id'],
             'texto'         => $m['texto'],
-            'adjuntoUrl'    => $m['adjunto_url'] ?? null,
+            'adjuntoUrl'    => $adjuntoUrl !== null
+                ? (new AdjuntoChatStorage())->urlParaCliente((string) $adjuntoUrl, (string) $m['id'])
+                : null,
             'adjuntoNombre' => $m['adjunto_nombre'] ?? null,
             'adjuntoTipo'   => $m['adjunto_tipo'] ?? null,
             'creadoEn'      => $this->datetimeAIso($m['created_at']),

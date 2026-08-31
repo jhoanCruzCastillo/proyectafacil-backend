@@ -180,6 +180,7 @@ $routes->group('api', ['filter' => 'auth'], static function (RouteCollection $ro
     $routes->get('asesoria/solicitudes/(:num)/mensajes', 'AsesoriaController::mensajes/$1');
     $routes->post('asesoria/solicitudes/(:num)/mensajes', 'AsesoriaController::enviarMensaje/$1');
     $routes->post('asesoria/adjuntos', 'AsesoriaController::subirAdjunto');
+    $routes->get('asesoria/mensajes/(:num)/adjunto', 'AsesoriaController::adjuntoMensaje/$1');
 
     $routes->get('notificaciones', 'NotificacionesController::index');
     $routes->post('notificaciones/(:num)/leida', 'NotificacionesController::marcarLeida/$1');
