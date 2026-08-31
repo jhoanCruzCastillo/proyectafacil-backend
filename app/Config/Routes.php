@@ -133,12 +133,16 @@ $routes->group('api', ['filter' => 'auth'], static function (RouteCollection $ro
     $routes->get('pagos/portal', 'PagosController::portal');
 
     $routes->get('plantillas/(:num)/contextos-ia', 'ContextosIAController::index/$1');
+    $routes->get('plantillas/(:num)/contextos-ia/prompt-sistema-predeterminado', 'ContextosIAController::promptSistemaPredeterminado/$1');
     // Rutas de "generales" van ANTES que el (:segment) genérico de sección: si no, "generales" se
     // interpretaría como un seccionId y nunca llegaría a estos métodos.
     $routes->get('plantillas/(:num)/contextos-ia/generales', 'ContextosIAController::indexGenerales/$1');
     $routes->post('plantillas/(:num)/contextos-ia/generales', 'ContextosIAController::guardarGeneral/$1');
     $routes->put('plantillas/(:num)/contextos-ia/generales/(:num)', 'ContextosIAController::guardarGeneral/$1/$2');
     $routes->delete('plantillas/(:num)/contextos-ia/generales/(:num)', 'ContextosIAController::eliminarGeneral/$1/$2');
+    // "Estructura": qué insumo va en cada paso del armado del prompt de sistema (paso = 1/2/4/5).
+    $routes->post('plantillas/(:num)/contextos-ia/pasos/(:num)', 'ContextosIAController::guardarPaso/$1/$2');
+    $routes->delete('plantillas/(:num)/contextos-ia/pasos-asignaciones/(:num)', 'ContextosIAController::eliminarPaso/$1/$2');
     $routes->put('plantillas/(:num)/contextos-ia/(:segment)', 'ContextosIAController::guardar/$1/$2');
     $routes->delete('plantillas/(:num)/contextos-ia/(:segment)', 'ContextosIAController::eliminar/$1/$2');
     $routes->get('contextos-ia/globales', 'ContextosIAController::indexGlobales');
@@ -176,6 +180,7 @@ $routes->group('api', ['filter' => 'auth'], static function (RouteCollection $ro
     $routes->get('asesoria/solicitudes/(:num)/mensajes', 'AsesoriaController::mensajes/$1');
     $routes->post('asesoria/solicitudes/(:num)/mensajes', 'AsesoriaController::enviarMensaje/$1');
     $routes->post('asesoria/adjuntos', 'AsesoriaController::subirAdjunto');
+    $routes->get('asesoria/mensajes/(:num)/adjunto', 'AsesoriaController::adjuntoMensaje/$1');
 
     $routes->get('notificaciones', 'NotificacionesController::index');
     $routes->post('notificaciones/(:num)/leida', 'NotificacionesController::marcarLeida/$1');

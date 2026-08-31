@@ -53,8 +53,12 @@ class S3ObjectStore
 
     /**
      * Sube un archivo local y devuelve el valor a guardar en `archivos.url` (`s3:key`).
+     *
+     * @param string $mimeOverride Content-Type real (ej. del navegador) — para archivos que no son
+     *                             Excel, mimeDeNombre() solo conoce xlsx/xlsm/xls y cae a
+     *                             octet-stream. Vacío = comportamiento de siempre (adivinar por extensión).
      */
-    public function subirDesdeRuta(string $rutaLocal, string $nombreOriginal, string $carpeta = 'proyecta-facil/excel'): string
+    public function subirDesdeRuta(string $rutaLocal, string $nombreOriginal, string $carpeta = 'proyecta-facil/excel', string $mimeOverride = ''): string
     {
         if (! is_file($rutaLocal)) {
             throw new RuntimeException('Archivo temporal no encontrado para subir a S3');
@@ -63,7 +67,7 @@ class S3ObjectStore
         $safe = preg_replace('/[^A-Za-z0-9._-]+/', '_', $nombreOriginal) ?: 'archivo.xlsx';
         $key  = trim($carpeta, '/') . '/' . date('Ymd') . '_' . bin2hex(random_bytes(6)) . '_' . $safe;
 
-        $this->putObjectFromFile($key, $rutaLocal, $this->mimeDeNombre($nombreOriginal));
+        $this->putObjectFromFile($key, $rutaLocal, $mimeOverride !== '' ? $mimeOverride : $this->mimeDeNombre($nombreOriginal));
 
         return self::STORED_PREFIX . $key;
     }

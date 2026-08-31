@@ -94,18 +94,16 @@ class PagosController extends BaseController
             return $this->response->setStatusCode(422)->setJSON(['error' => 'Este plan todavía no tiene un precio configurado en Stripe']);
         }
 
-        $stripe     = new StripeClient($config->secretKey);
-        $customerId = $this->stripeCustomerIdDe($cuentaId, $stripe);
-
+        $stripe = new StripeClient($config->secretKey);
         $params = [
             'mode'                => $plan['periodicidad'] === 'Único' ? 'payment' : 'subscription',
-            'customer'            => $customerId,
             'line_items'          => [['price' => $plan['stripe_price_id'], 'quantity' => 1]],
             'client_reference_id' => (string) $cuentaId,
             'metadata'            => ['tipo' => 'plan', 'planId' => (string) $plan['id'], 'cuentaId' => (string) $cuentaId],
             'success_url'         => rtrim($config->frontendBaseUrl, '/') . '/?facturacion_checkout=success',
             'cancel_url'          => rtrim($config->frontendBaseUrl, '/') . '/?facturacion_checkout=cancel',
         ];
+        $this->agregarClienteStripe($params, $cuentaId);
 
         try {
             $session = $stripe->checkout->sessions->create($params);
@@ -191,7 +189,6 @@ class PagosController extends BaseController
         }
 
         $stripe      = new StripeClient($config->secretKey);
-        $customerId  = $this->stripeCustomerIdDe($cuentaId, $stripe);
         $facturacion = db_connect()->table('facturaciones')->where('usuario_id', $cuentaId)->get()->getRowArray();
 
         // Recurrente y ya suscrito: se agrega/ajusta directo en la suscripción existente, sin
@@ -210,13 +207,13 @@ class PagosController extends BaseController
 
         $params = [
             'mode'                => $addon['recurrente'] ? 'subscription' : 'payment',
-            'customer'            => $customerId,
             'line_items'          => [['price' => $addon['stripe_price_id'], 'quantity' => $cantidad]],
             'client_reference_id' => (string) $cuentaId,
             'metadata'            => ['tipo' => 'addon', 'addonSlug' => $slug, 'cantidad' => (string) $cantidad, 'cuentaId' => (string) $cuentaId],
             'success_url'         => rtrim($config->frontendBaseUrl, '/') . '/?facturacion_checkout=success',
             'cancel_url'          => rtrim($config->frontendBaseUrl, '/') . '/?facturacion_checkout=cancel',
         ];
+        $this->agregarClienteStripe($params, $cuentaId, $facturacion);
 
         try {
             $session = $stripe->checkout->sessions->create($params);
@@ -361,44 +358,27 @@ class PagosController extends BaseController
         return $this->response->setJSON(['url' => $session->url]);
     }
 
-    // Resuelve el Customer real de Stripe de una cuenta — lo crea la primera vez que hace falta
-    // (lazy) y lo persiste en facturaciones.stripe_customer_id. Si la cuenta todavía no tiene fila
-    // en facturaciones (nunca abrió la pantalla de Facturación), la crea con lo mínimo — sin
-    // inventar un plan pagado, a diferencia de FacturacionController::crearDefault() (que sigue
-    // existiendo para el "estado de muestra" que ve cualquier cuenta nueva antes de comprar algo
-    // real).
-    private function stripeCustomerIdDe(int $cuentaId, StripeClient $stripe): string
+    // Agrega el cliente de Stripe a los parámetros de un Checkout nuevo — SIN escribir nada en
+    // `facturaciones` todavía: hacerlo acá (como antes) le otorgaba un plan real con solo abrir el
+    // Checkout, incluso si la persona nunca llegaba a pagar (bug real, ver conversación). Si ya
+    // existe un `stripe_customer_id` real (de una compra anterior confirmada por webhook()), se
+    // reutiliza ese Customer; si no, se le pasa `customer_email` y es el propio Stripe quien crea
+    // el Customer al completarse el pago — el `id` real llega recién en el evento
+    // `checkout.session.completed`, que es la única fuente de verdad para escribir en `facturaciones`.
+    private function agregarClienteStripe(array &$params, int $cuentaId, ?array $facturacion = null): void
     {
-        $db   = db_connect();
-        $fila = $db->table('facturaciones')->where('usuario_id', $cuentaId)->get()->getRowArray();
-        if ($fila && ! empty($fila['stripe_customer_id'])) {
-            return $fila['stripe_customer_id'];
+        $db = db_connect();
+        $facturacion ??= $db->table('facturaciones')->where('usuario_id', $cuentaId)->get()->getRowArray();
+
+        if ($facturacion && ! empty($facturacion['stripe_customer_id'])) {
+            $params['customer'] = $facturacion['stripe_customer_id'];
+            return;
         }
 
         $usuario = $db->table('usuarios')->select('correo')->where('id', $cuentaId)->get()->getRowArray();
-        $params  = [];
         if (! empty($usuario['correo'])) {
-            $params['email'] = $usuario['correo'];
+            $params['customer_email'] = $usuario['correo'];
         }
-        $customer = $stripe->customers->create($params);
-        $ahora    = date('Y-m-d H:i:s');
-
-        if ($fila) {
-            $db->table('facturaciones')->where('usuario_id', $cuentaId)->update(['stripe_customer_id' => $customer->id, 'updated_at' => $ahora]);
-        } else {
-            $planBase = $db->table('planes')->where('numero_nivel', 1)->get()->getRowArray();
-            $db->table('facturaciones')->insert([
-                'usuario_id'         => $cuentaId,
-                'plan_id'            => $planBase['id'],
-                'cancelada'          => 0,
-                'metodo_pago'        => 'tarjeta',
-                'stripe_customer_id' => $customer->id,
-                'created_at'         => $ahora,
-                'updated_at'         => $ahora,
-            ]);
-        }
-
-        return $customer->id;
     }
 
     // Stripe llama a esto directo (sin sesión, sin CSRF) — la única garantía de que el request es

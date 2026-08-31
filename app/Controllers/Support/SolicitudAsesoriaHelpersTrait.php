@@ -33,6 +33,14 @@ trait SolicitudAsesoriaHelpersTrait
         return array_values(array_filter(array_map(static fn (array $u) => $u['correo'] ?? null, $filas)));
     }
 
+    // Correo del asesor solo (independiente de correosParaInvitar) porque GoogleMeetService lo
+    // necesita aparte, como coHostEmail — no se puede distinguir cuál es el asesor dentro del
+    // array combinado de arriba.
+    private function correoAsesor(int $asesorId): ?string
+    {
+        return db_connect()->table('usuarios')->select('correo')->where('id', $asesorId)->get()->getRowArray()['correo'] ?? null;
+    }
+
     private function notificar(int $usuarioId, string $tipo, string $mensaje, int $solicitudId): void
     {
         db_connect()->table('notificaciones')->insert([
@@ -148,10 +156,13 @@ trait SolicitudAsesoriaHelpersTrait
             'horarioHoraFin'    => $s['horario_hora_fin'] !== null ? substr((string) $s['horario_hora_fin'], 0, 5) : null,
             'slaVenceEn'     => $s['sla_vence_en'] !== null ? $this->datetimeAIso($s['sla_vence_en']) : null,
             'linkReunion'    => $s['link_reunion'],
+            'linkGrabacion'  => $s['link_grabacion'] ?? null,
+            'resumenIaTexto' => $s['resumen_ia_texto'] ?? null,
             'calificacion'   => $s['calificacion'] !== null ? (int) $s['calificacion'] : null,
             'calificacionComentario' => $s['calificacion_comentario'] ?? null,
             'creadoEn'       => $this->datetimeAIso($s['created_at']),
             'actualizadoEn'  => $s['updated_at'] !== null ? $this->datetimeAIso($s['updated_at']) : null,
+            'completadoEn'   => ($s['completado_en'] ?? null) !== null ? $this->datetimeAIso($s['completado_en']) : null,
         ];
     }
 

@@ -4,11 +4,11 @@ namespace App\Controllers;
 
 use App\Libraries\ExcelStorage;
 use App\Libraries\S3ObjectStore;
+use App\Libraries\StreamProxy;
 use App\Models\ArchivoModel;
 use App\Models\PlantillaModel;
 use CodeIgniter\HTTP\ResponseInterface;
 use GuzzleHttp\Client;
-use Psr\Http\Message\StreamInterface;
 use Throwable;
 
 // Espejo de ArchivosExcelApi/CatalogoExcelPlantilla en frontend/src/types/index.ts. El campo
@@ -100,13 +100,7 @@ class ArchivosController extends BaseController
             if (S3ObjectStore::esStoredS3($stored)) {
                 $psr = (new S3ObjectStore())->getObjectPsrResponse(S3ObjectStore::claveDe($stored), true);
                 $len = $psr->getHeaderLine('Content-Length');
-
-                return $this->pipeStreamAlCliente(
-                    $psr->getBody(),
-                    $mime,
-                    $nombre,
-                    $len !== '' ? (int) $len : null,
-                );
+                StreamProxy::pipe($psr->getBody(), $mime, $nombre, $len !== '' ? (int) $len : null);
             }
 
             if (preg_match('#^https?://#i', $stored)) {
@@ -115,64 +109,13 @@ class ArchivosController extends BaseController
                     return $this->response->setStatusCode(502)->setJSON(['error' => 'No se pudo obtener el Excel remoto']);
                 }
                 $len = $remote->getHeaderLine('Content-Length');
-
-                return $this->pipeStreamAlCliente(
-                    $remote->getBody(),
-                    $mime,
-                    $nombre,
-                    $len !== '' ? (int) $len : null,
-                );
+                StreamProxy::pipe($remote->getBody(), $mime, $nombre, $len !== '' ? (int) $len : null);
             }
         } catch (Throwable $e) {
             return $this->response->setStatusCode(502)->setJSON(['error' => ExcelStorage::mensajeErrorAmigable($e)]);
         }
 
         return $this->response->setStatusCode(400)->setJSON(['error' => 'URL de archivo no reconocida']);
-    }
-
-    /**
-     * Escribe el stream al cliente a trozos (sin cargar el Excel entero en memoria de PHP).
-     * Sale del ciclo de Response de CI4 a propósito: si bufferizáramos el body, el % saltaría 0→100.
-     */
-    private function pipeStreamAlCliente(StreamInterface $stream, string $mime, string $nombre, ?int $length): ResponseInterface
-    {
-        while (ob_get_level() > 0) {
-            ob_end_clean();
-        }
-        @ini_set('zlib.output_compression', '0');
-        @ini_set('output_buffering', '0');
-
-        $safeName = str_replace(['"', "\r", "\n"], '', $nombre);
-
-        header('Content-Type: ' . $mime);
-        if ($length !== null && $length > 0) {
-            header('Content-Length: ' . $length);
-        }
-        header('Content-Disposition: inline; filename="' . $safeName . '"');
-        header('Cache-Control: private, max-age=300');
-        header('X-Accel-Buffering: no');
-        header('Connection: close');
-
-        // Fuerza el envío de cabeceras antes del primer trozo (php spark serve / CGI).
-        if (function_exists('fastcgi_finish_request') === false) {
-            flush();
-        }
-
-        $chunk = 64 * 1024;
-        while (! $stream->eof()) {
-            $data = $stream->read($chunk);
-            if ($data === '') {
-                break;
-            }
-            echo $data;
-            if (ob_get_level() > 0) {
-                ob_flush();
-            }
-            flush();
-        }
-        $stream->close();
-
-        exit;
     }
 
     private function mimeDeNombre(string $nombre): string

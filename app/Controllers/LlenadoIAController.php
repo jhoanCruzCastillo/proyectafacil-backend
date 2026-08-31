@@ -24,6 +24,44 @@ class LlenadoIAController extends BaseController
     // {lat,lng} en vez de texto plano — ambos quedan fuera igual que tabla/calculado/imagen/firma.
     private const TIPOS_EXCLUIDOS = ['calculado', 'tabla', 'tabla_jerarquica', 'imagen', 'firma', 'mapa_coordenadas', 'nota'];
 
+    // Nombre reservado en `contextos_ia_globales` para la frase de rol — antes vivía hardcodeada acá
+    // mismo, duplicada en construirSistema() y construirSistemaTabla(). Se movió a un global editable
+    // porque es pura prosa de encuadre (nadie la parsea con código) — a diferencia del contrato JSON
+    // de salida, que se queda hardcodeado porque normalizarPropuesta()/procesarRespuestaChatOpenAI()
+    // dependen literalmente de esa forma exacta (ver rolAsistente() y el fallback de abajo).
+    private const NOMBRE_ROL_ASISTENTE = 'Rol del asistente de IA';
+    private const ROL_ASISTENTE_FALLBACK = 'Eres un asistente experto en formulación de proyectos de '
+        . 'inversión pública del Perú (Invierte.pe) que llena fichas técnicas oficiales del MEF a '
+        . 'partir de la información real de un proyecto.';
+
+    // Nombre reservado en `contextos_ia_general` (mismo valor que NOMBRE_PROMPT_SISTEMA en el
+    // frontend, frontend/src/features/editor/contextosIaNombres.ts). Bug real encontrado en vivo
+    // (2026-08-30): contextosGeneralesDe() traía ESTA fila igual que cualquier otro "general" —
+    // terminaba pegada en el prompt real como "Contexto general de esta ficha — Prompt del
+    // sistema:", en la posición donde le tocara alfabéticamente/por orden de BD, no al inicio como
+    // su propio pilar (con chip "Universal") sugiere. Se excluye de contextosGeneralesDe() y se
+    // busca aparte con promptDelSistemaDe(), para ponerla en su lugar real: justo después del rol.
+    private const NOMBRE_PROMPT_SISTEMA = 'Prompt del sistema';
+
+    /**
+     * Nombre reservado en `contextos_ia_globales` para las reglas de llenado (mismo valor que
+     * NOMBRE_REGLAS_LLENADO en el frontend, frontend/src/features/editor/contextosIaNombres.ts). Se
+     * usa como fallback de reglasLlenado() cuando el admin todavía no asignó ningún insumo al paso 4
+     * desde la pestaña "Estructura" (ver insumosPaso()).
+     */
+    private const NOMBRE_REGLAS_LLENADO = 'Reglas de llenado automático con IA';
+
+    /**
+     * Pasos del armado del prompt de sistema que el admin puede reconfigurar desde la pestaña
+     * "Estructura" del panel Contextos IA (tabla `contextos_ia_pasos`): 1=rol, 2=prompt del sistema,
+     * 4=reglas de llenado, 5=contexto general. El ORDEN/FLUJO de los 8 pasos sigue fijo en
+     * construirSistema()/construirSistemaTabla() — lo único configurable es QUÉ insumo puntual llena
+     * cada uno de estos 4 pasos, no la secuencia en sí. Los pasos 3 (contrato JSON, fijo en código),
+     * 6 (fuente de la verdad, la manda el cliente) y 7/8 (bloque variable de sección, se editan desde
+     * "Guías por sección") quedan fuera de esta tabla a propósito — nunca son insumo-asignables.
+     */
+    private const PASOS_ASIGNABLES = [1, 2, 4, 5];
+
     /**
      * Tablas que son de solo-fórmula (el Excel las calcula solas) y por lo tanto no se ofrecen para
      * llenado con IA vía llenarTabla() — lista hardcodeada por `plantilla.codigo` porque el JSON de
@@ -114,7 +152,9 @@ class LlenadoIAController extends BaseController
             return $this->response->setStatusCode(400)->setJSON(['error' => 'Carga al menos un documento o escribe información del proyecto antes de llenar con IA']);
         }
 
-        $reglas     = $this->contenidoGlobalPorNombre('Reglas de llenado automático con IA');
+        $rol           = $this->rolAsistente($plantillaId);
+        $promptSistema = $this->promptDelSistemaDe($plantillaId);
+        $reglas     = $this->reglasLlenado($plantillaId);
         $generales  = $this->contextosGeneralesDe($plantillaId);
         $referencia = $this->valoresEjemploReferencia($plantillaId);
         // Snapshot de lo que YA está confirmado en la ficha (de una corrida anterior, o de secciones
@@ -142,7 +182,7 @@ class LlenadoIAController extends BaseController
             }
 
             $contextoSeccion = $this->contextoDeSeccion($plantillaId, (string) $seccion['id']);
-            $sistema = $this->construirSistema($reglas, $generales, $contextoSeccion, $fuenteVerdad);
+            $sistema = $this->construirSistema($rol, $promptSistema, $reglas, $generales, $contextoSeccion, $fuenteVerdad);
             $idsSeccion = array_column($campos, 'identificador');
             $referenciaSeccion = array_intersect_key($referencia, array_flip($idsSeccion));
             // Nunca los propios campos de esta sección: eso es justo lo que se le está pidiendo
@@ -314,7 +354,9 @@ class LlenadoIAController extends BaseController
             return $this->response->setStatusCode(400)->setJSON(['error' => 'Carga al menos un documento o escribe información del proyecto antes de llenar con IA']);
         }
 
-        $reglas          = $this->contenidoGlobalPorNombre('Reglas de llenado automático con IA');
+        $rol             = $this->rolAsistente($plantillaId);
+        $promptSistema   = $this->promptDelSistemaDe($plantillaId);
+        $reglas          = $this->reglasLlenado($plantillaId);
         $generales       = $this->contextosGeneralesDe($plantillaId);
         $contextoSeccion = $this->contextoDeSeccion($plantillaId, $seccionId);
 
@@ -349,7 +391,7 @@ class LlenadoIAController extends BaseController
         // guía es lo que ayuda al modelo a no mezclar una causa de una rama con la indirecta de otra.
         $contextoAdicional = trim((string) ($body['contextoAdicional'] ?? ''));
 
-        $sistema = $this->construirSistemaTabla($reglas, $generales, $contextoSeccion, $fuenteVerdad);
+        $sistema = $this->construirSistemaTabla($rol, $promptSistema, $reglas, $generales, $contextoSeccion, $fuenteVerdad);
         $usuario = $this->construirPromptTabla($campo, $subtipo, $agrupador, $columnas, $valorActual, $opcionesPorColumna, $contextoAdicional, $valorReferencia, $otrasSeccionesConfirmadas);
 
         // Cambiado a OpenAI (2026-08-19, usar créditos de OpenAI en vez de Anthropic) —
@@ -454,7 +496,9 @@ class LlenadoIAController extends BaseController
             return $this->response->setStatusCode(404)->setJSON(['error' => 'Sección no encontrada']);
         }
 
-        $reglas          = $this->contenidoGlobalPorNombre('Reglas de llenado automático con IA');
+        $rol             = $this->rolAsistente($plantillaId);
+        $promptSistema   = $this->promptDelSistemaDe($plantillaId);
+        $reglas          = $this->reglasLlenado($plantillaId);
         $generales       = $this->contextosGeneralesDe($plantillaId);
         $contextoSeccion = $this->contextoDeSeccion($plantillaId, $seccionId);
         $referencia      = $this->valoresEjemploReferencia($plantillaId);
@@ -469,7 +513,7 @@ class LlenadoIAController extends BaseController
 
         $campos            = $this->camposLlenables($seccion);
         $referenciaSeccion = array_intersect_key($referencia, array_flip(array_column($campos, 'identificador')));
-        $sistemaSeccion    = $this->construirSistema($reglas, $generales, $contextoSeccion, $fuenteVerdad);
+        $sistemaSeccion    = $this->construirSistema($rol, $promptSistema, $reglas, $generales, $contextoSeccion, $fuenteVerdad);
         $usuarioSeccion    = $this->construirPromptSeccion((string) $seccion['id'], (string) $seccion['nombre'], $campos, $referenciaSeccion);
 
         $tablas = [];
@@ -496,7 +540,7 @@ class LlenadoIAController extends BaseController
                     }
                 }
 
-                $sistemaTabla = $this->construirSistemaTabla($reglas, $generales, $contextoSeccion, $fuenteVerdad);
+                $sistemaTabla = $this->construirSistemaTabla($rol, $promptSistema, $reglas, $generales, $contextoSeccion, $fuenteVerdad);
                 $usuarioTabla = $this->construirPromptTabla($campo, $subtipo, $agrupador, $columnas, $valorActual, [], '', $valorReferenciaTabla);
 
                 $tablas[] = [
@@ -570,7 +614,9 @@ class LlenadoIAController extends BaseController
             return $this->response->setStatusCode(400)->setJSON(['error' => 'Carga al menos un documento o escribe información del proyecto antes de llenar con IA']);
         }
 
-        $reglas         = $this->contenidoGlobalPorNombre('Reglas de llenado automático con IA');
+        $rol            = $this->rolAsistente($plantillaId);
+        $promptSistema  = $this->promptDelSistemaDe($plantillaId);
+        $reglas         = $this->reglasLlenado($plantillaId);
         $generales      = $this->contextosGeneralesDe($plantillaId);
         $referencia     = $this->valoresEjemploReferencia($plantillaId);
         $yaConfirmados  = $this->valoresYaConfirmados($ejemploId);
@@ -592,7 +638,7 @@ class LlenadoIAController extends BaseController
 
             if ($campos !== []) {
                 $contextoSeccion = $this->contextoDeSeccion($plantillaId, $seccionId);
-                $sistema         = $this->construirSistema($reglas, $generales, $contextoSeccion, $fuenteVerdad);
+                $sistema         = $this->construirSistema($rol, $promptSistema, $reglas, $generales, $contextoSeccion, $fuenteVerdad);
                 $idsSeccion      = array_column($campos, 'identificador');
                 $referenciaSeccion = array_intersect_key($referencia, array_flip($idsSeccion));
                 // A diferencia de llenarFicha() síncrono, $yaConfirmados NO se va actualizando sección
@@ -644,7 +690,7 @@ class LlenadoIAController extends BaseController
                     }
 
                     $contextoSeccionTabla = $this->contextoDeSeccion($plantillaId, $seccionId);
-                    $sistemaTabla = $this->construirSistemaTabla($reglas, $generales, $contextoSeccionTabla, $fuenteVerdad);
+                    $sistemaTabla = $this->construirSistemaTabla($rol, $promptSistema, $reglas, $generales, $contextoSeccionTabla, $fuenteVerdad);
 
                     $valorReferencia = null;
                     $refCrudo = $referencia[$identificador] ?? null;
@@ -700,6 +746,14 @@ class LlenadoIAController extends BaseController
         if ($fileId === null) {
             return $this->response->setStatusCode(502)->setJSON(['error' => 'No se pudo preparar el lote para la IA. Intenta de nuevo.']);
         }
+        // El upload devuelve 200 antes de que el archivo esté listo del lado de OpenAI para usarse en
+        // un batch — crear el batch inmediatamente después a veces referencia un archivo que su propio
+        // backend todavía no puede leer, y el batch termina en 'failed' varios segundos después con
+        // "Cannot find file... or organization does not have access to it" (reproducido en vivo:
+        // 2/2 intentos con un lote chico de 1 sola sección, created_at→failed_at ~30-70s después,
+        // siempre sobre el archivo que se acababa de subir). Confirmado con GET /v1/files/{id}: el
+        // archivo SÍ llega a status 'processed', solo que no de inmediato — hay que esperarlo.
+        $this->esperarArchivoListoOpenAI($config, $fileId);
         $batchId = $this->crearLoteOpenAI($config, $fileId);
         if ($batchId === null) {
             return $this->response->setStatusCode(502)->setJSON(['error' => 'No se pudo enviar el lote a la IA. Intenta de nuevo.']);
@@ -768,6 +822,33 @@ class LlenadoIAController extends BaseController
             $motivo = $estadoOpenAI === 'failed'
                 ? json_encode($estadoBatch['errors'] ?? null, JSON_UNESCAPED_UNICODE)
                 : "estado de OpenAI: {$estadoOpenAI}";
+
+            // Error transitorio real, reproducido en vivo (2026-08-30): el batch recién creado falla
+            // porque el worker que lo procesa todavía no puede leer el archivo recién subido, aunque
+            // GET /v1/files/{id} ya lo muestre 'processed' — un desfase de propagación interno de
+            // OpenAI que esperarArchivoListoOpenAI() no alcanza a cubrir del todo. El archivo en sí
+            // está bien (no hace falta volver a subirlo) — alcanza con crear un batch NUEVO apuntando
+            // al mismo file_id. Máximo 2 reintentos para no quedar reintentando para siempre si el
+            // motivo real es otro.
+            $esArchivoNoEncontrado = $estadoOpenAI === 'failed'
+                && str_contains($motivo, 'Cannot find file')
+                && (int) $lote['reintentos'] < 2
+                && ! empty($lote['openai_file_id']);
+            if ($esArchivoNoEncontrado) {
+                $nuevoBatchId = $this->crearLoteOpenAI($config, $lote['openai_file_id']);
+                if ($nuevoBatchId !== null) {
+                    $loteModel->update($loteId, [
+                        'openai_batch_id' => $nuevoBatchId,
+                        'reintentos'      => (int) $lote['reintentos'] + 1,
+                    ]);
+                    log_message('warning', '[llenado-ia-lote] Lote {loteId}: batch {batchViejo} falló por archivo no encontrado (reintento {n}) — se creó un batch nuevo {batchNuevo} con el mismo archivo.', [
+                        'loteId' => $loteId, 'batchViejo' => $lote['openai_batch_id'], 'n' => (int) $lote['reintentos'] + 1, 'batchNuevo' => $nuevoBatchId,
+                    ]);
+
+                    return $this->response->setJSON(['estado' => 'procesando']);
+                }
+            }
+
             $loteModel->update($loteId, ['estado' => 'error', 'error' => $motivo]);
             log_message('error', '[llenado-ia-lote] Lote {loteId} (batch {batchId}) terminó en {estado}: {motivo}', [
                 'loteId' => $loteId, 'batchId' => $lote['openai_batch_id'], 'estado' => $estadoOpenAI, 'motivo' => $motivo,
@@ -1018,6 +1099,37 @@ class LlenadoIAController extends BaseController
         return is_string($json['id'] ?? null) ? $json['id'] : null;
     }
 
+    /**
+     * Espera a que un archivo recién subido llegue a `status: 'processed'` antes de referenciarlo en
+     * un batch — ver el comentario en enviarLoteFicha() para el bug real que esto evita. Máximo ~10s
+     * de espera (20 intentos × 500ms); si se agota el tiempo sin confirmar, sigue igual (mejor
+     * intentarlo que no intentarlo — el batch fallará limpio más tarde si de verdad no está listo, y
+     * eso ya lo maneja estadoLoteFicha()).
+     */
+    private function esperarArchivoListoOpenAI(object $config, string $fileId): void
+    {
+        for ($intento = 0; $intento < 20; $intento++) {
+            $ch = curl_init("https://api.openai.com/v1/files/{$fileId}");
+            curl_setopt_array($ch, [
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_HTTPHEADER     => ['authorization: Bearer ' . $config->openaiApiKey],
+                CURLOPT_TIMEOUT        => 10,
+            ]);
+            $cuerpo = curl_exec($ch);
+            $estado = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+
+            if ($cuerpo !== false && $estado >= 200 && $estado < 300) {
+                $json = json_decode((string) $cuerpo, true);
+                if (($json['status'] ?? null) === 'processed') {
+                    return;
+                }
+            }
+            usleep(500_000);
+        }
+        log_message('warning', '[llenado-ia-lote] Archivo {fileId} no confirmó status "processed" tras ~10s de espera — se crea el batch igual.', ['fileId' => $fileId]);
+    }
+
     /** Crea el batch job en OpenAI a partir de un file_id ya subido. Devuelve el batch_id, o null si falló. */
     private function crearLoteOpenAI(object $config, string $fileId): ?string
     {
@@ -1203,10 +1315,14 @@ class LlenadoIAController extends BaseController
      *
      * @return array{cacheable: string, variable: string}
      */
-    private function construirSistemaTabla(string $reglas, array $generales, array $contextoSeccion, string $fuenteVerdad): array
+    private function construirSistemaTabla(string $rol, string $promptSistema, string $reglas, array $generales, array $contextoSeccion, string $fuenteVerdad): array
     {
+        $partes = [$rol];
+        if ($promptSistema !== '') {
+            $partes[] = $promptSistema;
+        }
         $partes = [
-            'Eres un asistente experto en formulación de proyectos de inversión pública del Perú (Invierte.pe) que llena fichas técnicas oficiales del MEF a partir de la información real de un proyecto.',
+            ...$partes,
             'Vas a llenar UNA tabla de la ficha. Respondes SIEMPRE con un único objeto JSON válido (sin markdown, sin texto fuera del JSON): {"valor": <estructura>, "fuente": "<breve descripción de dónde salió la información, ej. nombre del documento y qué parte>"}.',
             'La forma de "valor" debe calzar EXACTAMENTE con la tabla actual que te muestran en el mensaje de usuario: mismas claves en cada fila/objeto, mismo número de filas/bloques/nodos. Nunca agregues ni quites filas, columnas o niveles — solo cambias los valores de las celdas.',
             'Si no hay evidencia en la fuente de la verdad para una celda, déjala como cadena vacía "" — no inventes datos.',
@@ -1731,12 +1847,111 @@ class LlenadoIAController extends BaseController
         return $fila ? $this->contenidoDeUrl($fila['url'] ?? null) : '';
     }
 
-    /** Contextos generales de la ficha (aplican a todas las secciones) — nombre => texto. */
+    /**
+     * Insumos que el admin asignó explícitamente a un paso desde la pestaña "Estructura" (tabla
+     * `contextos_ia_pasos`), en el orden en que los agregó. '' si nunca se editó `insumo_id` de un
+     * insumo borrado (fila huérfana) se ignora en vez de reventar. Vacío ([]) significa "el admin
+     * todavía no tocó este paso" — cada llamador cae a su comportamiento de siempre en ese caso (ver
+     * rolAsistente/promptDelSistemaDe/reglasLlenado/contextosGeneralesDe).
+     *
+     * @return list<array{nombre: string, texto: string}>
+     */
+    private function insumosPaso(int $plantillaId, int $paso): array
+    {
+        $filas = db_connect()->table('contextos_ia_pasos')
+            ->where('plantilla_id', $plantillaId)
+            ->where('paso', $paso)
+            ->orderBy('orden', 'ASC')
+            ->get()->getResultArray();
+        if ($filas === []) {
+            return [];
+        }
+
+        $idsGeneral = array_column(array_filter($filas, static fn (array $f): bool => $f['tipo_insumo'] === 'general'), 'insumo_id');
+        $idsGlobal  = array_column(array_filter($filas, static fn (array $f): bool => $f['tipo_insumo'] === 'global'), 'insumo_id');
+        $generales  = $idsGeneral !== [] ? db_connect()->table('contextos_ia_general')->whereIn('id', $idsGeneral)->get()->getResultArray() : [];
+        $globales   = $idsGlobal !== [] ? db_connect()->table('contextos_ia_globales')->whereIn('id', $idsGlobal)->get()->getResultArray() : [];
+        $porId      = ['general' => array_column($generales, null, 'id'), 'global' => array_column($globales, null, 'id')];
+
+        $out = [];
+        foreach ($filas as $f) {
+            $insumo = $porId[$f['tipo_insumo']][$f['insumo_id']] ?? null;
+            if ($insumo === null) {
+                continue; // insumo borrado después de asignarlo — fila huérfana, se ignora
+            }
+            $texto = $this->contenidoDeUrl($insumo['url'] ?? null);
+            if ($texto !== '') {
+                $out[] = ['nombre' => $insumo['nombre'], 'texto' => $texto];
+            }
+        }
+
+        return $out;
+    }
+
+    /** Une los insumos asignados a un paso en un solo bloque de texto — sin etiquetar si es uno solo
+     * (mismo texto que antes, cuando el paso era un único lookup por nombre reservado), con el
+     * nombre de cada insumo como encabezado si el admin asignó más de uno. */
+    private function concatenarInsumos(array $insumos): string
+    {
+        if (count($insumos) === 1) {
+            return $insumos[0]['texto'];
+        }
+
+        return implode("\n\n", array_map(
+            static fn (array $i): string => "— {$i['nombre']}:\n{$i['texto']}",
+            $insumos,
+        ));
+    }
+
+    /** Rol fijo — desde "Estructura" (paso 1) si el admin asignó algo, si no cae a "Reglas globales"
+     * por nombre reservado, y si tampoco existe esa fila (o está vacía) a un texto de respaldo
+     * hardcodeado (nunca se rompe el llenado por un global mal borrado ni por un paso sin configurar). */
+    private function rolAsistente(int $plantillaId): string
+    {
+        $asignados = $this->insumosPaso($plantillaId, 1);
+        if ($asignados !== []) {
+            return $this->concatenarInsumos($asignados);
+        }
+
+        $texto = $this->contenidoGlobalPorNombre(self::NOMBRE_ROL_ASISTENTE);
+
+        return $texto !== '' ? $texto : self::ROL_ASISTENTE_FALLBACK;
+    }
+
+    /** Reglas de llenado automático — desde "Estructura" (paso 4) si el admin asignó algo, si no cae
+     * a "Reglas globales" por nombre reservado (comportamiento de siempre). */
+    private function reglasLlenado(int $plantillaId): string
+    {
+        $asignados = $this->insumosPaso($plantillaId, 4);
+        if ($asignados !== []) {
+            return $this->concatenarInsumos($asignados);
+        }
+
+        return $this->contenidoGlobalPorNombre(self::NOMBRE_REGLAS_LLENADO);
+    }
+
+    /** Contextos generales de la ficha (aplican a todas las secciones) — nombre => texto. Desde
+     * "Estructura" (paso 5) si el admin asignó algo puntual; si no, cae al comportamiento de siempre:
+     * TODOS los generales de la plantilla, excepto NOMBRE_PROMPT_SISTEMA (esa fila tiene su propio
+     * lugar dedicado, ver promptDelSistemaDe()) — no debe mezclarse acá como "un general más". */
     private function contextosGeneralesDe(int $plantillaId): array
     {
+        $asignados = $this->insumosPaso($plantillaId, 5);
+        if ($asignados !== []) {
+            $out = [];
+            foreach ($asignados as $a) {
+                $out[$a['nombre']] = $a['texto'];
+            }
+
+            return $out;
+        }
+
         $filas = db_connect()->table('contextos_ia_general')->where('plantilla_id', $plantillaId)->get()->getResultArray();
         $out   = [];
         foreach ($filas as $g) {
+            if ($g['nombre'] === self::NOMBRE_PROMPT_SISTEMA) {
+                continue;
+            }
             $texto = $this->contenidoDeUrl($g['url'] ?? null);
             if ($texto !== '') {
                 $out[$g['nombre']] = $texto;
@@ -1744,6 +1959,25 @@ class LlenadoIAController extends BaseController
         }
 
         return $out;
+    }
+
+    /** Contenido de "Prompt del sistema" — desde "Estructura" (paso 2) si el admin asignó algo, si no
+     * cae al comportamiento de siempre: la fila reservada NOMBRE_PROMPT_SISTEMA de esta ficha
+     * puntual. Separado de contextosGeneralesDe() para que vaya en su propio lugar del prompt (justo
+     * después del rol), no mezclado como un "general" más. '' si no hay nada configurado. */
+    private function promptDelSistemaDe(int $plantillaId): string
+    {
+        $asignados = $this->insumosPaso($plantillaId, 2);
+        if ($asignados !== []) {
+            return $this->concatenarInsumos($asignados);
+        }
+
+        $fila = db_connect()->table('contextos_ia_general')
+            ->where('plantilla_id', $plantillaId)
+            ->where('nombre', self::NOMBRE_PROMPT_SISTEMA)
+            ->get()->getRowArray();
+
+        return $fila ? $this->contenidoDeUrl($fila['url'] ?? null) : '';
     }
 
     /** Contexto propio de la sección + sus globales asociados (mismo criterio que AsistenteIAController). */
@@ -1792,19 +2026,22 @@ class LlenadoIAController extends BaseController
      *
      * @return array{cacheable: string, variable: string}
      */
-    private function construirSistema(string $reglas, array $generales, array $contextoSeccion, string $fuenteVerdad): array
+    private function construirSistema(string $rol, string $promptSistema, string $reglas, array $generales, array $contextoSeccion, string $fuenteVerdad): array
     {
-        $partes = [
-            'Eres un asistente experto en formulación de proyectos de inversión pública del Perú (Invierte.pe) que llena fichas técnicas oficiales del MEF a partir de la información real de un proyecto.',
-            'Respondes SIEMPRE con un único objeto JSON válido (sin markdown). Contrato de salida de ESTA llamada:',
-            // Mismo enum de estados que acepta normalizarPropuesta() y que usa el "Prompt del
-            // sistema" sembrado (contexto general) — desincronizados antes: ese contrato listaba
-            // "calculado" como estado válido y este no, aunque el parser ya lo soportaba.
-            '{"seccion_id":"<id>","campos":[{"id":"<identificador>","valor_propuesto":"<texto o null>","estado":"extraido|inferido|requiere_confirmacion|no_encontrado|conflictivo|calculado","confianza":0.0,"fuente":"...","evidencia":"..."}]}',
-            'Usa exactamente los identificadores de campo que te pasan en el mensaje de usuario. No inventes ids.',
-            'Si un campo no tiene evidencia en la fuente de la verdad: estado "no_encontrado" y valor_propuesto null. No inventes datos.',
-            'Si la evidencia es explícita en los documentos (p. ej. "Nivel de gobierno: Gobierno Local"), marca estado "extraido" y copia el valor.',
-        ];
+        $partes = [$rol];
+        // "Prompt del sistema" (pilar 1, chip "Universal") va justo después del rol — antes vivía
+        // mezclado dentro de $generales como "un contexto general más" (ver NOMBRE_PROMPT_SISTEMA
+        // arriba), lo que lo dejaba en la posición que le tocara según el orden de la BD (en un caso
+        // real terminó último de 5, no primero).
+        if ($promptSistema !== '') {
+            $partes[] = $promptSistema;
+        }
+        $partes[] = 'Respondes SIEMPRE con un único objeto JSON válido (sin markdown). Contrato de salida de ESTA llamada:';
+        // Mismo enum de estados que acepta normalizarPropuesta().
+        $partes[] = '{"seccion_id":"<id>","campos":[{"id":"<identificador>","valor_propuesto":"<texto o null>","estado":"extraido|inferido|requiere_confirmacion|no_encontrado|conflictivo|calculado","confianza":0.0,"fuente":"...","evidencia":"..."}]}';
+        $partes[] = 'Usa exactamente los identificadores de campo que te pasan en el mensaje de usuario. No inventes ids.';
+        $partes[] = 'Si un campo no tiene evidencia en la fuente de la verdad: estado "no_encontrado" y valor_propuesto null. No inventes datos.';
+        $partes[] = 'Si la evidencia es explícita en los documentos (p. ej. "Nivel de gobierno: Gobierno Local"), marca estado "extraido" y copia el valor.';
         if ($reglas !== '') {
             $partes[] = "Reglas de llenado automático:\n{$reglas}";
         }

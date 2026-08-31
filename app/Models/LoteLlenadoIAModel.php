@@ -12,6 +12,6 @@ class LoteLlenadoIAModel extends Model
     protected $useTimestamps = true;
 
     protected $allowedFields = [
-        'ejemplo_id', 'openai_batch_id', 'openai_file_id', 'estado', 'mapeo_json', 'resultado_json', 'error',
+        'ejemplo_id', 'openai_batch_id', 'openai_file_id', 'estado', 'mapeo_json', 'resultado_json', 'error', 'reintentos',
     ];
 }
