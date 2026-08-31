@@ -58,6 +58,7 @@ class DeployDemoCompletoSeeder extends Seeder
             ContextosIACuidadoDiurnoSeeder::class,
             ContextoGeneralCuidadoDiurnoSeeder::class,
             PromptSistemaCuidadoDiurnoSeeder::class,
+            ContextosIAPasosCuidadoDiurnoSeeder::class,
             CorregirEspaciosInfraestructuraCuidadoDiurnoSeeder::class,
             AnotarOpcionesIncluidoPIEnTabla0803Seeder::class,
             CorregirTiposCostosAlternativa1Seeder::class,
