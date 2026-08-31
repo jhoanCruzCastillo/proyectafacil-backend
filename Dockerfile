@@ -43,11 +43,17 @@ RUN { \
 # notably log_errors=Off, which meant fatal errors vanished silently (no stderr, no error_log,
 # nothing) instead of surfacing anywhere. Also raise memory_limit; CI4's bootstrap (autoloader +
 # full route/config discovery) can be tight against the 128M compiled-in default.
+# upload_max_filesize/post_max_size default to 2M/8M — silently truncates any multipart upload
+# (Excel, chat attachments) bigger than that (empty $_FILES, no exception) unless raised here too;
+# matches the client_max_body_size raised in frontend/nginx.conf.template for the same reason.
 RUN { \
         echo 'log_errors = On'; \
         echo 'error_log = /dev/stderr'; \
         echo 'display_errors = Off'; \
         echo 'memory_limit = 256M'; \
+        echo 'upload_max_filesize = 60M'; \
+        echo 'post_max_size = 60M'; \
+        echo 'max_execution_time = 120'; \
     } > /usr/local/etc/php/conf.d/proyecta-facil.ini
 
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
