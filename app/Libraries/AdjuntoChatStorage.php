@@ -26,16 +26,29 @@ class AdjuntoChatStorage
         return S3ObjectStore::estaConfigurado();
     }
 
-    /** Sube desde data URI. Devuelve el valor a guardar en `mensajes_asesoria.adjunto_url`. */
-    public function subirDesdeDataUrl(string $dataUrl, string $nombreOriginal, string $mimeTipo): string
+    /**
+     * Sube desde un archivo ya en disco (multipart — preferido, no infla ~33 % como base64 ni
+     * obliga a tener el archivo entero en memoria de PHP para decodificarlo).
+     * Devuelve el valor a guardar en `mensajes_asesoria.adjunto_url`.
+     */
+    public function subirDesdeRuta(string $rutaLocal, string $nombreOriginal, string $mimeTipo): string
     {
         if (! $this->usarS3()) {
-            return (new CloudinaryUploader())->subirAdjuntoChat($dataUrl, $nombreOriginal, $mimeTipo);
+            return (new CloudinaryUploader())->subirAdjuntoChat($rutaLocal, $nombreOriginal, $mimeTipo);
         }
 
+        return (new S3ObjectStore())->subirDesdeRuta($rutaLocal, $nombreOriginal, self::CARPETA, $mimeTipo);
+    }
+
+    /**
+     * Compat: sube desde data URI (JSON, sin multipart) — decodifica a un temporal primero.
+     * Devuelve el valor a guardar en `mensajes_asesoria.adjunto_url`.
+     */
+    public function subirDesdeDataUrl(string $dataUrl, string $nombreOriginal, string $mimeTipo): string
+    {
         $tmp = $this->materializarATemp($dataUrl, $nombreOriginal);
         try {
-            return (new S3ObjectStore())->subirDesdeRuta($tmp, $nombreOriginal, self::CARPETA, $mimeTipo);
+            return $this->subirDesdeRuta($tmp, $nombreOriginal, $mimeTipo);
         } finally {
             @unlink($tmp);
         }
