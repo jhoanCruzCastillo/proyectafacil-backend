@@ -484,26 +484,40 @@ class AsesoriaController extends BaseController
     // Cloudinary bloquea por defecto la entrega pública de raw PDF/ZIP desde 2025 (ver el comentario
     // en esa clase) — el valor que devuelve acá puede ser `s3:{key}` (no es una URL usable todavía;
     // toDtoMensaje() la traduce recién cuando ya existe el id del mensaje, ver urlParaCliente()).
+    //
+    // Preferido: multipart binario (campo "archivo") — encontrado en vivo (2026-08-31) que un PDF
+    // real mandado como data URI en JSON (~33 % más pesado que el archivo + todo bufferizado en
+    // memoria de PHP de una sola vez) terminaba en net::ERR_HTTP2_PROTOCOL_ERROR en el navegador.
+    // Compat: JSON con dataUrl se mantiene por si algo más lo sigue usando.
     public function subirAdjunto(): ResponseInterface
     {
-        $dto     = $this->request->getJSON(true) ?? [];
-        $dataUrl = (string) ($dto['dataUrl'] ?? '');
-        $nombre  = (string) ($dto['nombre'] ?? 'archivo');
-        $tipo    = (string) ($dto['tipo'] ?? 'application/octet-stream');
-
-        if ($dataUrl === '') {
-            return $this->response->setStatusCode(400)->setJSON(['error' => 'Falta el archivo (dataUrl)']);
-        }
-
         try {
+            $file = $this->request->getFile('archivo');
+            if ($file && $file->isValid() && ! $file->hasMoved()) {
+                $nombre = $file->getClientName() ?: 'archivo';
+                $tipo   = $file->getClientMimeType() ?: 'application/octet-stream';
+                $url    = str_starts_with($tipo, 'image/')
+                    ? (new CloudinaryUploader())->subirAdjuntoChat($file->getTempName(), $nombre, $tipo)
+                    : (new AdjuntoChatStorage())->subirDesdeRuta($file->getTempName(), $nombre, $tipo);
+
+                return $this->response->setJSON(['url' => $url]);
+            }
+
+            $dto     = $this->request->getJSON(true) ?? [];
+            $dataUrl = (string) ($dto['dataUrl'] ?? '');
+            $nombre  = (string) ($dto['nombre'] ?? 'archivo');
+            $tipo    = (string) ($dto['tipo'] ?? 'application/octet-stream');
+            if ($dataUrl === '') {
+                return $this->response->setStatusCode(400)->setJSON(['error' => 'Falta el archivo (campo multipart "archivo" o dataUrl)']);
+            }
             $url = str_starts_with($tipo, 'image/')
                 ? (new CloudinaryUploader())->subirAdjuntoChat($dataUrl, $nombre, $tipo)
                 : (new AdjuntoChatStorage())->subirDesdeDataUrl($dataUrl, $nombre, $tipo);
+
+            return $this->response->setJSON(['url' => $url]);
         } catch (Throwable $e) {
             return $this->response->setStatusCode(502)->setJSON(['error' => 'No se pudo subir el archivo: ' . $e->getMessage()]);
         }
-
-        return $this->response->setJSON(['url' => $url]);
     }
 
     /** Proxy con Bearer del adjunto de un mensaje — ver el comentario en AdjuntoChatStorage. */
