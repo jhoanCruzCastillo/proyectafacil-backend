@@ -27,7 +27,7 @@ class LimpiarBaseDatosSeeder extends Seeder
         'contextos_ia_general', 'contextos_ia_pasos',
         'horarios_docente', 'horario_excepciones_docente', 'asesor_especialidades', 'asesor_subtemas',
         'subtemas_especialidad', 'mensajes_asesoria', 'solicitud_notificaciones',
-        'notificaciones', 'tickets_consulta', 'solicitudes_asesoria', 'configuracion_sla',
+        'notificaciones', 'tickets_consulta', 'solicitudes_asesoria', 'configuracion_sla', 'configuracion_videoconferencia',
         'fuente_verdad_archivos', 'llenado_ia_lotes', 'sesiones',
         'beneficios', 'cuenta_beneficios', 'cliente_intereses',
         'usuarios', 'sectores',

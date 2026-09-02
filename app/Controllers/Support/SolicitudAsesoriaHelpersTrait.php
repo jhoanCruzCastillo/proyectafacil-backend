@@ -53,6 +53,23 @@ trait SolicitudAsesoriaHelpersTrait
         ]);
     }
 
+    // Difunde a TODO el equipo Administrativo de Asesorías (Módulo 4) — a diferencia de
+    // asesoresPorSector/asesoresPorHorario (elegibilidad para TOMAR el ticket), acá siempre son
+    // todos los administrativo_asesorias activos, sin filtro de horario/especialidad: pedido
+    // explícito del usuario de que el administrativo se entere de pendientes/agendados/completados.
+    private function notificarAdministrativos(string $tipo, string $mensaje, int $solicitudId): void
+    {
+        $admins = db_connect()->table('usuarios')
+            ->select('id')
+            ->where('rol', 'administrativo_asesorias')
+            ->where('estado', 'activo')
+            ->get()->getResultArray();
+
+        foreach ($admins as $a) {
+            $this->notificar((int) $a['id'], $tipo, $mensaje, $solicitudId);
+        }
+    }
+
     // Chat: por especialidad de sector + toggle 'disponible'. Video: solo quienes marcaron ESE
     // horario exacto como disponible (docs §4 Fase 2).
     private function asesoresPorSector(?int $sectorId): array
@@ -106,6 +123,15 @@ trait SolicitudAsesoriaHelpersTrait
         $segundos = $tipo === 'video' ? $minutos * 60 : $horas * 3600;
 
         return date('Y-m-d H:i:s', time() + $segundos);
+    }
+
+    // 'abierta' | 'invitados' — ver GoogleMeetService::crearLinkReunion() para qué hace cada valor
+    // del lado de Meet. Configurable desde "Configuración de videollamadas" en el Administrativo.
+    private function tipoAccesoVideollamada(): string
+    {
+        $config = db_connect()->table('configuracion_videoconferencia')->get()->getRowArray();
+
+        return $config['tipo_acceso'] ?? 'abierta';
     }
 
     private function conSegundos(string $horaHM): string
@@ -279,7 +305,9 @@ trait SolicitudAsesoriaHelpersTrait
             // llegó" solo porque el nombre no calzó, se cae a comparar a las dos personas reales
             // que sí se conectaron — lo que de verdad define "Completado" es que dos personas
             // distintas coincidieron conectadas en la franja acordada, no cuál nombre tenía cada una.
-            [$sesionesCliente, $sesionesAsesor] = $this->dosParticipantesConMasSuperposicion($porNombre);
+            $par             = $this->dosParticipantesConMasSuperposicion($porNombre);
+            $sesionesCliente = $par['sesionesA'];
+            $sesionesAsesor  = $par['sesionesB'];
         }
 
         $superposicion      = $this->calcularSuperposicion($sesionesCliente, $sesionesAsesor);
@@ -303,6 +331,10 @@ trait SolicitudAsesoriaHelpersTrait
         if ($nuevoEstado === 'completado') {
             $this->consumirTicket((int) $solicitud['id']);
             $this->notificar((int) $solicitud['cliente_id'], 'solicitud_completada', 'Tu asesoría fue marcada como completada — cuéntanos cómo estuvo', (int) $solicitud['id']);
+            if ($solicitud['docente_id'] !== null) {
+                $this->notificar((int) $solicitud['docente_id'], 'solicitud_completada', 'Tu asesoría fue marcada como completada', (int) $solicitud['id']);
+            }
+            $this->notificarAdministrativos('solicitud_completada', "La asesoría #{$solicitud['id']} fue marcada como completada", (int) $solicitud['id']);
             // Resuelto "bajo demanda" (ver comentario de la clase) — puede correr en la request de
             // cualquiera que consulte la lista después (cliente, docente o el admin de Módulo 4), así
             // que el actor se toma de la propia solicitud, nunca de session().
@@ -334,18 +366,25 @@ trait SolicitudAsesoriaHelpersTrait
      * "compara a los dos que entraron". Sin al menos 2 participantes distintos no hay par que
      * comparar (nadie más entró aparte de, como mucho, una persona).
      *
+     * Devuelve también los índices ganadores dentro de `$porNombre` (no solo las sesiones) — lo
+     * necesita TicketsAsesoriaController::historialConexion() para saber cuáles de los participantes
+     * reales ya quedaron representados como alumno/asesor y armar la lista de "Desconocidos" con el
+     * resto (cualquiera más que haya entrado — posible desde que el acceso a la reunión es abierto).
+     *
      * @param array<int, array{nombre: string, sesiones: array}> $porNombre
-     * @return array{0: array, 1: array}
+     * @return array{sesionesA: array, sesionesB: array, indiceA: int|null, indiceB: int|null}
      */
     private function dosParticipantesConMasSuperposicion(array $porNombre): array
     {
         if (count($porNombre) < 2) {
-            return [[], []];
+            return ['sesionesA' => [], 'sesionesB' => [], 'indiceA' => null, 'indiceB' => null];
         }
 
         $mejorSegundos  = -1;
         $mejorA         = [];
         $mejorB         = [];
+        $indiceA        = null;
+        $indiceB        = null;
         foreach ($porNombre as $i => $a) {
             foreach ($porNombre as $j => $b) {
                 if ($j <= $i) {
@@ -356,11 +395,13 @@ trait SolicitudAsesoriaHelpersTrait
                     $mejorSegundos = $sup['segundos'];
                     $mejorA        = $a['sesiones'];
                     $mejorB        = $b['sesiones'];
+                    $indiceA       = $i;
+                    $indiceB       = $j;
                 }
             }
         }
 
-        return [$mejorA, $mejorB];
+        return ['sesionesA' => $mejorA, 'sesionesB' => $mejorB, 'indiceA' => $indiceA, 'indiceB' => $indiceB];
     }
 
     // Aplana dos listas de sesiones {entrada, salida} (ISO, pueden venir en cualquier orden y con

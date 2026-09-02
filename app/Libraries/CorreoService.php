@@ -51,6 +51,17 @@ class CorreoService
         $this->enviar($correo, $asunto, $cuerpo);
     }
 
+    /** @throws \RuntimeException si el correo no se pudo enviar */
+    public function enviarRecordatorioVideollamada(string $correo, string $nombre, string $horaInicio, string $linkReunion): void
+    {
+        $asunto = 'Tu videollamada empieza en 5 minutos — Proyecta Fácil';
+        $cuerpo = "Hola {$nombre},\n\n"
+            . "Tu asesoría por videollamada está por empezar, a las {$horaInicio}.\n\n"
+            . "Únete desde este enlace:\n{$linkReunion}\n";
+
+        $this->enviar($correo, $asunto, $cuerpo);
+    }
+
     private function enviar(string $correo, string $asunto, string $cuerpo): void
     {
         $this->mailer->clear(true);

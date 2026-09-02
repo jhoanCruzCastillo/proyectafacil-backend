@@ -20,6 +20,7 @@ use Google\Service\Meet;
 use Google\Service\Meet\ArtifactConfig;
 use Google\Service\Meet\EndActiveConferenceRequest;
 use Google\Service\Meet\Recording;
+use Google\Service\Meet\RecordingConfig;
 use Google\Service\Meet\SmartNote;
 use Google\Service\Meet\SmartNotesConfig;
 use Google\Service\Meet\Space;
@@ -117,17 +118,34 @@ class GoogleMeetService
      * poder admitir gente desde la sala de espera y grabar sin ser usuario de arkha.tech — ver
      * asignarCoHost() (confirmado funcionando en vivo). Es un paso adicional al link/evento (que ya
      * funciona sin esto) y se trata como no crítico: si por algún motivo falla, la reunión igual se
-     * crea y se devuelve el link, solo sin la promoción automática a co-host.
+     * crea y se devuelve el link, solo sin la promoción automática a co-host. Esto también es lo
+     * que dispara la grabación automática de abajo: Meet solo graba sola cuando se une alguien con
+     * privilegio de grabar, y ese privilegio lo da el rol de co-anfitrión.
+     *
+     * `$tipoAcceso` viene de configuracion_videoconferencia (ver
+     * SolicitudAsesoriaHelpersTrait::tipoAccesoVideollamada(), configurable desde "Configuración de
+     * videollamadas" en el Administrativo) — 'abierta' = cualquiera con el link entra directo, sin
+     * tocar la puerta ni necesitar estar logueado con el correo exacto invitado; 'invitados' = solo
+     * los invitados directos entran sin tocar la puerta, el resto queda en la sala de espera hasta
+     * que el asesor lo admita.
      */
-    public function crearLinkReunion(string $titulo, string $horarioFecha, string $horaInicio, string $horaFin, array $attendeeEmails = [], ?string $coHostEmail = null): string
+    public function crearLinkReunion(string $titulo, string $horarioFecha, string $horaInicio, string $horaFin, array $attendeeEmails = [], ?string $coHostEmail = null, string $tipoAcceso = 'abierta'): string
     {
-        // El resumen de Gemini se pide ya en la creación del espacio — no hace falta un patch
-        // aparte después (que tampoco funcionaría si el espacio fuera de Calendar, ver arriba).
+        // El resumen de Gemini y la grabación se piden ya en la creación del espacio — no hace
+        // falta un patch aparte después (que tampoco funcionaría si el espacio fuera de Calendar,
+        // ver arriba). autoRecordingGeneration=ON graba en cuanto se une alguien con privilegio de
+        // grabar (el co-anfitrión, ver asignarCoHost() más abajo) — antes de esto, había que
+        // activarla a mano desde el panel de Meet en cada reunión.
+        $accessType = $tipoAcceso === 'invitados' ? SpaceConfig::ACCESS_TYPE_TRUSTED : SpaceConfig::ACCESS_TYPE_OPEN;
         $space = $this->meet->spaces->create(new Space([
             'config' => new SpaceConfig([
+                'accessType' => $accessType,
                 'artifactConfig' => new ArtifactConfig([
                     'smartNotesConfig' => new SmartNotesConfig([
                         'autoSmartNotesGeneration' => SmartNotesConfig::AUTO_SMART_NOTES_GENERATION_ON,
+                    ]),
+                    'recordingConfig' => new RecordingConfig([
+                        'autoRecordingGeneration' => RecordingConfig::AUTO_RECORDING_GENERATION_ON,
                     ]),
                 ]),
             ]),
@@ -297,6 +315,45 @@ class GoogleMeetService
         }
 
         return null;
+    }
+
+    /**
+     * Todas las grabaciones asociadas al link (no solo la primera lista) — un mismo link de Meet
+     * puede terminar con más de una si, por ejemplo, la reunión se cortó y se reanudó, generando
+     * más de un `conferenceRecord`, o si hubo más de una sesión de grabación dentro de la misma
+     * llamada. A diferencia de grabacionLista(), esto incluye también las que todavía se están
+     * procesando (`state` distinto de `FILE_GENERATED`) — el llamador decide qué mostrar mientras
+     * tanto, en vez de que queden invisibles hasta que Google termine.
+     *
+     * @return array<int, array{url: ?string, fileId: ?string, estado: string, inicio: ?string, fin: ?string}>
+     */
+    public function grabacionesListadas(string $meetingCode): array
+    {
+        $registros = $this->meet->conferenceRecords->listConferenceRecords([
+            'filter' => sprintf('space.meeting_code = "%s"', $meetingCode),
+        ])->getConferenceRecords() ?? [];
+
+        $resultado = [];
+        foreach ($registros as $registro) {
+            $grabaciones = $this->meet->conferenceRecords_recordings
+                ->listConferenceRecordsRecordings($registro->getName())
+                ->getRecordings() ?? [];
+
+            foreach ($grabaciones as $grabacion) {
+                $destino = $grabacion->getDriveDestination();
+                $resultado[] = [
+                    'url'     => $destino?->getExportUri(),
+                    'fileId'  => $destino?->getFile(),
+                    'estado'  => (string) $grabacion->getState(),
+                    'inicio'  => $grabacion->getStartTime(),
+                    'fin'     => $grabacion->getEndTime(),
+                ];
+            }
+        }
+
+        usort($resultado, static fn (array $a, array $b) => strcmp((string) $a['inicio'], (string) $b['inicio']));
+
+        return $resultado;
     }
 
     /**

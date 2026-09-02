@@ -117,50 +117,90 @@ class TicketsAsesoriaController extends BaseController
         }
 
         // El nombre que da Meet es el de la cuenta de Google real que entró (puede ser cualquier
-        // cosa: apodo, cuenta personal distinta al nombre registrado) — nunca se muestra tal cual.
-        // Se empareja por nombre contra el cliente/asesor de este ticket cuando calza; si no calza
-        // con uno de los dos (o ninguno), se cae al mismo criterio que evaluarAsistenciaReal: la
-        // pareja de participantes reales con mayor superposición entre sí. En cualquier caso, lo
-        // que se muestra siempre es la identidad conocida en la plataforma (nombre + correo
-        // configurado), no el nombre que reportó Google.
+        // cosa: apodo, cuenta personal distinta al nombre registrado) — se empareja por nombre
+        // contra el cliente/asesor de este ticket cuando calza exacto; si no calza con ninguno de
+        // los dos, se muestra tal cual como "Desconocido" con su nombre real de Meet. A propósito
+        // SIN el fallback de "pareja con mayor superposición" que usa evaluarAsistenciaReal (ese es
+        // para decidir completado/observado, un problema distinto) — usarlo acá terminaba
+        // reetiquetando a cualquier cuenta no reconocida con la identidad (¡y el correo!) del
+        // alumno o asesor registrado, mostrando datos falsos en vez de honestamente "no sé quién
+        // es". Confirmado en vivo: con acceso abierto, cualquiera puede entrar con una cuenta que no
+        // calza con nada — mostrar su identidad real (aunque sea solo el nombre) es más útil y más
+        // correcto que adivinar.
         $normalizar      = static fn (string $s) => mb_strtolower(trim($s));
         $sesionesCliente = [];
         $sesionesAsesor  = [];
+        $participantes   = [];
         foreach ($porNombre as $p) {
             if ($normalizar($p['nombre']) === $normalizar($fila['cliente_nombre'])) {
                 $sesionesCliente = array_merge($sesionesCliente, $p['sesiones']);
+                $participantes[] = [
+                    'nombre'   => $fila['cliente_nombre'],
+                    'correo'   => $fila['cliente_correo'] ?? null,
+                    'rol'      => 'Alumno',
+                    'fotoUrl'  => $fila['cliente_foto_url'] ?? null,
+                    'sesiones' => $p['sesiones'],
+                ];
             } elseif ($fila['docente_nombre'] && $normalizar($p['nombre']) === $normalizar($fila['docente_nombre'])) {
-                $sesionesAsesor = array_merge($sesionesAsesor, $p['sesiones']);
+                $sesionesAsesor  = array_merge($sesionesAsesor, $p['sesiones']);
+                $participantes[] = [
+                    'nombre'   => $fila['docente_nombre'],
+                    'correo'   => $fila['docente_correo'] ?? null,
+                    'rol'      => 'Docente',
+                    'fotoUrl'  => $fila['docente_foto_url'] ?? null,
+                    'sesiones' => $p['sesiones'],
+                ];
+            } else {
+                // Meet no expone correo ni foto de alguien no registrado en la plataforma, solo el
+                // nombre de su cuenta de Google y sus horarios de conexión reales.
+                $participantes[] = [
+                    'nombre'   => $p['nombre'],
+                    'correo'   => null,
+                    'rol'      => 'Desconocido',
+                    'fotoUrl'  => null,
+                    'sesiones' => $p['sesiones'],
+                ];
             }
-        }
-        if ($sesionesCliente === [] || $sesionesAsesor === []) {
-            [$sesionesCliente, $sesionesAsesor] = $this->dosParticipantesConMasSuperposicion($porNombre);
-        }
-
-        $participantes = [];
-        if ($sesionesCliente !== []) {
-            $participantes[] = [
-                'nombre'   => $fila['cliente_nombre'],
-                'correo'   => $fila['cliente_correo'] ?? null,
-                'rol'      => 'Alumno',
-                'fotoUrl'  => $fila['cliente_foto_url'] ?? null,
-                'sesiones' => $sesionesCliente,
-            ];
-        }
-        if ($sesionesAsesor !== [] && $fila['docente_nombre']) {
-            $participantes[] = [
-                'nombre'   => $fila['docente_nombre'],
-                'correo'   => $fila['docente_correo'] ?? null,
-                'rol'      => 'Docente',
-                'fotoUrl'  => $fila['docente_foto_url'] ?? null,
-                'sesiones' => $sesionesAsesor,
-            ];
         }
 
         return $this->response->setJSON([
             'participantes'             => $participantes,
             'tiempoCoincidenteSegundos' => $this->calcularSuperposicion($sesionesCliente, $sesionesAsesor)['segundos'],
         ]);
+    }
+
+    // Todas las grabaciones asociadas al link de Meet de esta solicitud — a diferencia del único
+    // `link_grabacion` que queda guardado en la fila (la primera que Google terminó de procesar,
+    // ver CerrarVideollamadasVencidasCommand), esto consulta la Meet API en vivo y devuelve TODAS,
+    // incluidas las que todavía se están procesando — pedido explícito del usuario para mostrar la
+    // lista completa en el panel, no solo la primera.
+    public function grabaciones($id = null): ResponseInterface
+    {
+        $id   = (int) $id;
+        $fila = db_connect()->table('solicitudes_asesoria')->select('tipo, link_reunion')->where('id', $id)->get()->getRowArray();
+
+        if (! $fila || $fila['tipo'] !== 'video' || empty($fila['link_reunion'])) {
+            return $this->response->setJSON([]);
+        }
+        if (! preg_match('#meet\.google\.com/([a-z]+-[a-z]+-[a-z]+)#', (string) $fila['link_reunion'], $m)) {
+            return $this->response->setJSON([]);
+        }
+
+        try {
+            $grabaciones = (new GoogleMeetService())->grabacionesListadas($m[1]);
+        } catch (Throwable $e) {
+            log_message('error', 'GoogleMeetService::grabacionesListadas falló para la solicitud {id}: {msg}', ['id' => $id, 'msg' => $e->getMessage()]);
+
+            return $this->response->setJSON([]);
+        }
+
+        return $this->response->setJSON(array_map(static fn (array $g) => [
+            'url'    => $g['url'],
+            'fileId' => $g['fileId'],
+            'estado' => $g['estado'],
+            'inicio' => $g['inicio'],
+            'fin'    => $g['fin'],
+        ], $grabaciones));
     }
 
     // Elegibles AHORA (no al momento del broadcast — la disponibilidad pudo cambiar) para la
@@ -257,6 +297,7 @@ class TicketsAsesoriaController extends BaseController
                     (string) $solicitud['horario_hora_fin'],
                     $this->correosParaInvitar((int) $solicitud['cliente_id'], $asesorId),
                     $this->correoAsesor($asesorId),
+                    $this->tipoAccesoVideollamada(),
                 );
             } catch (Throwable $e) {
                 log_message('error', 'GoogleMeetService: no se pudo generar el link de Meet para la solicitud {id}: {msg}', ['id' => $id, 'msg' => $e->getMessage()]);
@@ -274,6 +315,7 @@ class TicketsAsesoriaController extends BaseController
 
         $this->notificar($asesorId, 'nueva_solicitud_asesoria', 'Un administrativo te asignó una solicitud de asesoría', $id);
         $this->notificar((int) $solicitud['cliente_id'], 'solicitud_aceptada', 'Tu solicitud de asesoría fue aceptada', $id);
+        $this->notificarAdministrativos('solicitud_aceptada', "La solicitud #{$id} fue asignada", $id);
 
         return $this->response->setJSON($this->toDtoSolicitud($this->fila($id)));
     }
@@ -608,5 +650,52 @@ class TicketsAsesoriaController extends BaseController
             'vigenciaHorarioDias'          => (int) $fila['vigencia_horario_dias'],
             'cancelacionLimiteMinutos'     => $fila['cancelacion_limite_minutos'] !== null ? (int) $fila['cancelacion_limite_minutos'] : null,
         ];
+    }
+
+    // Espejo del botón "Completar" del asesor (AsesoriaController::completarVideo) pero para el
+    // Administrativo — pedido explícito del usuario para poder cerrar una videollamada agendada
+    // desde el panel de admin sin depender de que el propio asesor lo haga. Misma verificación real
+    // de asistencia vía Meet API (resolverAsistenciaManual, trait compartido) — nunca marca
+    // "completado" a ciegas solo porque un admin apretó el botón.
+    public function completarVideo($id = null): ResponseInterface
+    {
+        $id        = (int) $id;
+        $solicitud = $this->fila($id);
+        if (! $solicitud || $solicitud['tipo'] !== 'video' || $solicitud['estado'] !== 'agendado') {
+            return $this->response->setStatusCode(422)->setJSON(['error' => 'Esta solicitud no se puede completar']);
+        }
+
+        $resultado = $this->resolverAsistenciaManual($solicitud);
+        if ($resultado['estado'] === 'agendado') {
+            return $this->response->setStatusCode(422)->setJSON(['error' => 'Todavía no se puede completar esta asesoría. Espera a que termine el horario agendado (con su margen de salida) e inténtalo de nuevo.']);
+        }
+
+        return $this->response->setJSON($this->toDtoSolicitud($resultado));
+    }
+
+    public function configuracionVideoconferencia(): ResponseInterface
+    {
+        $fila = db_connect()->table('configuracion_videoconferencia')->get()->getRowArray();
+
+        return $this->response->setJSON(['tipoAcceso' => $fila['tipo_acceso'] ?? 'abierta']);
+    }
+
+    // Solo afecta a las asesorías en video que se agenden DE ACÁ EN ADELANTE — ver
+    // GoogleMeetService::crearLinkReunion(), el link/espacio de Meet de una asesoría ya agendada no
+    // se vuelve a tocar.
+    public function actualizarConfiguracionVideoconferencia(): ResponseInterface
+    {
+        $dto        = $this->request->getJSON(true) ?? [];
+        $tipoAcceso = $dto['tipoAcceso'] ?? null;
+
+        if (! in_array($tipoAcceso, ['abierta', 'invitados'], true)) {
+            return $this->response->setStatusCode(422)->setJSON(['error' => 'tipoAcceso debe ser "abierta" o "invitados"']);
+        }
+
+        $db   = db_connect();
+        $fila = $db->table('configuracion_videoconferencia')->get()->getRowArray();
+        $db->table('configuracion_videoconferencia')->where('id', $fila['id'])->update(['tipo_acceso' => $tipoAcceso]);
+
+        return $this->response->setJSON(['tipoAcceso' => $tipoAcceso]);
     }
 }
