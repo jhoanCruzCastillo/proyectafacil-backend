@@ -207,6 +207,7 @@ class AsesoriaController extends BaseController
         ]);
 
         $this->broadcast((int) $id, $tipo, $sectorId, $horarioFecha, $horarioHoraInicio, $horarioHoraFin);
+        $this->notificarAdministrativos('nueva_solicitud_asesoria', 'Nueva solicitud de asesoría pendiente de asignar', (int) $id);
 
         (new ActividadModel())->insert([
             'mensaje'    => 'Reservó una sesión de asesoría',
@@ -263,6 +264,7 @@ class AsesoriaController extends BaseController
                     (string) $solicitudPrevia['horario_hora_fin'],
                     $this->correosParaInvitar((int) $solicitudPrevia['cliente_id'], $asesorId),
                     $this->correoAsesor($asesorId),
+                    $this->tipoAccesoVideollamada(),
                 );
             } catch (Throwable $e) {
                 log_message('error', 'GoogleMeetService: no se pudo generar el link de Meet para la solicitud {id}: {msg}', ['id' => $id, 'msg' => $e->getMessage()]);
@@ -289,6 +291,7 @@ class AsesoriaController extends BaseController
 
         $solicitud = $this->fila($id);
         $this->notificar((int) $solicitud['cliente_id'], 'solicitud_aceptada', 'Tu solicitud de asesoría fue aceptada', $id);
+        $this->notificarAdministrativos('solicitud_aceptada', "Un asesor aceptó la solicitud #{$id}", $id);
 
         return $this->response->setJSON($this->toDtoSolicitud($solicitud));
     }
@@ -332,6 +335,7 @@ class AsesoriaController extends BaseController
         $solicitud = $this->fila($id);
         if ($solicitud) {
             $this->notificar((int) $solicitud['cliente_id'], 'solicitud_completada', 'Tu asesoría fue marcada como completada — cuéntanos cómo estuvo', $id);
+            $this->notificarAdministrativos('solicitud_completada', "La asesoría #{$id} fue marcada como completada", $id);
         }
 
         return $this->response->setJSON($this->toDtoSolicitud($solicitud));
