@@ -165,6 +165,30 @@ class CloudinaryUploader
     }
 
     /**
+     * PDF de referencia adjunto a "Contexto general" de una plantilla (panel Contextos IA) — NO es
+     * un insumo del prompt, solo un archivo que el admin guarda para otro uso fuera del llenado con
+     * IA. Recibe la ruta local del temporal subido (multipart), igual que subirExcelDesdeRuta.
+     *
+     * @return string URL segura (https) del archivo subido
+     */
+    public function subirArchivoContexto(string $rutaLocal, string $nombreOriginal): string
+    {
+        if (! is_file($rutaLocal)) {
+            throw new RuntimeException('Archivo temporal no encontrado para subir a Cloudinary');
+        }
+
+        $resultado = $this->uploadApi->upload($rutaLocal, [
+            'resource_type'      => 'raw',
+            'folder'             => 'proyecta-facil/contextos-ia-archivos',
+            'use_filename'       => true,
+            'unique_filename'    => true,
+            'filename_override'  => $nombreOriginal,
+        ]);
+
+        return (string) $resultado['secure_url'];
+    }
+
+    /**
      * Adjunto de chat de asesoría — cualquier tipo de archivo, como un chat real. Imágenes suben
      * como resource_type=image (para poder mostrarlas inline); todo lo demás como raw.
      *
