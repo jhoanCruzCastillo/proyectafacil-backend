@@ -162,6 +162,9 @@ class LlenadoIAController extends BaseController
         // que si en un solo lote se llenan varias secciones seguidas, la última ve lo que propusieron
         // las anteriores — no solo lo que ya estaba antes de apretar el botón.
         $yaConfirmados = $this->valoresYaConfirmados($ejemploId);
+        // Snapshot INMUTABLE de antes de este run — para el historial de cambios (ver
+        // registrarHistorialAutocompletado más abajo). $yaConfirmados se sigue mutando en el loop.
+        $valoresAntes = $yaConfirmados;
 
         $valoresFinal      = [];
         $estadosFinal      = [];
@@ -170,12 +173,19 @@ class LlenadoIAController extends BaseController
         $resumenPorSeccion = [];
         $idsAfectados      = [];
         $costoTotalUsd     = 0.0;
+        // "Ayúdame a llenar/verificar el campo X" del chat (AsistenteIAController) ya registra el
+        // historial cuando el usuario confirma manualmente un valor — este llenado de TODA la ficha
+        // persiste directo al servidor (ver guardarValores más abajo, nunca pasa por
+        // HistorialCambiosController::registrar del frontend), así que hay que registrarlo acá para
+        // que "Historial de cambios" muestre estas filas como "Autocompletó" / "IA del sistema".
+        $historialEntradas = [];
 
         foreach ($secciones as $seccion) {
             $campos = $this->camposLlenables($seccion);
             if ($campos === []) {
                 continue;
             }
+            $camposPorId = array_column($campos, null, 'identificador');
 
             foreach ($campos as $c) {
                 $idsAfectados[(string) $c['identificador']] = true;
@@ -233,6 +243,17 @@ class LlenadoIAController extends BaseController
                     }
                     $valoresFinal[$identificador] = $texto;
                     $yaConfirmados[$identificador] = $texto; // visible para las secciones siguientes de este mismo run
+                    $valorAntes = (string) ($valoresAntes[$identificador] ?? '');
+                    if ($valorAntes !== $texto) {
+                        $historialEntradas[] = [
+                            'identificador'  => $identificador,
+                            'etiqueta'       => (string) ($camposPorId[$identificador]['etiqueta'] ?? $identificador),
+                            'valorAnterior'  => $valorAntes,
+                            'valorNuevo'     => $texto,
+                            'seccionNumero'  => (string) ($seccion['numero'] ?? ''),
+                            'seccionNombre'  => (string) ($seccion['nombre'] ?? ''),
+                        ];
+                    }
                     if (isset($propuesta['estados'][$identificador])) {
                         $estadosFinal[$identificador] = $propuesta['estados'][$identificador];
                     }
@@ -256,6 +277,7 @@ class LlenadoIAController extends BaseController
         }
 
         $this->guardarValores($ejemploId, $valoresFinal, $fuentesFinal, $parcial ? array_keys($idsAfectados) : null);
+        $this->registrarHistorialAutocompletado($ejemploId, $historialEntradas);
 
         return $this->response->setJSON([
             'valores'       => (object) $valoresFinal,
@@ -2104,6 +2126,50 @@ class LlenadoIAController extends BaseController
         }
 
         return implode("\n", $lineas);
+    }
+
+    /**
+     * Registra en historial_cambios/historial_cambio_campos los campos que el llenado automático
+     * de TODA la ficha propuso y difieren de lo que ya había — ver el comentario en llenarFicha()
+     * sobre por qué hace falta acá y no alcanza con el registro que hace el frontend en
+     * HistorialCambiosController::registrar() al guardar a mano.
+     *
+     * @param list<array{identificador:string,etiqueta:string,valorAnterior:string,valorNuevo:string,seccionNumero:string,seccionNombre:string}> $entradas
+     */
+    private function registrarHistorialAutocompletado(int $ejemploId, array $entradas): void
+    {
+        if ($entradas === []) {
+            return;
+        }
+        $usuarioId = (int) (session()->get('usuario_id') ?? 0);
+        if ($usuarioId === 0) {
+            log_message('warning', '[llenado-ia] No hay usuario en sesión para registrar el historial del llenado automático del ejemplo {id} — se omite.', ['id' => $ejemploId]);
+
+            return;
+        }
+
+        $db = db_connect();
+        // OJO: BaseBuilder::insert() devuelve bool (éxito), no el id — a diferencia de Model::insert(),
+        // que sí acepta un segundo parámetro $returnID. El id real se lee de insertID() después.
+        $db->table('historial_cambios')->insert([
+            'ejemplo_id' => $ejemploId,
+            'usuario_id' => $usuarioId,
+            'fecha'      => date('Y-m-d H:i:s'),
+        ]);
+        $historialId = $db->insertID();
+
+        foreach ($entradas as $e) {
+            $db->table('historial_cambio_campos')->insert([
+                'historial_cambio_id' => $historialId,
+                'identificador'       => $e['identificador'],
+                'etiqueta'            => $e['etiqueta'],
+                'valor_anterior'      => $e['valorAnterior'],
+                'valor_nuevo'         => $e['valorNuevo'],
+                'accion'              => 'autocompletado',
+                'seccion_numero'      => $e['seccionNumero'],
+                'seccion_nombre'      => $e['seccionNombre'],
+            ]);
+        }
     }
 
     /**

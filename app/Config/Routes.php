@@ -140,6 +140,10 @@ $routes->group('api', ['filter' => 'auth'], static function (RouteCollection $ro
     $routes->post('plantillas/(:num)/contextos-ia/generales', 'ContextosIAController::guardarGeneral/$1');
     $routes->put('plantillas/(:num)/contextos-ia/generales/(:num)', 'ContextosIAController::guardarGeneral/$1/$2');
     $routes->delete('plantillas/(:num)/contextos-ia/generales/(:num)', 'ContextosIAController::eliminarGeneral/$1/$2');
+    // Archivos PDF de "Contexto general" — NO son insumos del prompt, ver comentario en el controlador.
+    $routes->get('plantillas/(:num)/contextos-ia/archivos-generales', 'ContextosIAController::indexArchivosGenerales/$1');
+    $routes->post('plantillas/(:num)/contextos-ia/archivos-generales', 'ContextosIAController::subirArchivoGeneral/$1');
+    $routes->delete('plantillas/(:num)/contextos-ia/archivos-generales/(:num)', 'ContextosIAController::eliminarArchivoGeneral/$1/$2');
     // "Estructura": qué insumo va en cada paso del armado del prompt de sistema (paso = 1/2/4/5).
     $routes->post('plantillas/(:num)/contextos-ia/pasos/(:num)', 'ContextosIAController::guardarPaso/$1/$2');
     $routes->delete('plantillas/(:num)/contextos-ia/pasos-asignaciones/(:num)', 'ContextosIAController::eliminarPaso/$1/$2');
@@ -151,6 +155,7 @@ $routes->group('api', ['filter' => 'auth'], static function (RouteCollection $ro
     $routes->delete('contextos-ia/globales/(:num)', 'ContextosIAController::eliminarGlobal/$1');
 
     $routes->post('asistente-ia/consultar', 'AsistenteIAController::consultar');
+    $routes->post('asistente-ia/ayuda-campo', 'AsistenteIAController::ayudaCampo');
 
     $routes->get('mi-liquidacion/historico', 'MiLiquidacionController::historico');
     $routes->get('mi-liquidacion/pendiente', 'MiLiquidacionController::pendiente');

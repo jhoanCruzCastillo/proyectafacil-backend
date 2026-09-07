@@ -38,13 +38,18 @@ class HistorialCambiosController extends BaseController
         ], true);
 
         $db = db_connect();
+        $accionesValidas = ['editado', 'autocompletado', 'eliminado'];
         foreach ((array) ($dto['campos'] ?? []) as $campo) {
+            $accion = (string) ($campo['accion'] ?? 'editado');
             $db->table('historial_cambio_campos')->insert([
                 'historial_cambio_id' => $id,
                 'identificador'       => (string) ($campo['identificador'] ?? ''),
                 'etiqueta'            => (string) ($campo['etiqueta'] ?? ''),
                 'valor_anterior'      => (string) ($campo['valorAnterior'] ?? ''),
                 'valor_nuevo'         => (string) ($campo['valorNuevo'] ?? ''),
+                'accion'              => in_array($accion, $accionesValidas, true) ? $accion : 'editado',
+                'seccion_numero'      => ($campo['seccionNumero'] ?? null) !== null ? (string) $campo['seccionNumero'] : null,
+                'seccion_nombre'      => ($campo['seccionNombre'] ?? null) !== null ? (string) $campo['seccionNombre'] : null,
             ]);
         }
 
@@ -54,7 +59,7 @@ class HistorialCambiosController extends BaseController
     private function toDto(array $fila): array
     {
         $campos = db_connect()->table('historial_cambio_campos')
-            ->select('identificador, etiqueta, valor_anterior, valor_nuevo')
+            ->select('identificador, etiqueta, valor_anterior, valor_nuevo, accion, seccion_numero, seccion_nombre')
             ->where('historial_cambio_id', $fila['id'])
             ->get()->getResultArray();
 
@@ -68,6 +73,9 @@ class HistorialCambiosController extends BaseController
                 'etiqueta'      => $c['etiqueta'],
                 'valorAnterior' => $c['valor_anterior'],
                 'valorNuevo'    => $c['valor_nuevo'],
+                'accion'        => $c['accion'] ?? 'editado',
+                'seccionNumero' => $c['seccion_numero'],
+                'seccionNombre' => $c['seccion_nombre'],
             ], $campos),
         ];
     }

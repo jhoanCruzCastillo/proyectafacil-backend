@@ -4,6 +4,8 @@ namespace App\Controllers;
 
 use App\Libraries\CloudinaryUploader;
 use CodeIgniter\HTTP\ResponseInterface;
+use Smalot\PdfParser\Parser as PdfParser;
+use Throwable;
 
 // Contexto que consume la IA al ayudar a llenar una ficha. Lo redacta el administrador desde el
 // panel "Contextos IA" del editor de plantillas; el cliente nunca lo ve ni lo edita, solo se
@@ -391,6 +393,85 @@ class ContextosIAController extends BaseController
             'url'    => $g['url'] !== null ? (string) $g['url'] : null,
             'actualizadoEn' => $g['updated_at'] !== null ? str_replace(' ', 'T', (string) $g['updated_at']) . 'Z' : null,
         ], $filas);
+    }
+
+    // --- Archivos PDF de "Contexto general". Tabla propia, nunca tocada por generales()/
+    // insumosPaso(), así que estructuralmente no pueden aparecer como insumo asignable en la
+    // pestaña Estructura ni entrar al llenado automático de la ficha (LlenadoIAController). SÍ se
+    // usan como último recurso en el chat "ayúdame a llenar/verificar el campo X" — ver
+    // AsistenteIAController::archivosContextoGeneral() — cuando ni la fuente de la verdad del
+    // cliente ni las guías del admin bastan para responder con confianza. ---
+
+    public function indexArchivosGenerales($plantillaId = null): ResponseInterface
+    {
+        return $this->response->setJSON($this->archivosGenerales((int) $plantillaId));
+    }
+
+    public function subirArchivoGeneral($plantillaId = null): ResponseInterface
+    {
+        $plantillaId = (int) $plantillaId;
+        $file        = $this->request->getFile('archivo');
+        if (! $file || ! $file->isValid() || $file->hasMoved()) {
+            return $this->response->setStatusCode(400)->setJSON(['error' => 'Falta el archivo']);
+        }
+        $esPdf = $file->getClientMimeType() === 'application/pdf' && strtolower((string) $file->getClientExtension()) === 'pdf';
+        if (! $esPdf) {
+            return $this->response->setStatusCode(422)->setJSON(['error' => 'Solo se admiten archivos PDF']);
+        }
+
+        try {
+            $url = (new CloudinaryUploader())->subirArchivoContexto($file->getTempName(), $file->getClientName());
+        } catch (Throwable $e) {
+            return $this->response->setStatusCode(502)->setJSON(['error' => CloudinaryUploader::mensajeErrorAmigable($e)]);
+        }
+
+        db_connect()->table('contextos_ia_archivos')->insert([
+            'plantilla_id'     => $plantillaId,
+            'nombre'           => $file->getClientName(),
+            'url'              => $url,
+            'contenido_texto'  => $this->extraerTextoPdf((string) file_get_contents($file->getTempName())),
+            'created_at'       => date('Y-m-d H:i:s'),
+        ]);
+
+        return $this->response->setJSON($this->archivosGenerales($plantillaId));
+    }
+
+    public function eliminarArchivoGeneral($plantillaId = null, $id = null): ResponseInterface
+    {
+        db_connect()->table('contextos_ia_archivos')
+            ->where('id', (int) $id)
+            ->where('plantilla_id', (int) $plantillaId)
+            ->delete();
+
+        return $this->response->setJSON($this->archivosGenerales((int) $plantillaId));
+    }
+
+    private function archivosGenerales(int $plantillaId): array
+    {
+        $filas = db_connect()->table('contextos_ia_archivos')
+            ->where('plantilla_id', $plantillaId)
+            ->orderBy('created_at', 'DESC')
+            ->get()->getResultArray();
+
+        return array_map(static fn (array $a) => [
+            'id'       => (string) $a['id'],
+            'nombre'   => $a['nombre'],
+            'url'      => $a['url'],
+            'creadoEn' => $a['created_at'] !== null ? str_replace(' ', 'T', (string) $a['created_at']) . 'Z' : null,
+        ], $filas);
+    }
+
+    /** Mismo criterio que FuenteVerdadController::extraerTexto() — un PDF raro (escaneado, corrupto,
+     * protegido) no debe tumbar la subida, solo queda sin texto extraído. */
+    private function extraerTextoPdf(string $binario): string
+    {
+        try {
+            return trim((new PdfParser())->parseContent($binario)->getText());
+        } catch (Throwable $e) {
+            log_message('error', '[contextos-ia] No se pudo extraer texto de un PDF de contexto general: {msg}', ['msg' => $e->getMessage()]);
+
+            return '';
+        }
     }
 
     // --- Globales (compartidos por cualquier ficha/sector) ---
