@@ -267,7 +267,7 @@ class AsesoriaController extends BaseController
                     $this->tipoAccesoVideollamada(),
                 );
             } catch (Throwable $e) {
-                log_message('error', 'GoogleMeetService: no se pudo generar el link de Meet para la solicitud {id}: {msg}', ['id' => $id, 'msg' => $e->getMessage()]);
+                $this->logDetalleErrorGoogleMeet($e, $id);
 
                 return $this->response->setStatusCode(502)->setJSON(['error' => 'No se pudo generar el link de la videollamada. Intenta de nuevo en unos minutos.']);
             }
