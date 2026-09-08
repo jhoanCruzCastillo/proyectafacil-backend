@@ -3,6 +3,7 @@
 namespace Config;
 
 use CodeIgniter\Config\BaseConfig;
+use CodeIgniter\Log\Handlers\ErrorlogHandler;
 use CodeIgniter\Log\Handlers\FileHandler;
 use CodeIgniter\Log\Handlers\HandlerInterface;
 
@@ -134,18 +135,27 @@ class Logger extends BaseConfig
         // ],
 
         /*
-         * The ErrorlogHandler writes the logs to PHP's native `error_log()` function.
-         * Uncomment this block to use it.
+         * FileHandler escribe en writable/logs/ — un archivo DENTRO del contenedor. En Railway (y
+         * cualquier plataforma similar) eso es invisible: el panel de logs solo muestra lo que el
+         * proceso imprime por stdout/stderr, nunca archivos en disco. Encontrado en vivo (2026-09-08)
+         * intentando diagnosticar un error real de GoogleMeetService: el log_message('error', ...)
+         * se ejecutaba, pero jamás aparecía en "Deploy Logs" de Railway — solo las líneas de acceso
+         * de Apache, que sí van a stdout por defecto en la imagen php:*-apache. ErrorlogHandler con
+         * TYPE_SAPI manda el mensaje directo al log de error de Apache (mismo canal que ya se ve en
+         * Railway), sin depender de la directiva ini `error_log`.
          */
-        // 'CodeIgniter\Log\Handlers\ErrorlogHandler' => [
-        //     /* The log levels this handler can handle. */
-        //     'handles' => ['critical', 'alert', 'emergency', 'debug', 'error', 'info', 'notice', 'warning'],
-        //
-        //     /*
-        //     * The message type where the error should go. Can be 0 or 4, or use the
-        //     * class constants: `ErrorlogHandler::TYPE_OS` (0) or `ErrorlogHandler::TYPE_SAPI` (4)
-        //     */
-        //     'messageType' => 0,
-        // ],
+        ErrorlogHandler::class => [
+            'handles' => [
+                'critical',
+                'alert',
+                'emergency',
+                'debug',
+                'error',
+                'info',
+                'notice',
+                'warning',
+            ],
+            'messageType' => ErrorlogHandler::TYPE_SAPI,
+        ],
     ];
 }
