@@ -7,6 +7,7 @@ use App\Libraries\HorarioRecurrencia;
 use App\Models\ActividadModel;
 use DateTime;
 use DateTimeZone;
+use Google\Service\Exception as GoogleServiceException;
 use Throwable;
 
 // Compartido entre AsesoriaController (lado alumno/asesor) y TicketsAsesoriaController (lado
@@ -17,6 +18,45 @@ trait SolicitudAsesoriaHelpersTrait
     private function fila(int $id): ?array
     {
         return db_connect()->table('solicitudes_asesoria')->where('id', $id)->get()->getRowArray();
+    }
+
+    /**
+     * Log detallado para cuando GoogleMeetService::crearLinkReunion() falla — el `$e->getMessage()`
+     * genérico que ya se logueaba no alcanzaba para diagnosticar un despliegue nuevo (ej. la Service
+     * Account de un cliente recién configurada): si el error viene de la API de Google
+     * (Google\Service\Exception — Calendar/Meet/Drive), `getErrors()` trae el `reason` real
+     * ("insufficientPermissions", "accessNotConfigured", "notFound", "invalid_grant", etc.), que es
+     * lo que de verdad dice QUÉ falló en admin.google.com o en las credenciales — el mensaje plano
+     * muchas veces solo dice el código HTTP.
+     */
+    private function logDetalleErrorGoogleMeet(Throwable $e, int $solicitudId): void
+    {
+        $detalle = [
+            'clase'   => $e::class,
+            'mensaje' => $e->getMessage(),
+            'codigo'  => $e->getCode(),
+            'en'      => $e->getFile() . ':' . $e->getLine(),
+        ];
+
+        if ($e instanceof GoogleServiceException) {
+            $detalle['erroresGoogle'] = $e->getErrors();
+        }
+
+        $previa = $e->getPrevious();
+        if ($previa !== null) {
+            $detalle['causaPrevia'] = [
+                'clase'   => $previa::class,
+                'mensaje' => $previa->getMessage(),
+            ];
+            if ($previa instanceof GoogleServiceException) {
+                $detalle['causaPrevia']['erroresGoogle'] = $previa->getErrors();
+            }
+        }
+
+        log_message('error', 'GoogleMeetService: no se pudo generar el link de Meet para la solicitud {id} — {detalle}', [
+            'id'      => $solicitudId,
+            'detalle' => json_encode($detalle, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT),
+        ]);
     }
 
     // Correos reales del cliente y el asesor para invitarlos al evento de Calendar/Meet (ver
