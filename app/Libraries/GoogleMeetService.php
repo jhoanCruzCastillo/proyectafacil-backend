@@ -16,6 +16,7 @@ use Google\Service\Docs;
 use Google\Service\Docs\Paragraph;
 use Google\Service\Drive;
 use Google\Service\Drive\Permission;
+use Google\Service\Exception as GoogleServiceException;
 use Google\Service\Meet;
 use Google\Service\Meet\ArtifactConfig;
 use Google\Service\Meet\EndActiveConferenceRequest;
@@ -136,20 +137,35 @@ class GoogleMeetService
         // ver arriba). autoRecordingGeneration=ON graba en cuanto se une alguien con privilegio de
         // grabar (el co-anfitrión, ver asignarCoHost() más abajo) — antes de esto, había que
         // activarla a mano desde el panel de Meet en cada reunión.
-        $accessType = $tipoAcceso === 'invitados' ? SpaceConfig::ACCESS_TYPE_TRUSTED : SpaceConfig::ACCESS_TYPE_OPEN;
-        $space = $this->meet->spaces->create(new Space([
-            'config' => new SpaceConfig([
-                'accessType' => $accessType,
-                'artifactConfig' => new ArtifactConfig([
-                    'smartNotesConfig' => new SmartNotesConfig([
-                        'autoSmartNotesGeneration' => SmartNotesConfig::AUTO_SMART_NOTES_GENERATION_ON,
-                    ]),
-                    'recordingConfig' => new RecordingConfig([
-                        'autoRecordingGeneration' => RecordingConfig::AUTO_RECORDING_GENERATION_ON,
-                    ]),
+        //
+        // Ambas automatizaciones son parte de Gemini for Workspace / planes altos (Business Plus o
+        // superior) — un Workspace sin ese add-on (ej. el de un cliente en un plan más chico)
+        // rechaza la creación COMPLETA del espacio con 403 FEATURE_UNAVAILABLE_TO_USER, confirmado
+        // en vivo (2026-09-08) con el Workspace de un cliente real. Sin este fallback, esos clientes
+        // nunca podían generar NINGÚN link de Meet. Se reintenta sin `artifactConfig` — el link
+        // igual se crea y funciona normal, solo sin auto-grabación/auto-notas (el asesor puede
+        // prenderlas a mano desde el panel de Meet si la reunión lo necesita).
+        $accessType  = $tipoAcceso === 'invitados' ? SpaceConfig::ACCESS_TYPE_TRUSTED : SpaceConfig::ACCESS_TYPE_OPEN;
+        $configEspacio = [
+            'accessType'     => $accessType,
+            'artifactConfig' => new ArtifactConfig([
+                'smartNotesConfig' => new SmartNotesConfig([
+                    'autoSmartNotesGeneration' => SmartNotesConfig::AUTO_SMART_NOTES_GENERATION_ON,
+                ]),
+                'recordingConfig' => new RecordingConfig([
+                    'autoRecordingGeneration' => RecordingConfig::AUTO_RECORDING_GENERATION_ON,
                 ]),
             ]),
-        ]));
+        ];
+        try {
+            $space = $this->meet->spaces->create(new Space(['config' => new SpaceConfig($configEspacio)]));
+        } catch (GoogleServiceException $e) {
+            if (! str_contains($e->getMessage(), 'FEATURE_UNAVAILABLE_TO_USER')) {
+                throw $e;
+            }
+            log_message('warning', 'GoogleMeetService: este Workspace no tiene disponible auto-grabación/auto-notas de Meet (plan sin Gemini) — se crea el espacio sin esas automatizaciones.');
+            $space = $this->meet->spaces->create(new Space(['config' => new SpaceConfig(['accessType' => $accessType])]));
+        }
 
         $event = new Event([
             'summary' => $titulo,
