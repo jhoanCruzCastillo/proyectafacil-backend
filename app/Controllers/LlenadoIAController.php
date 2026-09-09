@@ -308,8 +308,10 @@ class LlenadoIAController extends BaseController
         // grandes/lentas hacían que PHP matara el script ANTES de que curl devolviera null con gracia
         // — eso salía como HTTP 500 crudo en vez de un 502 "no se pudo consultar", confirmado en logs
         // reales (ErrorException: Maximum execution time of 60 seconds exceeded) durante una prueba con
-        // tablas grandes (jerárquicas con muchas columnas, ej. 08.03.1/08.06.1/09.02.1).
-        set_time_limit(220);
+        // tablas grandes (jerárquicas con muchas columnas, ej. 08.03.1/08.06.1/09.02.1). Subido de 220 a
+        // 420 al agregar el reintento automático de forma (ver más abajo) — en el peor caso son 2
+        // llamadas de hasta 170s cada una.
+        set_time_limit(420);
         $ejemploId = (int) $ejemploId;
 
         $config = config('Ia');
@@ -377,6 +379,9 @@ class LlenadoIAController extends BaseController
         if (! is_array($valorActual)) {
             return $this->response->setStatusCode(400)->setJSON(['error' => 'Esta tabla no tiene una estructura base válida para comparar.']);
         }
+        if (in_array($identificador, self::TABLAS_UBIGEO, true)) {
+            $valorActual = $this->limpiarUbigeoCrudoDeValorActual($valorActual);
+        }
 
         $fuenteVerdad = $this->fuenteDeLaVerdad($ejemploId, $ejemplo['fuente_verdad_texto'] ?? '');
         if (trim($fuenteVerdad) === '') {
@@ -438,12 +443,6 @@ class LlenadoIAController extends BaseController
         // que el cliente veía como un 502 genérico sin pista de la causa real (estaba en el log, no en
         // la respuesta HTTP). No hay downside de subir el techo: max_completion_tokens es un tope, no
         // un objetivo — una tabla chica sigue costando/tardando lo mismo que antes.
-        $respuesta = $this->llamarOpenAICrudo($config, $sistema, $usuario, 32000, 170, $modeloParaEstaTabla, "tabla {$identificador}");
-        if ($respuesta === null) {
-            return $this->response->setStatusCode(502)->setJSON(['error' => 'No se pudo consultar a la IA. Intenta de nuevo.']);
-        }
-        $valorPropuesto = $respuesta['valor'];
-
         $columnasCalculadas = array_values(array_filter(array_map(
             static fn (array $c): ?string => ($c['tipo'] ?? '') === 'calculado' ? (string) ($c['id'] ?? '') : null,
             $columnas,
@@ -471,11 +470,65 @@ class LlenadoIAController extends BaseController
         }
 
         $columnasConSubcolumnas = $this->columnasConSubcolumnasDe($columnas);
-        $resultado = $this->validarFormaTabla($valorActual, $valorPropuesto['valor'] ?? null, $columnasCalculadas, $ultimaColumnaCalculada, $catalogoPorColumna, $columnaIdPorProfundidad, $columnasConSubcolumnas);
-        if (! $resultado['valido']) {
-            log_message('warning', '[llenado-tabla-ia] rechazado {id}: {motivo}', ['id' => $identificador, 'motivo' => $resultado['motivo']]);
 
-            return $this->response->setStatusCode(422)->setJSON(['error' => $resultado['motivo']]);
+        // Reintento automático (encontrado en vivo 2026-09-09): sobre un lote real de 23 tablas, 3
+        // fallaron por forma incorrecta (nodo de árbol mal armado, o filas de más) y las 3 pasaron sin
+        // ningún cambio de prompt con solo repetir la misma llamada — es variabilidad normal del modelo
+        // en árboles jerárquicos profundos o tablas con muchas filas/columnas, no un problema del
+        // prompt en sí. Antes esto llegaba al usuario como un error duro que exigía un clic manual de
+        // más; ahora se reintenta una vez, en el mismo request, antes de rendirse. `set_time_limit`
+        // arriba ya tiene margen para 2 llamadas de hasta 170s cada una.
+        $intentosMaximos = 2;
+        $resultado       = null;
+        $valorPropuesto  = null;
+        for ($intento = 1; $intento <= $intentosMaximos; $intento++) {
+            $etiqueta  = $intento === 1 ? "tabla {$identificador}" : "tabla {$identificador} (reintento)";
+            $respuesta = $this->llamarOpenAICrudo($config, $sistema, $usuario, 32000, 170, $modeloParaEstaTabla, $etiqueta);
+            if ($respuesta === null) {
+                if ($intento === $intentosMaximos) {
+                    return $this->response->setStatusCode(502)->setJSON(['error' => 'No se pudo consultar a la IA. Intenta de nuevo.']);
+                }
+                continue; // sin respuesta del modelo (falla de red/API) — no cuenta como rechazo de forma, se reintenta igual
+            }
+
+            $valorPropuesto = $respuesta['valor'];
+            $resultado      = $this->validarFormaTabla($valorActual, $valorPropuesto['valor'] ?? null, $columnasCalculadas, $ultimaColumnaCalculada, $catalogoPorColumna, $columnaIdPorProfundidad, $columnasConSubcolumnas);
+            // Para las 3 tablas de UBIGEO: la columna "ubigeo" ya llegó vacía en TODAS las filas (ver
+            // limpiarUbigeoCrudoDeValorActual arriba) — cualquier código de 6 dígitos en la propuesta es
+            // entonces del modelo mismo, no un dato preexistente. Encontrado en vivo (2026-09-09): pese a
+            // que la nota de la columna prohíbe explícitamente ese código, el modelo lo escribía igual
+            // (adivinado de memoria, sin pasar por el catálogo real de UbigeoResolver) — se trata como
+            // forma inválida para forzar el reintento en vez de aceptar un código no verificado.
+            if ($resultado['valido'] && in_array($identificador, self::TABLAS_UBIGEO, true)) {
+                $filaConCodigoCrudo = $this->primeraFilaConUbigeoCrudo($resultado['valorSaneado']);
+                if ($filaConCodigoCrudo !== null) {
+                    $resultado = ['valido' => false, 'motivo' => "Fila {$filaConCodigoCrudo}: escribiste un código UBIGEO de 6 dígitos en vez del texto \"Departamento | Provincia | Distrito\" que pide la columna.", 'advertencias' => []];
+                }
+            }
+            if ($resultado['valido']) {
+                if ($intento > 1) {
+                    log_message('info', '[llenado-tabla-ia] {id} se corrigió solo en el reintento {intento}', ['id' => $identificador, 'intento' => $intento]);
+                }
+                break;
+            }
+            log_message('warning', '[llenado-tabla-ia] rechazado {id} (intento {intento}/{max}): {motivo}', [
+                'id' => $identificador, 'intento' => $intento, 'max' => $intentosMaximos, 'motivo' => $resultado['motivo'],
+            ]);
+        }
+        if ($resultado === null || ! $resultado['valido']) {
+            // Ya se reintentó (ver arriba) — si el modelo insiste en escribir un código crudo, se
+            // acepta la tabla igual pero se limpia esa celda puntual y se avisa, en vez de bloquear
+            // TODA la tabla por una sola columna que el cliente puede completar a mano en segundos.
+            if ($resultado !== null && in_array($identificador, self::TABLAS_UBIGEO, true)) {
+                [$valorLimpio, $advertenciaCodigo] = $this->limpiarCodigosUbigeoCrudos($valorPropuesto['valor'] ?? []);
+                $resultado = $this->validarFormaTabla($valorActual, $valorLimpio, $columnasCalculadas, $ultimaColumnaCalculada, $catalogoPorColumna, $columnaIdPorProfundidad, $columnasConSubcolumnas);
+                if ($resultado['valido']) {
+                    $resultado['advertencias'] = array_merge($resultado['advertencias'], $advertenciaCodigo);
+                }
+            }
+            if ($resultado === null || ! $resultado['valido']) {
+                return $this->response->setStatusCode(422)->setJSON(['error' => $resultado['motivo'] ?? 'La IA no devolvió una respuesta utilizable.']);
+            }
         }
 
         if (in_array($identificador, self::TABLAS_UBIGEO, true)) {
@@ -1242,6 +1295,73 @@ class LlenadoIAController extends BaseController
      * @param list<array<string,string>> $filas
      * @return array{0: list<array<string,string>>, 1: list<string>}
      */
+    /**
+     * Encontrado en vivo (2026-09-09): la celda "ubigeo" de estas 3 tablas debe llevar texto
+     * "Departamento | Provincia | Distrito" (ver la nota de la columna) — un código de 6 dígitos ya
+     * escrito ahí (de una prueba anterior, o de una fila editada a mano antes de que existiera esta
+     * regla) es justo lo que la columna prohíbe. Pedirle al modelo en el prompt que "revise y corrija"
+     * una celda así no bastó de forma confiable: al ver una celda no vacía, tiende a dejarla tal cual
+     * en vez de reformatearla — y como resolverUbigeoEnTabla() a propósito NO re-valida un código ya
+     * de 6 dígitos (ver su comentario), ese código viejo (de un distrito distinto) quedaba resuelto a
+     * un lugar que ya no corresponde al proyecto real, sin ninguna advertencia visible. En vez de
+     * confiar en que el modelo lo note, se limpia ANTES de armar el prompt: para el modelo esa celda
+     * llega vacía, así que la llena desde cero con la fuente de la verdad — mismo criterio que ya
+     * usa el resto del prompt para celdas vacías.
+     *
+     * @param list<array<string,string>> $valorActual
+     * @return list<array<string,string>>
+     */
+    private function limpiarUbigeoCrudoDeValorActual(array $valorActual): array
+    {
+        foreach ($valorActual as &$fila) {
+            if (is_array($fila) && preg_match('/^\d{6}$/', trim((string) ($fila['ubigeo'] ?? ''))) === 1) {
+                $fila['ubigeo'] = '';
+            }
+        }
+        unset($fila);
+
+        return $valorActual;
+    }
+
+    /** @param mixed $filas @return int|null número de fila (1-based) de la primera con "ubigeo" en formato de código de 6 dígitos, o null si ninguna */
+    private function primeraFilaConUbigeoCrudo(mixed $filas): ?int
+    {
+        if (! is_array($filas)) {
+            return null;
+        }
+        foreach (array_values($filas) as $i => $fila) {
+            if (is_array($fila) && preg_match('/^\d{6}$/', trim((string) ($fila['ubigeo'] ?? ''))) === 1) {
+                return $i + 1;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Último recurso si el modelo insiste en escribir un código crudo incluso tras el reintento (ver
+     * llenarTabla): en vez de descartar toda la tabla, se vacía solo esa celda puntual — el cliente la
+     * completa a mano en segundos, contra bloquearlo con un error de la tabla entera por una columna.
+     *
+     * @return array{0: mixed, 1: list<string>}
+     */
+    private function limpiarCodigosUbigeoCrudos(mixed $filas): array
+    {
+        if (! is_array($filas)) {
+            return [$filas, []];
+        }
+        $advertencias = [];
+        foreach ($filas as $i => &$fila) {
+            if (is_array($fila) && preg_match('/^\d{6}$/', trim((string) ($fila['ubigeo'] ?? ''))) === 1) {
+                $fila['ubigeo']  = '';
+                $advertencias[] = 'Fila ' . ((int) $i + 1) . ': la IA propuso un código UBIGEO en vez de texto — déjalo en blanco, complétalo escribiendo "Departamento | Provincia | Distrito".';
+            }
+        }
+        unset($fila);
+
+        return [$filas, $advertencias];
+    }
+
     private function resolverUbigeoEnTabla(array $filas): array
     {
         $advertencias = [];
@@ -1573,7 +1693,23 @@ class LlenadoIAController extends BaseController
             $lineas[] = 'Ejemplo de referencia — así quedó esta MISMA tabla ya completada correctamente en OTRO proyecto (mírala para entender la FORMA y el estilo esperado en cada columna; los VALORES deben salir de la fuente de la verdad de ESTE proyecto, no copies estos literalmente):' .
                 "\n" . json_encode($valorReferencia, JSON_UNESCAPED_UNICODE);
         }
-        $lineas[] = "Tabla actual (completa lo vacío con evidencia real, corrige solo si hay evidencia mejor, conserva lo que ya esté bien):\n" . json_encode($valorActual, JSON_UNESCAPED_UNICODE);
+        // Encontrado en vivo (2026-09-09): una celda YA escrita (dato de ejemplo del formato, o una
+        // edición previa que quedó desactualizada) puede (a) contradecir la fuente de la verdad de ESTE
+        // proyecto, o (b) violar la propia regla de formato de su columna (ver "nota" de columna arriba)
+        // — caso real: una columna de UBIGEO cuya nota pide texto "Departamento | Provincia | Distrito"
+        // y prohíbe explícitamente el código de 6 dígitos, pero la celda ya traía un código de una
+        // prueba anterior y el modelo lo dejó tal cual en vez de reformatearlo, aun cuando la fuente de
+        // la verdad sí precisaba el distrito correcto. La redacción anterior ("corrige solo si hay
+        // evidencia mejor, conserva lo que ya esté bien") se interpretaba como licencia para no revisar
+        // una celda no vacía. Ahora se exige la verificación activa, incluida la regla de su columna.
+        $lineas[] = 'Tabla actual — ADVERTENCIA: una celda que ya tiene texto no necesariamente es correcta ni tiene el formato '
+            . 'correcto, puede ser un dato de ejemplo del formato o una edición anterior desactualizada. Para cada celda con '
+            . 'datos, sin excepción: (1) revísala contra la fuente de la verdad de ESTE proyecto — si da un dato distinto '
+            . '(otra ubicación, otro nombre, otra cifra, etc.), CORRÍGELA; (2) revísala contra la nota/regla de su columna '
+            . '(si la columna tiene una arriba) — si no la cumple (ej. trae un código donde se pedía texto, u otro formato '
+            . 'prohibido), REFORMATÉALA para que la cumpla. No dejes una celda tal cual solo porque ya tenía algo escrito. '
+            . 'Completa además las celdas vacías con evidencia real. Solo conserva un valor existente sin cambios cuando ya '
+            . "cumple su regla de columna y la fuente de la verdad no dice nada que lo contradiga:\n" . json_encode($valorActual, JSON_UNESCAPED_UNICODE);
         $lineas[] = 'Responde solo {"valor": <la misma estructura, con los valores llenados>}.';
 
         return implode("\n", $lineas);
