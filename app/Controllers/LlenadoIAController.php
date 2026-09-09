@@ -98,6 +98,13 @@ class LlenadoIAController extends BaseController
      */
     private const TABLAS_UBIGEO = ['2.01.01', '2.02.01', '3.03.01'];
 
+    /** Nombre reservado en `contextos_ia_globales` de la convención JSON oficial (ver notion-schema-doc
+     * / ContextosIAGlobalesSeeder) — cuando está asociado a la sección de una tabla (mismo criterio de
+     * asociación por sección que usa AsistenteIAController::construirSistema() para el chat), se recorta
+     * a solo la variante que le corresponde a esa tabla en vez de mandar el documento completo (~1100
+     * líneas cubriendo ~14 variantes) — ver extraerEsquemaTablaRelevante(). */
+    private const NOMBRE_CONTEXTO_ESQUEMA_TABLA = 'Estructura de datos — Fichas técnicas';
+
     /**
      * Tablas que dependen del Excel vivo del cliente (catálogo en cascada, ver
      * opcionesLlenadoCascada() en el frontend) y por eso quedan FUERA del lote de "Llenar toda la
@@ -381,6 +388,7 @@ class LlenadoIAController extends BaseController
         $reglas          = $this->reglasLlenado($plantillaId);
         $generales       = $this->contextosGeneralesDe($plantillaId);
         $contextoSeccion = $this->contextoDeSeccion($plantillaId, $seccionId);
+        $esquemaTabla    = $this->esquemaTablaDeSeccion($plantillaId, $seccionId, $configTabla);
 
         // Ejemplo de referencia: esta MISMA tabla, ya resuelta en otro proyecto marcado por el admin
         // como few-shot (ver valoresEjemploReferencia) — null si no hay ninguno marcado, si nunca se
@@ -413,7 +421,7 @@ class LlenadoIAController extends BaseController
         // guía es lo que ayuda al modelo a no mezclar una causa de una rama con la indirecta de otra.
         $contextoAdicional = trim((string) ($body['contextoAdicional'] ?? ''));
 
-        $sistema = $this->construirSistemaTabla($rol, $promptSistema, $reglas, $generales, $contextoSeccion, $fuenteVerdad);
+        $sistema = $this->construirSistemaTabla($rol, $promptSistema, $reglas, $generales, $contextoSeccion, $fuenteVerdad, $esquemaTabla);
         $usuario = $this->construirPromptTabla($campo, $subtipo, $agrupador, $columnas, $valorActual, $opcionesPorColumna, $contextoAdicional, $valorReferencia, $otrasSeccionesConfirmadas);
 
         // Cambiado a OpenAI (2026-08-19, usar créditos de OpenAI en vez de Anthropic) —
@@ -562,7 +570,8 @@ class LlenadoIAController extends BaseController
                     }
                 }
 
-                $sistemaTabla = $this->construirSistemaTabla($rol, $promptSistema, $reglas, $generales, $contextoSeccion, $fuenteVerdad);
+                $esquemaTabla = $this->esquemaTablaDeSeccion($plantillaId, $seccionId, $configTabla);
+                $sistemaTabla = $this->construirSistemaTabla($rol, $promptSistema, $reglas, $generales, $contextoSeccion, $fuenteVerdad, $esquemaTabla);
                 $usuarioTabla = $this->construirPromptTabla($campo, $subtipo, $agrupador, $columnas, $valorActual, [], '', $valorReferenciaTabla);
 
                 $tablas[] = [
@@ -712,7 +721,8 @@ class LlenadoIAController extends BaseController
                     }
 
                     $contextoSeccionTabla = $this->contextoDeSeccion($plantillaId, $seccionId);
-                    $sistemaTabla = $this->construirSistemaTabla($rol, $promptSistema, $reglas, $generales, $contextoSeccionTabla, $fuenteVerdad);
+                    $esquemaTabla = $this->esquemaTablaDeSeccion($plantillaId, $seccionId, $configTabla);
+                    $sistemaTabla = $this->construirSistemaTabla($rol, $promptSistema, $reglas, $generales, $contextoSeccionTabla, $fuenteVerdad, $esquemaTabla);
 
                     $valorReferencia = null;
                     $refCrudo = $referencia[$identificador] ?? null;
@@ -1337,7 +1347,7 @@ class LlenadoIAController extends BaseController
      *
      * @return array{cacheable: string, variable: string}
      */
-    private function construirSistemaTabla(string $rol, string $promptSistema, string $reglas, array $generales, array $contextoSeccion, string $fuenteVerdad): array
+    private function construirSistemaTabla(string $rol, string $promptSistema, string $reglas, array $generales, array $contextoSeccion, string $fuenteVerdad, string $esquemaTabla = ''): array
     {
         $partes = [$rol];
         if ($promptSistema !== '') {
@@ -1356,6 +1366,13 @@ class LlenadoIAController extends BaseController
         foreach ($generales as $nombre => $texto) {
             $partes[] = "Contexto general de esta ficha — {$nombre}:\n{$texto}";
         }
+        // Solo la variante de la convención JSON oficial que le corresponde a ESTA tabla (ver
+        // esquemaTablaDeSeccion/extraerEsquemaTablaRelevante) — no confundir con los $generales de
+        // arriba: ese documento vive en `contextos_ia_globales`, asociado por SECCIÓN, y es demasiado
+        // largo (~14 variantes) para mandarlo completo en cada llamada.
+        if ($esquemaTabla !== '') {
+            $partes[] = "Convención de formato JSON para tablas — variante que aplica a esta tabla exacta:\n{$esquemaTabla}";
+        }
         $partes[] = "Fuente de la verdad (información real del proyecto, cargada por el cliente):\n{$fuenteVerdad}";
 
         $variable = [];
@@ -1364,6 +1381,94 @@ class LlenadoIAController extends BaseController
         }
 
         return ['cacheable' => implode("\n\n", $partes), 'variable' => implode("\n\n", $variable)];
+    }
+
+    /**
+     * Contexto global "Estructura de datos — Fichas técnicas" asociado a la sección de esta tabla (si lo
+     * hay), ya recortado a la variante que le corresponde a `$configTabla` — mismo criterio de
+     * asociación por sección que usa AsistenteIAController::construirSistema() para el chat (tabla
+     * `contexto_seccion_globales`). Devuelve '' si no hay ninguno asociado a esta sección o si el
+     * documento no tiene ese nombre exacto — nunca revienta el prompt por esto.
+     */
+    private function esquemaTablaDeSeccion(int $plantillaId, string $seccionId, array $configTabla): string
+    {
+        $contexto = db_connect()->table('contextos_ia_seccion')
+            ->where('plantilla_id', $plantillaId)
+            ->where('seccion_id', $seccionId)
+            ->get()->getRowArray();
+        if ($contexto === null) {
+            return '';
+        }
+
+        $global = db_connect()->table('contexto_seccion_globales sg')
+            ->select('g.url')
+            ->join('contextos_ia_globales g', 'g.id = sg.contexto_global_id')
+            ->where('sg.contexto_seccion_id', (int) $contexto['id'])
+            ->where('g.nombre', self::NOMBRE_CONTEXTO_ESQUEMA_TABLA)
+            ->get()->getRowArray();
+        if ($global === null) {
+            return '';
+        }
+
+        $md = $this->contenidoDeUrl($global['url'] ?? null);
+
+        return $md === '' ? '' : $this->extraerEsquemaTablaRelevante($md, $configTabla);
+    }
+
+    /**
+     * Recorta el markdown de la convención JSON oficial al bloque (o bloques) de variante de tabla que
+     * corresponden a `$configTabla` — identificados por anclas `<!-- anchor:tabla-X -->` sembradas en el
+     * documento (ver estructura-datos-fichas-tecnicas.md). Documento largo (~14 variantes, ~1100
+     * líneas): una tabla puntual solo necesita la sección de SU variante, el resto es ruido de tokens
+     * que no le aplica y puede incluso confundir al modelo con reglas de otra variante.
+     *
+     * Si no encuentra NINGUNA ancla (documento reemplazado a mano sin ellas, o headings renombrados sin
+     * actualizar las anclas), cae a devolver el texto completo sin filtrar — nunca se queda sin este
+     * contexto por un cambio de formato del documento, solo pierde la precisión del recorte.
+     *
+     * @param array{subtipo?:string,agrupador?:bool,columnaDinamicaId?:string} $configTabla
+     */
+    private function extraerEsquemaTablaRelevante(string $md, array $configTabla): string
+    {
+        $subtipo   = (string) ($configTabla['subtipo'] ?? 'filas_dinamicas');
+        $agrupador = (bool) ($configTabla['agrupador'] ?? false);
+
+        $ids = ['tabla-intro'];
+        if ($subtipo === 'jerarquica') {
+            $ids[] = 'tabla-4.5';
+            if (! empty($configTabla['columnaDinamicaId'])) {
+                $ids[] = 'tabla-4.5b';
+            }
+            if ($agrupador) {
+                $ids[] = 'tabla-4.5c';
+            }
+        } elseif ($subtipo === 'matriz_por_periodos') {
+            $ids[] = 'tabla-4.3';
+            if ($agrupador) {
+                $ids[] = 'tabla-4.4';
+            }
+        } else {
+            // 'filas_dinamicas' (a pesar del nombre, es la variante de filas PLANAS con columnas fijas
+            // — ver SubtipoTabla en frontend/src/types/index.ts) es el default de cualquier otro valor.
+            $ids[] = 'tabla-4.1';
+            if ($agrupador) {
+                $ids[] = 'tabla-4.2';
+            }
+        }
+
+        $bloques = [];
+        foreach ($ids as $id) {
+            $marca  = "<!-- anchor:{$id} -->";
+            $inicio = strpos($md, $marca);
+            if ($inicio === false) {
+                continue;
+            }
+            $inicio  += strlen($marca);
+            $fin      = strpos($md, '<!-- anchor:', $inicio);
+            $bloques[] = trim($fin !== false ? substr($md, $inicio, $fin - $inicio) : substr($md, $inicio));
+        }
+
+        return $bloques === [] ? $md : implode("\n\n", $bloques);
     }
 
     /**

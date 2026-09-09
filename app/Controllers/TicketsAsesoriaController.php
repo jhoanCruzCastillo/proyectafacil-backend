@@ -6,6 +6,8 @@ use App\Controllers\Support\SolicitudAsesoriaHelpersTrait;
 use App\Libraries\GoogleMeetService;
 use App\Libraries\HorarioRecurrencia;
 use CodeIgniter\HTTP\ResponseInterface;
+use DateTime;
+use DateTimeZone;
 use Throwable;
 
 // Lado Administrativo de Asesorías (Módulo 4, docs/proyectafacil-asesorias.md §5 "administrador"):
@@ -316,6 +318,118 @@ class TicketsAsesoriaController extends BaseController
         $this->notificar($asesorId, 'nueva_solicitud_asesoria', 'Un administrativo te asignó una solicitud de asesoría', $id);
         $this->notificar((int) $solicitud['cliente_id'], 'solicitud_aceptada', 'Tu solicitud de asesoría fue aceptada', $id);
         $this->notificarAdministrativos('solicitud_aceptada', "La solicitud #{$id} fue asignada", $id);
+
+        return $this->response->setJSON($this->toDtoSolicitud($this->fila($id)));
+    }
+
+    /**
+     * Agenda una videollamada directa entre un cliente y un asesor elegidos a mano por el
+     * Administrativo, en el horario que él defina — pedido explícito del usuario: "independiente
+     * de su tiempo disponible", así que NO pasa por asesoresPorHorario()/horarios_docente (esa
+     * elegibilidad solo importa para decidir a quién BROADCASTEAR un ticket pendiente, ver
+     * AsesoriaController::crear()) ni por tickets_consulta (no consume ninguna ficha del alumno —
+     * es una reunión que ofrece el Administrativo, no algo que el alumno pidió con su saldo).
+     *
+     * La solicitud nace YA agendada (nunca pasa por 'pendiente'): se inserta, se genera el link de
+     * Meet real con el mismo GoogleMeetService::crearLinkReunion() que usa asignar(), y recién con
+     * el link en mano se deja 'agendado'. Si Google falla, se borra la fila recién creada (mismo
+     * criterio que asignar(): nunca dejar un ticket a medio crear que nadie sepa cómo destrabar).
+     *
+     * Después de esto no hace falta NADA especial: al pasar el horario, el mismo ciclo automático
+     * de siempre (resolverAsistenciaSiCorresponde(), evaluado en cada listado/detalle — ver el
+     * trait) mueve la fila sola a completado/observado/vencido según la asistencia real en Meet, y
+     * el cron CerrarVideollamadasVencidasCommand trae grabación/resumen igual que para cualquier
+     * otro ticket — esta fila es indistinguible de una agendada por el flujo normal.
+     */
+    public function crearManual(): ResponseInterface
+    {
+        // El resto de endpoints de este controlador no valida rol más allá del filtro 'auth' (ver
+        // hallazgo de la investigación) — para ESTA acción puntual sí se agrega, porque a diferencia
+        // de leer/reasignar un ticket ya existente, esta crea un evento real de Calendar/Meet y
+        // notifica gente de la nada; el gate de rol del router en el frontend no protege la API en
+        // sí, así que sin esto cualquier usuario autenticado (de cualquier rol) podría llamarla directo.
+        $rol = session()->get('usuario_rol');
+        if (! in_array($rol, ['administrativo_asesorias', 'superusuario'], true)) {
+            return $this->response->setStatusCode(403)->setJSON(['error' => 'No tienes permiso para esta acción']);
+        }
+
+        $dto        = $this->request->getJSON(true) ?? [];
+        $clienteId  = (int) ($dto['clienteId'] ?? 0);
+        $asesorId   = (int) ($dto['asesorId'] ?? 0);
+        $fecha      = trim((string) ($dto['horarioFecha'] ?? ''));
+        $horaInicioRaw = trim((string) ($dto['horarioHoraInicio'] ?? ''));
+        $horaFinRaw    = trim((string) ($dto['horarioHoraFin'] ?? ''));
+
+        if ($clienteId === 0 || $asesorId === 0 || $fecha === '' || $horaInicioRaw === '' || $horaFinRaw === '') {
+            return $this->response->setStatusCode(400)->setJSON(['error' => 'Faltan datos: cliente, asesor, fecha y horario de inicio/fin son obligatorios']);
+        }
+
+        $horaInicio = $this->conSegundos($horaInicioRaw);
+        $horaFin    = $this->conSegundos($horaFinRaw);
+        if ($horaFin <= $horaInicio) {
+            return $this->response->setStatusCode(400)->setJSON(['error' => 'La hora de fin debe ser posterior a la hora de inicio']);
+        }
+        // Con strtotime() a secas, "{$fecha} {$horaInicio}" se interpreta en la zona horaria del
+        // servidor (UTC) — no en la del horario acordado con el alumno/asesor. Mismo criterio que
+        // vencimientoAcordado() del trait: America/Lima explícito, o esto rechazaba horarios que en
+        // Lima todavía no habían pasado (confirmado en vivo: 06:55 Lima marcado como "pasado"
+        // porque como UTC ya eran las 11:55).
+        $inicioTimestamp = (new DateTime("{$fecha} {$horaInicio}", new DateTimeZone('America/Lima')))->getTimestamp();
+        if ($inicioTimestamp < time()) {
+            return $this->response->setStatusCode(400)->setJSON(['error' => 'No se puede agendar una reunión en el pasado']);
+        }
+
+        $db      = db_connect();
+        $cliente = $db->table('usuarios')->select('id')->where('id', $clienteId)->where('rol', 'cliente')->get()->getRowArray();
+        if (! $cliente) {
+            return $this->response->setStatusCode(400)->setJSON(['error' => 'El cliente elegido no existe o no tiene rol de cliente']);
+        }
+        $asesor = $db->table('usuarios')->select('id')->where('id', $asesorId)->where('rol', 'asesor')->get()->getRowArray();
+        if (! $asesor) {
+            return $this->response->setStatusCode(400)->setJSON(['error' => 'El asesor elegido no existe o no tiene rol de asesor']);
+        }
+
+        // OJO: BaseBuilder::insert() devuelve bool (éxito), no el id — a diferencia de Model::insert().
+        $ahora = date('Y-m-d H:i:s');
+        $db->table('solicitudes_asesoria')->insert([
+            'cliente_id'          => $clienteId,
+            'docente_id'          => $asesorId,
+            'tipo'                => 'video',
+            'estado'              => 'pendiente', // transitorio — se deja 'agendado' recién si Meet responde bien, ver abajo
+            'horario_fecha'       => $fecha,
+            'horario_hora_inicio' => $horaInicio,
+            'horario_hora_fin'    => $horaFin,
+            'created_at'          => $ahora,
+            'updated_at'          => $ahora,
+        ]);
+        $id = (int) $db->insertID();
+
+        try {
+            $linkReunion = (new GoogleMeetService())->crearLinkReunion(
+                "Asesoría Proyecta Fácil #{$id}",
+                $fecha,
+                $horaInicio,
+                $horaFin,
+                $this->correosParaInvitar($clienteId, $asesorId),
+                $this->correoAsesor($asesorId),
+                $this->tipoAccesoVideollamada(),
+            );
+        } catch (Throwable $e) {
+            $this->logDetalleErrorGoogleMeet($e, $id);
+            $db->table('solicitudes_asesoria')->where('id', $id)->delete();
+
+            return $this->response->setStatusCode(502)->setJSON(['error' => 'No se pudo generar el link de la videollamada. Intenta de nuevo en unos minutos.']);
+        }
+
+        $db->table('solicitudes_asesoria')->where('id', $id)->update([
+            'estado'       => 'agendado',
+            'link_reunion' => $linkReunion,
+            'updated_at'   => date('Y-m-d H:i:s'),
+        ]);
+
+        $this->notificar($clienteId, 'nueva_solicitud_asesoria', 'Un administrativo te agendó una videollamada de asesoría', $id);
+        $this->notificar($asesorId, 'nueva_solicitud_asesoria', 'Un administrativo te agendó una videollamada de asesoría', $id);
+        $this->notificarAdministrativos('solicitud_aceptada', "Se agendó manualmente la solicitud #{$id}", $id);
 
         return $this->response->setJSON($this->toDtoSolicitud($this->fila($id)));
     }

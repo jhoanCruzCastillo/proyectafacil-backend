@@ -170,6 +170,7 @@ $routes->group('api', ['filter' => 'auth'], static function (RouteCollection $ro
     $routes->get('asesoria/dashboard', 'TicketsAsesoriaController::dashboard');
     $routes->get('asesoria/tickets', 'TicketsAsesoriaController::index');
     $routes->get('asesoria/tickets-mismo-horario', 'TicketsAsesoriaController::mismoHorario');
+    $routes->post('asesoria/tickets/crear-manual', 'TicketsAsesoriaController::crearManual');
     $routes->get('asesoria/tickets/(:num)', 'TicketsAsesoriaController::detalle/$1');
     $routes->get('asesoria/tickets/(:num)/historial-conexion', 'TicketsAsesoriaController::historialConexion/$1');
     $routes->get('asesoria/tickets/(:num)/grabaciones', 'TicketsAsesoriaController::grabaciones/$1');
