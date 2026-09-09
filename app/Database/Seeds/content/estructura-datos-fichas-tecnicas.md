@@ -248,6 +248,8 @@ Como ya se explicó en detalle la estructura base del nodo `campo` en el punto 3
 
 🔴 **AQUÍ MODIFIQUÉ HOY 2/08/2026 a las 12:01 hrs.** Cómo se comporta este tipo en el viaje de ida y vuelta al Excel — qué se protege en cada dirección y por qué — está en la sección **5. PROTECCIÓN DE CELDAS CALCULADAS**. Resumen: al **volcar** (Excel → JSON) un campo `calculado` se salta, conserva su `formula` y no el número cacheado; al **insertar** (JSON → Excel) su fórmula solo se escribe si la celda destino no trae ya una propia.
 
+<!-- anchor:tabla-intro -->
+
 ### 4. NIVEL CAMPO — Tipo Tabla
 
 **Para qué sirve:** Es el cuarto tipo de nodo (`tipo: "tabla"`), usado cuando un conjunto de datos se repite en filas — a diferencia del campo simple, que captura un solo valor. Toda tabla comparte un esqueleto común de 6 propiedades, y luego se especializa según cómo crecen sus filas (`planas` o `jerarquicas`), si sus columnas son fijas o se generan dinámicamente, y si sus filas se organizan bajo agrupadores.
@@ -278,6 +280,8 @@ Como ya se explicó en detalle la estructura base del nodo `campo` en el punto 3
 | `cabecera` | Array opcional que agrupa columnas bajo un título común de encabezado. Una columna que no aparece en ningún `hijos` de `cabecera` no tiene título padre, y ocupa verticalmente la misma altura que sus columnas vecinas. |
 | `columnas` | Definición lógica de cada columna: `id`, `nombre`, `tipo`, y propiedades específicas del tipo. En tablas jerárquicas, este array se llama `niveles`. |
 | `valor` | Los datos reales de la tabla. Su forma exacta depende de la combinación de `config`. |
+
+<!-- anchor:tabla-4.1 -->
 
 ### 4.1 Filas planas, columnas fijas, sin agrupador
 
@@ -318,6 +322,8 @@ Como ya se explicó en detalle la estructura base del nodo `campo` en el punto 3
   ]
 }
 ```
+
+<!-- anchor:tabla-4.2 -->
 
 ### 4.2 Filas planas, columnas fijas, con agrupador
 
@@ -423,6 +429,8 @@ El resultado era que tomaba las filas de datos por títulos y los títulos por d
 
 Es el mismo criterio que ya seguían las **jerarquicas** (`rellenarArbol`): las agrupadas se habían quedado con el método viejo.
 
+<!-- anchor:tabla-4.3 -->
+
 ### 4.3 Filas planas, columnas dinámicas, sin agrupador
 
 **Para qué sirve:** Se usa cuando una columna debe repetirse un número variable de veces (periodos, años), cuya cantidad no se conoce de antemano en la estructura. Esa columna declara `columnas_base` (la lista de encabezados a generar), y en `valor` cada fila guarda un array plano relacionado **por posición** con `columnas_base` — la única excepción a la regla de referenciar todo por id.
@@ -464,6 +472,8 @@ Es el mismo criterio que ya seguían las **jerarquicas** (`rellenarArbol`): las 
 | `columnas_base` | Array de encabezados generados dinámicamente para esta columna, en orden. Cada elemento se convierte en una columna real del Excel al generarlo. |
 | `nombre` (columna dinámica) | No se usa — cada columna generada trae su propio nombre desde `columnas_base`. Se declara solo por consistencia de esquema. |
 | `valor.[fila].columnas_dinamicas` | Array plano de valores, relacionado por **posición** con `columnas_base`: el índice 0 corresponde al primer elemento, etc. |
+
+<!-- anchor:tabla-4.4 -->
 
 ### 4.4 Filas planas, columnas dinámicas, con agrupador
 
@@ -515,6 +525,8 @@ Es el mismo criterio que ya seguían las **jerarquicas** (`rellenarArbol`): las 
   ]
 }
 ```
+
+<!-- anchor:tabla-4.5 -->
 
 ### 4.5 Filas jerárquicas, columnas fijas, sin agrupador
 
@@ -578,6 +590,8 @@ Es el mismo criterio que ya seguían las **jerarquicas** (`rellenarArbol`): las 
 
 🔴 **AQUÍ MODIFIQUE HOY 1/08/2026 a las 22:57 hrs** — esta nota decía que `filas jerárquicas + agrupador: true` no tenía ejemplo real y que el mecanismo esperado sería el mismo `agrupador`/`valores` de las variantes planas. **Resultó no ser así**: el agrupador jerárquico no es un bloque envolvente, sino un nivel del propio árbol. Ver **4.5c**.
 
+<!-- anchor:tabla-4.5b -->
+
 ### 4.5b Filas jerárquicas, columnas dinámicas
 
 **Para qué sirve:** Combina el árbol de 4.5 con la columna que se repite dinámicamente de 4.3 — se usa cuando los datos forman una jerarquía de dos o más niveles, y uno de esos niveles necesita un valor por período en vez de un solo valor de texto. Reutiliza el mismo sentinel `"columnas_dinamicas"` de 4.3/4.4: **cualquier entrada de ****`niveles`**** puede ser la dinámica** con solo declarar `id: "columnas_dinamicas"` en vez de un id propio — no es una propiedad extra pegada a otro nivel, es un nivel del árbol como cualquier otro, salvo que su valor es un array en vez de texto. Por eso, cuando el dato real necesita tanto una etiqueta de texto ("OPERACIÓN") como sus valores por año, se modelan como **dos niveles separados y consecutivos**: uno de texto normal, seguido del nivel dinámico (que en ese caso siempre será hoja del árbol, sin `hijos` propios).
@@ -639,6 +653,8 @@ Ejemplo real: Formato 6-A, hoja COSTO TOTAL, sección 8.03 "Costos de operación
 | `valor.[nodo].columnas_dinamicas` | En los nodos de ese nivel, reemplaza por completo el valor de texto normal por un array plano relacionado por posición con `columnas_base` — misma convención que en las variantes planas (4.3/4.4), nunca coexiste con una etiqueta de texto en el mismo nodo. |
 
 ✅ *Implementado y verificado en el código (editor + escritor de Excel) el 2026-07-13, probado en 8.03 de la plantilla "faro".*
+
+<!-- anchor:tabla-4.5c -->
 
 ### 4.5c Filas jerárquicas, con agrupador
 
@@ -742,6 +758,8 @@ A diferencia de las variantes planas, que los meten en `agrupador.valores` (4.2)
 
 Regla de lectura: dentro de un nodo, la clave que coincide con la columna de su propio nivel es **el título**; cualquier otra clave que coincida con una columna de la tabla son **valores propios de esa fila**. Solo tienen sentido en columnas libres — si `agrupador_abarca_columnas` cubre toda la tabla, no queda ninguna.
 
+<!-- anchor:tabla-4.6 -->
+
 ### 4.6 Caso especial — Valores seleccionables ✏️ *(AQUÍ MODIFIQUE HOY 2026-08-06 a las 08:47 hrs)*
 
 **Para qué sirve:** documentar cómo se representa un valor que en el Excel se elige de una lista desplegable.
@@ -787,6 +805,8 @@ Esto incluye las **listas dependientes**: cuando la validación es un `INDIRECT`
 | `etiquetas` / `opciones` | **Ya no se usan.** La lista sale de la validación de datos del Excel. Si aparecen en una estructura antigua, se ignoran. |
 | `valor` de una columna con lista | El texto exacto de la opción elegida, tal cual figura en el Excel (ej. `"Sí"`, `"Administración indirecta – por contrata"`). Nunca `true`/`false` ni un índice. |
 
+<!-- anchor:tabla-4.7 -->
+
 ### 4.7 Crecimiento y desplazamiento de filas
 
 **Para qué sirve:** Cuando el usuario agrega más registros a una tabla de los que tenía en su estado base (`filas_base`), todo lo que esté ubicado *después* de esa tabla en la misma hoja debe desplazarse hacia abajo. Esta sección define cómo se calcula ese crecimiento y cómo se propaga.
@@ -815,6 +835,8 @@ fila_efectiva(nodo) = fila_base(nodo) + Σ crecimiento(tabla)                   
 ```
 
 **Regla de orden:** el orden de "antes/después" lo determina el orden en que los nodos aparecen dentro de `campos`, a través de todas las secciones que comparten `hoja`. Por eso ese orden debe reflejar fielmente la disposición física real del Excel, de arriba hacia abajo — si el JSON no respeta ese orden, el cálculo de desplazamiento se rompe silenciosamente.
+
+<!-- anchor:tabla-4.8 -->
 
 ### 4.8 Caso especial — Celdas partidas (`subcolumnas`)
 
@@ -905,6 +927,8 @@ Caso real que motivó la convención: Formato CIAI, hoja `Involucrados`, tabla 4
 
 > **Nota de implementación:** 🔴 **AQUÍ MODIFIQUÉ HOY 2/08/2026 a las 10:39 hrs — esta nota decía que la convención "todavía no está implementada". Ya no es cierto: está implementada de punta a punta** — editor (interruptor "Tiene subcolumnas" en el engranaje de la columna, y engranaje por celda para partir/fusionar), lector de Excel y escritor. Al escribir, una celda partida rompe la fusión que la plantilla trae por defecto; una fusionada vacía las columnas de las otras partes para no dejar restos ocultos bajo la fusión. Ver la página hija **INSTRUCCIONES DEL UI** para el detalle del comportamiento en el editor.
 
+<!-- anchor:tabla-4.9 -->
+
 ### 4.9 Caso especial — Fila de cabecera del Excel usada como fila de datos
 
 🔴 **AQUÍ MODIFIQUÉ HOY 2/08/2026 a las 10:39 hrs — sección nueva.**
@@ -966,6 +990,8 @@ No hace falta una variante de tabla nueva: basta con **hacer que la tabla empiec
 
 ⚠️ **Cuidado con ****`cabecera`****.** Es solo decoración para agrupar columnas bajo un título común en la UI; no tiene efecto en el Excel. Declararla cuando el archivo real **no** tiene ese título (7.03, 7.05 y 7.06 no tienen nada sobre las columnas de años) solo confunde la lectura de la estructura.
 
+<!-- anchor:tabla-4.10 -->
+
 ### 4.10 Filas que abarca una celda base — `config.abarca_filas`
 
 🔴 **AQUÍ MODIFIQUÉ HOY 10/08/2026 — sección nueva.**
@@ -1011,6 +1037,8 @@ Ejemplo — tabla plana cuyas filas base ocupan 2 filas de Excel cada una:
 ```
 
 Con `abarca_filas: 2`, la fila base 1 vive en B74:B75 (fusionada), la fila base 2 en B76:B77, la fila base 3 en B78:B79 — `filas_base: 3` sigue contando filas BASE, no filas físicas; la cantidad de filas físicas reales que ocupa la tabla es `filas_base × abarca_filas`.
+
+<!-- anchor:tabla-5 -->
 
 ## 5. PROTECCIÓN DE CELDAS CALCULADAS
 
@@ -1090,6 +1118,8 @@ La plantilla oficial del CIAI (`1_plantilla_electronica.xlsx`) tiene **~2320 fó
 
 ⚠️ **Nuestras propias fórmulas ceden.** Un campo `calculado` cuyo `valor` sea `=6.01.12+6.01.13` solo escribe su fórmula traducida si la celda destino está **libre**. Si el Excel ya trae la suya (`+I23+I25`, la misma cuenta escrita distinto), gana la del archivo oficial.
 
+<!-- anchor:tabla-6 -->
+
 ## 6. NODO `nota`
 
 🔴 **AQUÍ MODIFIQUÉ HOY 11/08/2026 — sección nueva.**
@@ -1115,5 +1145,15 @@ Forma — deliberadamente mínima, sin `id`, sin `nombre`, sin `tipo`, sin `edit
 Comparar con `Subseccion.ayuda`: la ayuda de subsección vive detrás de un botón "?" y explica cómo llenar TODA la subsección de un tirón; una nota se ve directo en el flujo, en cualquier posición, y suele ser tan puntual como una frase junto a un campo específico.
 
 ---
+
+🔴 **AQUÍ MODIFIQUÉ HOY 2026-09-08 — anclas de ancla HTML agregadas, sin tocar contenido.**
+Se sembró un comentario HTML invisible (formato `anchor:<id>`) justo encima de cada encabezado de variante de tabla (`tabla-intro`,
+`tabla-4.1`…`tabla-4.10`, `tabla-5`, `tabla-6`). Motivo: el nuevo botón "?" de "ayúdame a llenar esta tabla"
+(chat del cliente) arma su prompt con la variante EXACTA de la tabla en cuestión — según su
+`config.filas`/`config.columnas`/`config.agrupador` — en vez de mandar el documento completo (ver
+`LlenadoIAController::extraerEsquemaTablaRelevante()` en el backend de proyectafacil). Las anclas son el
+punto de corte que usa esa función; no cambian nada visible para quien lee este documento como humano.
+Si se agrega una variante nueva (ej. 4.11), sembrarle su propia ancla siguiendo el mismo patrón, o la
+extracción caerá al documento completo sin filtrar (comportamiento de respaldo, nunca se rompe el prompt).
 
 ✅ **Claude tiene acceso a este documento** (confirmado vía Notion MCP).

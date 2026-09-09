@@ -445,6 +445,14 @@ class GoogleMeetService
         return $parrafos === [] ? null : implode("\n\n", $parrafos);
     }
 
+    /**
+     * Un salto de línea manual (Shift+Enter) DENTRO de un mismo párrafo de Google Docs no crea un
+     * párrafo nuevo — la API lo entrega como un carácter de control literal U+000B (vertical tab)
+     * incrustado en el texto del TextRun. Gemini usa justo ese patrón para separar la etiqueta de
+     * un sub-tema ("Fundamentos y riesgos IA") de su explicación, dentro de un solo párrafo. Sin
+     * normalizar, ese \v queda guardado tal cual y el navegador lo pinta como un cuadrado (tofu) —
+     * el "símbolo extraño" que reportó el usuario. Lo convertimos a un salto de línea real.
+     */
     private function textoDeParrafo(Paragraph $parrafo): string
     {
         $texto = '';
@@ -452,7 +460,7 @@ class GoogleMeetService
             $texto .= $elemento->getTextRun()?->getContent() ?? '';
         }
 
-        return $texto;
+        return str_replace(["\v", "\f", "\u{2028}", "\u{2029}"], "\n", $texto);
     }
 
     /**
