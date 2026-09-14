@@ -32,7 +32,7 @@ class AsistenteIAController extends BaseController
         }
 
         $config = config('Ia');
-        if ($config->openaiApiKey === '') {
+        if ($config->kimiApiKey === '') {
             return $this->response->setStatusCode(503)->setJSON([
                 'error' => 'El asesor de IA todavía no está configurado en el servidor.',
             ]);
@@ -53,7 +53,7 @@ class AsistenteIAController extends BaseController
         }
         $mensajes[] = ['role' => 'user', 'content' => $pregunta];
 
-        $texto = $this->llamarOpenAI($config, $this->construirSistema($plantillaId, $seccionId), $mensajes);
+        $texto = $this->llamarKimi($config, $this->construirSistema($plantillaId, $seccionId), $mensajes);
         if ($texto === null) {
             return $this->response->setStatusCode(502)->setJSON([
                 'error' => 'No se pudo consultar al asesor de IA en este momento. Inténtalo de nuevo.',
@@ -101,7 +101,7 @@ class AsistenteIAController extends BaseController
         }
 
         $config = config('Ia');
-        if ($config->openaiApiKey === '') {
+        if ($config->kimiApiKey === '') {
             return $this->response->setStatusCode(503)->setJSON([
                 'error' => 'El asesor de IA todavía no está configurado en el servidor.',
             ]);
@@ -154,7 +154,7 @@ class AsistenteIAController extends BaseController
         $usuario = $this->construirPromptCampo($campo, $modo);
 
         $sistema1  = $sistemaBase . "\n\n" . $this->reglasRespuestaCampo($modo);
-        $resultado = $this->llamarOpenAIJson($config, $sistema1, $usuario);
+        $resultado = $this->llamarKimiJson($config, $sistema1, $usuario);
         if ($resultado === null) {
             return $this->response->setStatusCode(502)->setJSON([
                 'error' => 'No se pudo consultar al asesor de IA en este momento. Inténtalo de nuevo.',
@@ -181,7 +181,7 @@ class AsistenteIAController extends BaseController
             . "\n\nMás información de referencia sobre esta ficha técnica (documentos oficiales cargados por el administrador — "
             . "revísalos con atención, aquí puede estar el dato concreto que te faltaba):\n" . implode("\n\n", $bloquePdfs)
             . "\n\n" . $this->reglasRespuestaCampo($modo);
-        $resultado2 = $this->llamarOpenAIJson($config, $sistema2, $usuario);
+        $resultado2 = $this->llamarKimiJson($config, $sistema2, $usuario);
         if ($resultado2 === null || ! $resultado2['suficiente']) {
             return $this->response->setJSON($this->salidaSinInformacion($resultado2 ?? $resultado, $archivos));
         }
@@ -271,6 +271,10 @@ class AsistenteIAController extends BaseController
     }
 
     /**
+     * DORMIDA desde el 2026-09-09 (junto con llamarOpenAI() más abajo) — el asesor de IA migró a
+     * Kimi, ver llamarKimiJson() al final de este archivo. Se conserva intacta por si hay que volver
+     * a swapear.
+     *
      * Igual que llamarOpenAI() pero en JSON mode y devolviendo ya el array parseado — usado solo por
      * ayudaCampo(). Se mantiene aparte de llamarOpenAI() porque el contrato de salida es distinto
      * (objeto estructurado, no texto libre) y mezclar ambos con un parámetro opcional complicaba más
@@ -588,6 +592,129 @@ class AsistenteIAController extends BaseController
             // Se registra el detalle en el log del servidor, pero al cliente solo le llega un
             // mensaje genérico: el cuerpo del error puede traer datos de la cuenta.
             log_message('error', '[asistente-ia] OpenAI respondió {estado}: {cuerpo} {curl}', [
+                'estado' => $estado,
+                'cuerpo' => is_string($cuerpo) ? substr($cuerpo, 0, 500) : '(sin cuerpo)',
+                'curl'   => $errorCurl,
+            ]);
+
+            return null;
+        }
+
+        $json  = json_decode((string) $cuerpo, true);
+        $texto = trim((string) ($json['choices'][0]['message']['content'] ?? ''));
+
+        return $texto === '' ? null : $texto;
+    }
+
+    /**
+     * Igual que llamarOpenAIJson() (dormida desde el 2026-09-09, ver Config\Ia) pero contra Kimi
+     * (Moonshot AI) — la API es compatible con el formato de OpenAI Chat Completions, así que el
+     * cuerpo de la solicitud y el parseo de la respuesta son idénticos; solo cambian el endpoint, la
+     * clave y el nombre del modelo.
+     *
+     * @return array{explicacion:string,opciones:list<string>,correcto:?bool,suficiente:bool}|null
+     */
+    private function llamarKimiJson(object $config, string $sistema, string $usuario): ?array
+    {
+        $ch = curl_init($config->kimiEndpoint);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_POST           => true,
+            CURLOPT_POSTFIELDS     => json_encode([
+                // Sin `reasoning_effort`: ese parámetro solo está documentado para el modelo K3 (ver
+                // llamarKimi() más abajo, que sí lo manda) — kimiModeloLlenado es un modelo K2.x, que
+                // usa un mecanismo de razonamiento distinto (`thinking`) no necesario para esta tarea.
+                'model'                 => $config->kimiModeloLlenado,
+                'max_completion_tokens' => self::MAX_TOKENS_AYUDA_CAMPO,
+                'response_format'       => ['type' => 'json_object'],
+                'messages'              => [
+                    ['role' => 'system', 'content' => $sistema],
+                    ['role' => 'user', 'content' => $usuario],
+                ],
+            ]),
+            CURLOPT_TIMEOUT        => 60,
+            CURLOPT_HTTPHEADER     => [
+                'content-type: application/json',
+                'authorization: Bearer ' . $config->kimiApiKey,
+            ],
+        ]);
+        $cuerpo    = curl_exec($ch);
+        $estado    = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $errorCurl = curl_error($ch);
+        curl_close($ch);
+
+        if ($cuerpo === false || $estado < 200 || $estado >= 300) {
+            log_message('error', '[asistente-ia] Kimi (ayuda-campo) respondió {estado}: {cuerpo} {curl}', [
+                'estado' => $estado,
+                'cuerpo' => is_string($cuerpo) ? substr($cuerpo, 0, 500) : '(sin cuerpo)',
+                'curl'   => $errorCurl,
+            ]);
+
+            return null;
+        }
+
+        $json      = json_decode((string) $cuerpo, true);
+        $contenido = trim((string) ($json['choices'][0]['message']['content'] ?? ''));
+        $parsed    = json_decode($contenido, true);
+
+        $explicacion = trim((string) ($parsed['explicacion'] ?? ''));
+        $opcionesRaw = is_array($parsed['opciones'] ?? null) ? $parsed['opciones'] : [];
+        $opciones    = array_values(array_filter(
+            array_map(static fn ($o) => trim((string) $o), $opcionesRaw),
+            static fn (string $o) => $o !== '',
+        ));
+        $correcto   = array_key_exists('correcto', (array) $parsed) ? (bool) $parsed['correcto'] : null;
+        $suficiente = array_key_exists('suficiente', (array) $parsed) ? (bool) $parsed['suficiente'] : true;
+
+        if ($explicacion === '') {
+            log_message('warning', '[asistente-ia] ayuda-campo (Kimi): respuesta sin explicacion utilizable: {contenido}', [
+                'contenido' => substr($contenido, 0, 300),
+            ]);
+
+            return null;
+        }
+
+        return [
+            'explicacion' => $explicacion,
+            'opciones'    => array_slice($opciones, 0, 4),
+            'correcto'    => $correcto,
+            'suficiente'  => $suficiente,
+        ];
+    }
+
+    /**
+     * Igual que llamarOpenAI() (dormida desde el 2026-09-09) pero contra Kimi — ver el comentario de
+     * llamarKimiJson() sobre la compatibilidad de formato.
+     *
+     * @return string|null texto de la respuesta, o null si la llamada falló
+     */
+    private function llamarKimi(object $config, string $sistema, array $mensajes): ?string
+    {
+        $mensajesConSistema = array_merge([['role' => 'system', 'content' => $sistema]], $mensajes);
+
+        $ch = curl_init($config->kimiEndpoint);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_POST           => true,
+            CURLOPT_POSTFIELDS     => json_encode([
+                'model'                 => $config->kimiModelo,
+                'max_completion_tokens' => $config->maxTokens,
+                'reasoning_effort'      => 'low',
+                'messages'              => $mensajesConSistema,
+            ]),
+            CURLOPT_TIMEOUT        => 60,
+            CURLOPT_HTTPHEADER     => [
+                'content-type: application/json',
+                'authorization: Bearer ' . $config->kimiApiKey,
+            ],
+        ]);
+        $cuerpo    = curl_exec($ch);
+        $estado    = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $errorCurl = curl_error($ch);
+        curl_close($ch);
+
+        if ($cuerpo === false || $estado < 200 || $estado >= 300) {
+            log_message('error', '[asistente-ia] Kimi respondió {estado}: {cuerpo} {curl}', [
                 'estado' => $estado,
                 'cuerpo' => is_string($cuerpo) ? substr($cuerpo, 0, 500) : '(sin cuerpo)',
                 'curl'   => $errorCurl,

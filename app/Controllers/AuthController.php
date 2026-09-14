@@ -12,16 +12,19 @@ use Config\Stripe as StripeConfig;
 use Throwable;
 
 // Contrato de respuesta: espejo de `Sesion` en frontend/src/types/index.ts (usuarioId, nombre,
-// usuario, rol, iniciadaEn). login() además incluye `token` (Bearer JWT) y `tienePlan`. me()
-// devuelve Sesion o null. Auth por Authorization: Bearer — no depende de la cookie de sesión PHP.
+// usuario, rol, iniciadaEn). login() además incluye `token` (Bearer JWT), `tienePlan`,
+// `alumnoVigente` y `vigenciaAlumnoHasta`. me() devuelve Sesion o null. Auth por
+// Authorization: Bearer — no depende de la cookie de sesión PHP.
 //
-// `tienePlan` viaja SIEMPRE fuera del JWT (no es un claim de identidad, es un estado que cambia
-// apenas alguien compra un plan — meterlo en el token lo dejaría desactualizado hasta el próximo
-// login) y se recalcula en cada llamada a login()/me() con un chequeo liviano y SIN efectos
-// colaterales: a propósito nunca se llama a FacturacionController::crearDefault() desde acá —
-// ver el plan de implementación de "registro público" para el porqué (un cliente sin plan debe
-// ver únicamente la pantalla de elegir plan, nunca uno de mentira asignado solo por consultar el
-// estado de su sesión).
+// `tienePlan`/`alumnoVigente` viajan SIEMPRE fuera del JWT (no son claims de identidad, son estado
+// que cambia sin que la persona vuelva a loguearse — al comprar/cancelar un plan, o al vencer la
+// fecha de un alumno — meterlos en el token los dejaría desactualizados hasta el próximo login) y
+// se recalculan en cada llamada a login()/me() con un chequeo liviano y SIN efectos colaterales: a
+// propósito nunca se llama a FacturacionController::crearDefault() desde acá — ver el plan de
+// implementación de "registro público" para el porqué (un cliente sin plan debe ver únicamente la
+// pantalla de elegir plan, nunca uno de mentira asignado solo por consultar el estado de su
+// sesión). Juntos determinan si puede entrar a "Proyectos de Inversión con IA" — ver
+// `puedeAccederProyectosIA()` en frontend/src/lib/permisos.ts.
 class AuthController extends BaseController
 {
     public function login(): ResponseInterface
@@ -75,8 +78,10 @@ class AuthController extends BaseController
 
         return $this->response->setJSON([
             ...$sesion,
-            'token'     => AuthToken::emitir($sesion, (string) $sesionId),
-            'tienePlan' => $this->tienePlan($fila['rol'], (int) $fila['id']),
+            'token'              => AuthToken::emitir($sesion, (string) $sesionId),
+            'tienePlan'          => $this->tienePlan($fila['rol'], (int) $fila['id']),
+            'alumnoVigente'      => $this->alumnoVigente((int) $fila['id']),
+            'vigenciaAlumnoHasta' => $fila['vigencia_alumno_hasta'] ?? null,
         ]);
     }
 
@@ -87,9 +92,13 @@ class AuthController extends BaseController
             return $this->response->setJSON(null);
         }
 
+        $usuario = (new UsuarioModel())->find((int) $sesion['usuarioId']);
+
         return $this->response->setJSON([
             ...$sesion,
-            'tienePlan' => $this->tienePlan($sesion['rol'], (int) $sesion['usuarioId']),
+            'tienePlan'          => $this->tienePlan($sesion['rol'], (int) $sesion['usuarioId']),
+            'alumnoVigente'      => $this->alumnoVigente((int) $sesion['usuarioId']),
+            'vigenciaAlumnoHasta' => $usuario['vigencia_alumno_hasta'] ?? null,
         ]);
     }
 
@@ -194,13 +203,37 @@ class AuthController extends BaseController
         return $this->response->setJSON(['verificado' => true]);
     }
 
+    // "Tiene plan" exige que la membresía siga VIGENTE, no solo que exista la fila: una cancelada o
+    // vencida no debe seguir desbloqueando "Proyectos de Inversión con IA" — pedido explícito del
+    // cliente ("mientras dura su membresía"). `fecha_renovacion` nula = plan sin fecha de corte
+    // (ej. Nivel 0 gratuito o un pago único ya cubierto), se trata como vigente.
     private function tienePlan(string $rol, int $usuarioId): bool
     {
         if ($rol !== 'cliente') {
             return true; // no aplica — no se usa para gatear nada fuera del rol cliente.
         }
 
-        return db_connect()->table('facturaciones')->where('usuario_id', $usuarioId)->countAllResults() > 0;
+        return db_connect()->table('facturaciones')
+            ->where('usuario_id', $usuarioId)
+            ->where('cancelada', 0)
+            ->groupStart()
+                ->where('fecha_renovacion', null)
+                ->orWhere('fecha_renovacion >=', date('Y-m-d'))
+            ->groupEnd()
+            ->countAllResults() > 0;
+    }
+
+    // Pedido explícito del cliente: un alumno de curso/diploma tiene "Proyectos de Inversión con
+    // IA" e "ILPIIE Live" gratis hasta que venza su acceso — `vigencia_alumno_hasta` nula significa
+    // sin fecha de corte (acceso indefinido mientras siga marcado como alumno).
+    private function alumnoVigente(int $usuarioId): bool
+    {
+        $fila = (new UsuarioModel())->select('origen, vigencia_alumno_hasta')->find($usuarioId);
+        if (! $fila || ($fila['origen'] ?? null) !== 'alumno') {
+            return false;
+        }
+
+        return $fila['vigencia_alumno_hasta'] === null || $fila['vigencia_alumno_hasta'] >= date('Y-m-d');
     }
 
     /** "maria.perez@dominio.com" -> "maria.perez", con sufijo numérico si ya existe. */
