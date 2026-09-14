@@ -17,8 +17,16 @@ class AsesoriasDemoAsesor1Seeder extends Seeder
 {
     private const MARCADOR = 'Necesito ayuda con el diagnóstico de la unidad productora (demo asesor1).';
 
-    /** Sectores MEF que atiende el asesor demo — es lo que abre marcado en "Temas de especialidad". */
+    /** Sectores MEF que atiende el asesor demo (asesor_especialidades) — usado por el aviso
+     * automático de solicitudes de chat (SolicitudAsesoriaHelpersTrait::asesoresPorSector). */
     private const SECTORES_PROPIOS = ['SAL', 'VYS', 'DIS'];
+
+    /** Temas de especialidad (tabla `temas_especialidad` / `asesor_temas_especialidad` — catálogo
+     * SEPARADO de `sectores`, ver TemasEspecialidadSeeder) que atiende el asesor demo — es lo que
+     * abre marcado en el bloque "2. Temas de especialidad". Incluye dos con subtemas (PIN, EJO) y
+     * dos sin subtemas (PLN, PRE) para que la demo muestre ambos estados de esa pantalla (acordeón
+     * vs. seleccionable simple). */
+    private const TEMAS_PROPIOS = ['PIN', 'EJO', 'PLN', 'PRE'];
 
     public function run(): void
     {
@@ -30,13 +38,17 @@ class AsesoriasDemoAsesor1Seeder extends Seeder
         }
         $pedroId = (int) $pedro['id'];
 
+        // Sector MEF (para las solicitudes demo y el aviso automático) y tema de especialidad (para
+        // el bloque "2. Temas de especialidad") son catálogos DISTINTOS — no confundir uno con otro.
         $sectorId = $this->sectorIdsPorCodigo();
+        $temaId   = $this->temaIdsPorCodigo();
 
         // Va ANTES del corte de idempotencia: AsesoriasDemoSeeder solo le da especialidades a los
         // docentes demo (usuarios 12-14), no a asesor1, así que sin esto su pantalla "Temas de
-        // especialidad" arranca vacía en una BD recién sembrada — y sin sectores tampoco hay
+        // especialidad" arranca vacía en una BD recién sembrada — y sin sectores/temas tampoco hay
         // subtemas que marcarle después.
-        $this->asignarEspecialidades($pedroId, $sectorId);
+        $this->asignarSectores($pedroId, $sectorId);
+        $this->asignarTemas($pedroId, $temaId);
 
         $yaExiste = $this->db->table('solicitudes_asesoria')->where('mensaje_inicial', self::MARCADOR)->countAllResults() > 0;
         if ($yaExiste) {
@@ -117,7 +129,7 @@ class AsesoriasDemoAsesor1Seeder extends Seeder
         echo "Listo — 4 solicitudes demo nuevas para asesor1 (Pedro Ríos): 2 por agendar, 2 agendadas.\n";
     }
 
-    private function asignarEspecialidades(int $pedroId, array $sectorId): void
+    private function asignarSectores(int $pedroId, array $sectorId): void
     {
         $nuevas = 0;
         foreach (self::SECTORES_PROPIOS as $codigo) {
@@ -135,13 +147,49 @@ class AsesoriasDemoAsesor1Seeder extends Seeder
             $nuevas++;
         }
         if ($nuevas > 0) {
-            echo "Listo — {$nuevas} especialidades asignadas a asesor1 (Pedro Ríos).\n";
+            echo "Listo — {$nuevas} sectores asignados a asesor1 (Pedro Ríos).\n";
         }
     }
 
+    private function asignarTemas(int $pedroId, array $temaId): void
+    {
+        $nuevas = 0;
+        foreach (self::TEMAS_PROPIOS as $codigo) {
+            if (! isset($temaId[$codigo])) {
+                continue;
+            }
+            $yaTiene = $this->db->table('asesor_temas_especialidad')
+                ->where('usuario_id', $pedroId)
+                ->where('tema_id', $temaId[$codigo])
+                ->countAllResults() > 0;
+            if ($yaTiene) {
+                continue;
+            }
+            $this->db->table('asesor_temas_especialidad')->insert(['usuario_id' => $pedroId, 'tema_id' => $temaId[$codigo]]);
+            $nuevas++;
+        }
+        if ($nuevas > 0) {
+            echo "Listo — {$nuevas} temas de especialidad asignados a asesor1 (Pedro Ríos).\n";
+        }
+    }
+
+    /** Sectores MEF (Salud, Educación...) — usados solo para el `sector_id` de las solicitudes demo. */
     private function sectorIdsPorCodigo(): array
     {
         $filas = $this->db->table('sectores')->select('id, codigo')->get()->getResultArray();
+        $porCodigo = [];
+        foreach ($filas as $f) {
+            $porCodigo[$f['codigo']] = (int) $f['id'];
+        }
+
+        return $porCodigo;
+    }
+
+    /** Temas de especialidad (Proyectos de Inversión, Ejecución de Obras...) — usados para
+     * `asesor_especialidades`/"Temas de especialidad", catálogo separado de `sectores`. */
+    private function temaIdsPorCodigo(): array
+    {
+        $filas = $this->db->table('temas_especialidad')->select('id, codigo')->get()->getResultArray();
         $porCodigo = [];
         foreach ($filas as $f) {
             $porCodigo[$f['codigo']] = (int) $f['id'];

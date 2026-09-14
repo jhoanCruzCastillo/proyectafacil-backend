@@ -52,7 +52,7 @@ class PagosController extends BaseController
             'line_items'          => [['price' => $beneficio['stripe_price_id'], 'quantity' => 1]],
             'client_reference_id' => (string) $cuentaId,
             'metadata'            => ['tipo' => 'beneficio', 'beneficioId' => (string) $beneficioId, 'cuentaId' => (string) $cuentaId],
-            'success_url'         => rtrim($config->frontendBaseUrl, '/') . '/?beneficio_checkout=success',
+            'success_url'         => rtrim($config->frontendBaseUrl, '/') . '/?beneficio_checkout=success&session_id={CHECKOUT_SESSION_ID}',
             'cancel_url'          => rtrim($config->frontendBaseUrl, '/') . '/?beneficio_checkout=cancel',
         ];
         // El SDK de Stripe manda `null` como cadena vacía en vez de omitirlo — customer_email
@@ -100,7 +100,7 @@ class PagosController extends BaseController
             'line_items'          => [['price' => $plan['stripe_price_id'], 'quantity' => 1]],
             'client_reference_id' => (string) $cuentaId,
             'metadata'            => ['tipo' => 'plan', 'planId' => (string) $plan['id'], 'cuentaId' => (string) $cuentaId],
-            'success_url'         => rtrim($config->frontendBaseUrl, '/') . '/?facturacion_checkout=success',
+            'success_url'         => rtrim($config->frontendBaseUrl, '/') . '/?facturacion_checkout=success&session_id={CHECKOUT_SESSION_ID}',
             'cancel_url'          => rtrim($config->frontendBaseUrl, '/') . '/?facturacion_checkout=cancel',
         ];
         $this->agregarClienteStripe($params, $cuentaId);
@@ -210,7 +210,7 @@ class PagosController extends BaseController
             'line_items'          => [['price' => $addon['stripe_price_id'], 'quantity' => $cantidad]],
             'client_reference_id' => (string) $cuentaId,
             'metadata'            => ['tipo' => 'addon', 'addonSlug' => $slug, 'cantidad' => (string) $cantidad, 'cuentaId' => (string) $cuentaId],
-            'success_url'         => rtrim($config->frontendBaseUrl, '/') . '/?facturacion_checkout=success',
+            'success_url'         => rtrim($config->frontendBaseUrl, '/') . '/?facturacion_checkout=success&session_id={CHECKOUT_SESSION_ID}',
             'cancel_url'          => rtrim($config->frontendBaseUrl, '/') . '/?facturacion_checkout=cancel',
         ];
         $this->agregarClienteStripe($params, $cuentaId, $facturacion);
@@ -400,96 +400,15 @@ class PagosController extends BaseController
         $db = db_connect();
 
         if ($event->type === 'checkout.session.completed') {
-            $session = $event->data->object;
-            $tipo    = $session->metadata->tipo ?? 'beneficio'; // sesiones viejas de beneficio no tenían 'tipo'
-            $ahora   = date('Y-m-d H:i:s');
-
-            if ($tipo === 'beneficio') {
-                $db->table('cuenta_beneficios')->insert([
-                    'cuenta_id'                  => (int) $session->metadata->cuentaId,
-                    'beneficio_id'               => (int) $session->metadata->beneficioId,
-                    'estado'                     => 'activo',
-                    'stripe_checkout_session_id' => $session->id,
-                    'stripe_subscription_id'     => $session->subscription ?? null,
-                    'fecha_inicio'               => $ahora,
-                    'created_at'                 => $ahora,
-                    'updated_at'                 => $ahora,
-                ]);
-            } elseif ($tipo === 'plan') {
-                $cuentaId  = (int) $session->metadata->cuentaId;
-                $planId    = (int) $session->metadata->planId;
-                $subId     = $session->subscription ?? null;
-                $itemId    = null;
-                if ($subId) {
-                    $stripe = new StripeClient($config->secretKey);
-                    $sub    = $stripe->subscriptions->retrieve($subId);
-                    $itemId = $sub->items->data[0]->id ?? null;
-                }
-
-                $cambios = [
-                    'plan_id'                     => $planId,
-                    'cancelada'                   => 0,
-                    'fecha_inicio_plan'           => $ahora,
-                    'stripe_customer_id'          => $session->customer,
-                    'stripe_subscription_id'      => $subId,
-                    'stripe_subscription_item_id' => $itemId,
-                    'updated_at'                  => $ahora,
-                ];
-                if ($db->table('facturaciones')->where('usuario_id', $cuentaId)->countAllResults() > 0) {
-                    $db->table('facturaciones')->where('usuario_id', $cuentaId)->update($cambios);
-                } else {
-                    $cambios['usuario_id']  = $cuentaId;
-                    $cambios['metodo_pago'] = 'tarjeta';
-                    $cambios['created_at']  = $ahora;
-                    $db->table('facturaciones')->insert($cambios);
-                }
-
-                TicketsConsultaController::emitirTicketsDePlan($cuentaId, $planId);
-            } elseif ($tipo === 'addon') {
-                $cuentaId = (int) $session->metadata->cuentaId;
-                $slug     = (string) $session->metadata->addonSlug;
-                $cantidad = (int) $session->metadata->cantidad;
-                $nombre   = self::ADDON_SLUGS[$slug] ?? null;
-                $addon    = $nombre !== null ? $db->table('add_ons')->where('nombre', $nombre)->get()->getRowArray() : null;
-
-                if ($addon) {
-                    $filaAddon     = $db->table('facturacion_addons')->where('facturacion_usuario_id', $cuentaId)->where('add_on_id', $addon['id'])->get()->getRowArray();
-                    $cantidadTotal = ($filaAddon['cantidad'] ?? 0) + $cantidad;
-
-                    $itemId = null;
-                    if ($addon['recurrente'] && $session->subscription) {
-                        $stripe = new StripeClient($config->secretKey);
-                        $sub    = $stripe->subscriptions->retrieve($session->subscription);
-                        $itemId = $sub->items->data[0]->id ?? null;
-                    }
-
-                    if ($filaAddon) {
-                        $cambiosAddon = ['cantidad' => $cantidadTotal];
-                        if ($itemId) {
-                            $cambiosAddon['stripe_subscription_item_id'] = $itemId;
-                        }
-                        $db->table('facturacion_addons')->where('facturacion_usuario_id', $cuentaId)->where('add_on_id', $addon['id'])->update($cambiosAddon);
-                    } else {
-                        $db->table('facturacion_addons')->insert([
-                            'facturacion_usuario_id'      => $cuentaId,
-                            'add_on_id'                   => $addon['id'],
-                            'cantidad'                    => $cantidadTotal,
-                            'stripe_subscription_item_id' => $itemId,
-                        ]);
-                    }
-
-                    if ($slug === 'consultoria-1a1') {
-                        TicketsConsultaController::emitirTicketsDeAddon($cuentaId, $cantidadTotal);
-                    }
-                }
-            }
+            $this->procesarSesionCompletada($event->data->object);
         }
 
         if ($event->type === 'customer.subscription.updated') {
-            $sub     = $event->data->object;
-            $cambios = ['updated_at' => date('Y-m-d H:i:s'), 'cancelada' => $sub->cancel_at_period_end ? 1 : 0];
-            if (isset($sub->current_period_end)) {
-                $cambios['fecha_renovacion'] = date('Y-m-d', $sub->current_period_end);
+            $sub        = $event->data->object;
+            $cambios    = ['updated_at' => date('Y-m-d H:i:s'), 'cancelada' => $sub->cancel_at_period_end ? 1 : 0];
+            $finPeriodo = $this->finDePeriodo($sub);
+            if ($finPeriodo !== null) {
+                $cambios['fecha_renovacion'] = date('Y-m-d', $finPeriodo);
             }
             $db->table('facturaciones')->where('stripe_customer_id', $sub->customer)->update($cambios);
         }
@@ -529,6 +448,166 @@ class PagosController extends BaseController
         }
 
         return $this->response->setJSON(['recibido' => true]);
+    }
+
+    // Confirma una Checkout Session al volver de Stripe, SIN esperar al webhook — en desarrollo
+    // local, Stripe no tiene ninguna URL pública a la que llamar (el webhook solo llega si corre
+    // `stripe listen` en una terminal aparte), así que depender solo de webhook() dejaba a
+    // cualquiera "sin plan" aunque el cobro sí se hubiera hecho. Esto no reemplaza al webhook (que
+    // sigue siendo la fuente de verdad para eventos futuros: renovación, cancelación) — es un
+    // respaldo inmediato al volver del Checkout. Llama al mismo procesarSesionCompletada() que usa
+    // el webhook, así que si el webhook SÍ llega más tarde, no duplica nada (es upsert).
+    public function verificarCheckout(): ResponseInterface
+    {
+        $dto       = $this->request->getJSON(true) ?? [];
+        $sessionId = (string) ($dto['sessionId'] ?? '');
+        if ($sessionId === '') {
+            return $this->response->setStatusCode(400)->setJSON(['error' => 'Falta sessionId']);
+        }
+
+        $config = config('Stripe');
+        if ($config->secretKey === '') {
+            return $this->response->setStatusCode(500)->setJSON(['error' => 'Stripe no está configurado']);
+        }
+
+        $stripe = new StripeClient($config->secretKey);
+        try {
+            $session = $stripe->checkout->sessions->retrieve($sessionId);
+        } catch (Throwable $e) {
+            log_message('error', 'PagosController::verificarCheckout falló: {msg}', ['msg' => $e->getMessage()]);
+
+            return $this->response->setStatusCode(502)->setJSON(['error' => 'No se pudo confirmar el pago con Stripe. Intenta de nuevo en unos minutos.']);
+        }
+
+        // 'payment' (Nivel 0, pago único) confirma vía payment_status; 'subscription' también lo
+        // trae en 'paid' apenas se crea la suscripción — no hace falta distinguir el modo acá.
+        if ($session->payment_status !== 'paid') {
+            return $this->response->setJSON(['ok' => false]);
+        }
+
+        $this->procesarSesionCompletada($session);
+
+        return $this->response->setJSON(['ok' => true]);
+    }
+
+    // Cuerpo de checkout.session.completed — llamado desde webhook() (Stripe) y desde
+    // verificarCheckout() (regreso inmediato del Checkout). Upsert por diseño: procesar la misma
+    // sesión dos veces dos no duplica nada.
+    private function procesarSesionCompletada(object $session): void
+    {
+        $config = config('Stripe');
+        $db     = db_connect();
+        $tipo   = $session->metadata->tipo ?? 'beneficio'; // sesiones viejas de beneficio no tenían 'tipo'
+        $ahora  = date('Y-m-d H:i:s');
+
+        if ($tipo === 'beneficio') {
+            $db->table('cuenta_beneficios')->insert([
+                'cuenta_id'                  => (int) $session->metadata->cuentaId,
+                'beneficio_id'               => (int) $session->metadata->beneficioId,
+                'estado'                     => 'activo',
+                'stripe_checkout_session_id' => $session->id,
+                'stripe_subscription_id'     => $session->subscription ?? null,
+                'fecha_inicio'               => $ahora,
+                'created_at'                 => $ahora,
+                'updated_at'                 => $ahora,
+            ]);
+        } elseif ($tipo === 'plan') {
+            $cuentaId = (int) $session->metadata->cuentaId;
+            $planId   = (int) $session->metadata->planId;
+            $subId    = $session->subscription ?? null;
+            $itemId   = null;
+            $sub      = null;
+            if ($subId) {
+                $stripe = new StripeClient($config->secretKey);
+                $sub    = $stripe->subscriptions->retrieve($subId);
+                $itemId = $sub->items->data[0]->id ?? null;
+            }
+
+            $cambios = [
+                'plan_id'                     => $planId,
+                'cancelada'                   => 0,
+                'fecha_inicio_plan'           => $ahora,
+                'stripe_customer_id'          => $session->customer,
+                'stripe_subscription_id'      => $subId,
+                'stripe_subscription_item_id' => $itemId,
+                'updated_at'                  => $ahora,
+            ];
+            // Sin esto, una suscripción recién creada quedaba con `fecha_renovacion` vacía (Nivel 0,
+            // pago único, nunca la tiene) o con la fecha vieja de un plan anterior — el chequeo de
+            // vigencia de tienePlan() (ver AuthController.php) la trataba como vencida al instante,
+            // aunque el cobro sí se hubiera hecho. El evento `customer.subscription.updated` también
+            // la actualiza más tarde (webhook()), esto solo evita el hueco entre ambos.
+            $finPeriodo = $sub !== null ? $this->finDePeriodo($sub) : null;
+            if ($finPeriodo !== null) {
+                $cambios['fecha_renovacion'] = date('Y-m-d', $finPeriodo);
+            } elseif ($subId === null) {
+                // Nivel 0 (pago único, sin suscripción): sin fecha de corte — tienePlan() ya trata
+                // null como "vigente sin vencimiento".
+                $cambios['fecha_renovacion'] = null;
+            }
+            if ($db->table('facturaciones')->where('usuario_id', $cuentaId)->countAllResults() > 0) {
+                $db->table('facturaciones')->where('usuario_id', $cuentaId)->update($cambios);
+            } else {
+                $cambios['usuario_id']  = $cuentaId;
+                $cambios['metodo_pago'] = 'tarjeta';
+                $cambios['created_at']  = $ahora;
+                $db->table('facturaciones')->insert($cambios);
+            }
+
+            TicketsConsultaController::emitirTicketsDePlan($cuentaId, $planId);
+        } elseif ($tipo === 'addon') {
+            $cuentaId = (int) $session->metadata->cuentaId;
+            $slug     = (string) $session->metadata->addonSlug;
+            $cantidad = (int) $session->metadata->cantidad;
+            $nombre   = self::ADDON_SLUGS[$slug] ?? null;
+            $addon    = $nombre !== null ? $db->table('add_ons')->where('nombre', $nombre)->get()->getRowArray() : null;
+
+            if ($addon) {
+                $filaAddon     = $db->table('facturacion_addons')->where('facturacion_usuario_id', $cuentaId)->where('add_on_id', $addon['id'])->get()->getRowArray();
+                $cantidadTotal = ($filaAddon['cantidad'] ?? 0) + $cantidad;
+
+                $itemId = null;
+                if ($addon['recurrente'] && $session->subscription) {
+                    $stripe = new StripeClient($config->secretKey);
+                    $sub    = $stripe->subscriptions->retrieve($session->subscription);
+                    $itemId = $sub->items->data[0]->id ?? null;
+                }
+
+                if ($filaAddon) {
+                    $cambiosAddon = ['cantidad' => $cantidadTotal];
+                    if ($itemId) {
+                        $cambiosAddon['stripe_subscription_item_id'] = $itemId;
+                    }
+                    $db->table('facturacion_addons')->where('facturacion_usuario_id', $cuentaId)->where('add_on_id', $addon['id'])->update($cambiosAddon);
+                } else {
+                    $db->table('facturacion_addons')->insert([
+                        'facturacion_usuario_id'      => $cuentaId,
+                        'add_on_id'                   => $addon['id'],
+                        'cantidad'                    => $cantidadTotal,
+                        'stripe_subscription_item_id' => $itemId,
+                    ]);
+                }
+
+                if ($slug === 'consultoria-1a1') {
+                    TicketsConsultaController::emitirTicketsDeAddon($cuentaId, $cantidadTotal);
+                }
+            }
+        }
+    }
+
+    // Stripe movió `current_period_end` del objeto Subscription a cada `items.data[]` (facturación
+    // flexible / multi-ítem) — un cambio de versión de API que dejó `$sub->current_period_end`
+    // silenciosamente ausente (sin error, `isset()` simplemente da false) tanto en el webhook de
+    // renovación como en la confirmación inmediata de arriba. Se intenta primero el campo viejo
+    // (compat con cuentas/API-versions que todavía lo traigan) y si no está, el nuevo lugar.
+    private function finDePeriodo(object $sub): ?int
+    {
+        if (isset($sub->current_period_end)) {
+            return (int) $sub->current_period_end;
+        }
+        $item = $sub->items->data[0] ?? null;
+
+        return isset($item->current_period_end) ? (int) $item->current_period_end : null;
     }
 
     private function idCuentaDe(int $usuarioId): int

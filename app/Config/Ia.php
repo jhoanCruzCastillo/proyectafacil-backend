@@ -4,12 +4,21 @@ namespace Config;
 
 use CodeIgniter\Config\BaseConfig;
 
-// Acceso a las APIs de IA (Gemini, Anthropic/Claude y OpenAI/ChatGPT). El llenado automático
-// (LlenadoIAController) usa OpenAI/ChatGPT (cambiado el 2026-08-19 para usar créditos de OpenAI en
-// vez de Anthropic); Gemini/Anthropic quedan configurados pero sin uso activo — se conservan por si
-// hay que volver a cambiar de proveedor (ver llamarModeloCrudo()/llamarClaudeCrudo() en el
-// controlador, ambas intactas). El asesor de IA (AsistenteIAController, chat del cliente) ya usaba
-// OpenAI desde antes — ambos flujos comparten `openaiApiKey`/`openaiEndpoint`.
+// Acceso a las APIs de IA (Gemini, Anthropic/Claude, OpenAI/ChatGPT y Kimi/Moonshot). Desde el
+// 2026-09-09 el proveedor ACTIVO para ambos flujos (AsistenteIAController — chat del cliente — y
+// LlenadoIAController — llenado automático de ficha, incluido el lote de "Llenar toda la ficha") es
+// Kimi (`kimiApiKey`/`kimiEndpoint`). Gemini, Anthropic y OpenAI quedan configurados pero sin uso
+// activo — se conservan por si hay que volver a cambiar de proveedor (ver llamarModeloCrudo() /
+// llamarClaudeCrudo() / llamarOpenAICrudo() en LlenadoIAController y llamarOpenAI()/llamarOpenAIJson()
+// en AsistenteIAController, todas intactas). La API de Kimi es compatible con el formato de OpenAI
+// Chat Completions (mismo `max_completion_tokens`, `response_format: json_object`, forma de
+// `messages`) — por eso el llenado automático síncrono migra casi 1:1; la única pieza que NO existe
+// en Kimi es la Batches API de OpenAI (subir archivo + job asíncrono + poll), así que el lote de
+// "Llenar toda la ficha" (enviarLoteFicha) se reescribió para mandar todas las solicitudes en
+// PARALELO (curl_multi) dentro del mismo request síncrono en vez de un job aparte — ver
+// ejecutarLoteKimiEnParalelo(). El código de la Batches API de OpenAI (subirArchivoLoteOpenAI /
+// esperarArchivoListoOpenAI / crearLoteOpenAI / consultarLoteOpenAI / descargarArchivoOpenAI) queda
+// dormido, sin llamadas, por el mismo criterio de reversibilidad.
 //
 // Las API keys se leen SIEMPRE del entorno del servidor — nunca se escriben aquí ni llegan al
 // navegador. Ponerlas en el frontend no serviría de nada: Vite hornea las variables VITE_* dentro
@@ -19,6 +28,7 @@ use CodeIgniter\Config\BaseConfig;
 //   ia.geminiApiKey = "AIza..."
 //   ia.anthropicApiKey = "sk-ant-..."
 //   ia.openaiApiKey = "sk-proj-..."
+//   ia.kimiApiKey = "sk-..."
 class Ia extends BaseConfig
 {
     /** Clave de la API de Gemini (Google AI Studio). Vacía = el llenado con IA responde que no está configurado. */
@@ -67,4 +77,21 @@ class Ia extends BaseConfig
     public string $openaiModeloLlenado = 'gpt-5-mini';
 
     public string $openaiEndpoint = 'https://api.openai.com/v1/chat/completions';
+
+    /** Clave de la API de Kimi (Moonshot AI, platform.kimi.ai / api.moonshot.ai) — proveedor ACTIVO desde el 2026-09-09. */
+    public string $kimiApiKey = '';
+
+    /** Modelo del asesor de IA (chat) y de las tablas con catálogo en cascada del llenado automático (ver kimiModeloLlenado abajo) — modelo insignia, respuestas más matizadas, vale la pena el costo mayor. */
+    public string $kimiModelo = 'kimi-k3';
+
+    /**
+     * Modelo del llenado automático de fichas (LlenadoIAController) — extracción determinista contra
+     * un schema fijo, no conversación matizada, así que un modelo más barato rinde igual de bien por
+     * mucho menos costo. Mismo criterio que `openaiModeloLlenado` (dormido) — ver
+     * PRECIOS_KIMI_POR_MTOK en el controlador para el detalle de precio.
+     */
+    public string $kimiModeloLlenado = 'kimi-k2.6';
+
+    /** API de Kimi: compatible con el formato de OpenAI Chat Completions (mismos campos de request/response). */
+    public string $kimiEndpoint = 'https://api.moonshot.ai/v1/chat/completions';
 }

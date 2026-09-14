@@ -29,13 +29,15 @@ class ExcelStorage
 
     /**
      * Acepta ruta local, data URI, URL https, o proxy `/api/archivos/{id}/contenido`.
+     * `$carpeta` solo aplica a S3 (Cloudinary organiza por su cuenta) — por defecto la misma
+     * carpeta de siempre, para no cambiar nada a quien ya llama esto sin pasarla.
      */
-    public function subirDesdeFuente(string $fuente, string $nombreOriginal): string
+    public function subirDesdeFuente(string $fuente, string $nombreOriginal, string $carpeta = 'proyecta-facil/excel'): string
     {
         if ($this->usarS3()) {
             $tmp = $this->materializarATemp($fuente, $nombreOriginal);
             try {
-                return (new S3ObjectStore())->subirDesdeRuta($tmp, $nombreOriginal);
+                return (new S3ObjectStore())->subirDesdeRuta($tmp, $nombreOriginal, $carpeta);
             } finally {
                 @unlink($tmp);
             }

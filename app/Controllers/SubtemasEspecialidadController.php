@@ -4,26 +4,27 @@ namespace App\Controllers;
 
 use CodeIgniter\HTTP\ResponseInterface;
 
-// Segundo nivel de las especialidades del asesor: dentro de cada sector MEF ("tema"), qué subtemas
-// específicos atiende — p. ej. dentro de Formatos Generales: "Liquidación por contrata".
-// Mismo patrón que EspecialidadesAsesorController: el catálogo es global y la selección del asesor
-// se guarda con reemplazo total (borra e inserta), no con diff incremental.
+// Segundo nivel de las especialidades del asesor: dentro de cada tema de especialidad (tabla
+// `temas_especialidad` — Proyectos de Inversión, Ejecución de Obras..., NO `sectores` MEF, ver
+// TemasEspecialidadSeeder), qué subtemas específicos atiende — p. ej. dentro de Ejecución de Obras:
+// "Expediente Técnico". Mismo patrón que EspecialidadesAsesorController: el catálogo es global y la
+// selección del asesor se guarda con reemplazo total (borra e inserta), no con diff incremental.
 class SubtemasEspecialidadController extends BaseController
 {
-    /** Catálogo completo de subtemas activos, agrupable por sector en el frontend. */
+    /** Catálogo completo de subtemas activos, agrupable por tema de especialidad en el frontend. */
     public function index(): ResponseInterface
     {
         $filas = db_connect()->table('subtemas_especialidad')
-            ->select('id, sector_id, nombre')
+            ->select('id, tema_id, nombre')
             ->where('activo', 1)
-            ->orderBy('sector_id', 'ASC')
+            ->orderBy('tema_id', 'ASC')
             ->orderBy('id', 'ASC')
             ->get()->getResultArray();
 
         return $this->response->setJSON(array_map(static fn (array $f) => [
-            'id'       => (string) $f['id'],
-            'sectorId' => (string) $f['sector_id'],
-            'nombre'   => $f['nombre'],
+            'id'     => (string) $f['id'],
+            'temaId' => (string) $f['tema_id'],
+            'nombre' => $f['nombre'],
         ], $filas));
     }
 

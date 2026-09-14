@@ -1,0 +1,92 @@
+[
+  {
+    "id": "tema-1",
+    "nombre": "Proyectos de Inversión",
+    "codigo": "PIN",
+    "icono": "faChartLine",
+    "colorAccent": "#2563eb",
+    "descripcion": "Formulación y evaluación de proyectos de inversión pública (Formatos, Fichas Técnicas, IOARR, Perfiles)",
+    "activo": true
+  },
+  {
+    "id": "tema-2",
+    "nombre": "Contrataciones con el Estado",
+    "codigo": "CON",
+    "icono": "faFileContract",
+    "colorAccent": "#d97706",
+    "descripcion": "Procesos de contratación pública",
+    "activo": true
+  },
+  {
+    "id": "tema-3",
+    "nombre": "Planeamiento",
+    "codigo": "PLN",
+    "icono": "faDiagramProject",
+    "colorAccent": "#0891b2",
+    "descripcion": "Planeamiento estratégico e institucional",
+    "activo": true
+  },
+  {
+    "id": "tema-4",
+    "nombre": "Presupuesto",
+    "codigo": "PRE",
+    "icono": "faSackDollar",
+    "colorAccent": "#059669",
+    "descripcion": "Gestión presupuestal pública",
+    "activo": true
+  },
+  {
+    "id": "tema-5",
+    "nombre": "Peritaje Económico, Financiero y Contable",
+    "codigo": "PEC",
+    "icono": "faCalculator",
+    "colorAccent": "#7c3aed",
+    "descripcion": "Peritajes económicos, financieros y contables",
+    "activo": true
+  },
+  {
+    "id": "tema-6",
+    "nombre": "Control Gubernamental",
+    "codigo": "CGU",
+    "icono": "faScaleBalanced",
+    "colorAccent": "#dc2626",
+    "descripcion": "Control gubernamental y auditoría pública",
+    "activo": true
+  },
+  {
+    "id": "tema-7",
+    "nombre": "Ejecución de Obras",
+    "codigo": "EJO",
+    "icono": "faHelmetSafety",
+    "colorAccent": "#ea580c",
+    "descripcion": "Ejecución, supervisión y liquidación de obras públicas",
+    "activo": true
+  },
+  {
+    "id": "tema-8",
+    "nombre": "Economía",
+    "codigo": "ECO",
+    "icono": "faChartPie",
+    "colorAccent": "#0d9488",
+    "descripcion": "Análisis económico aplicado al sector público",
+    "activo": true
+  },
+  {
+    "id": "tema-9",
+    "nombre": "Asesoría Legal",
+    "codigo": "LEG",
+    "icono": "faGavel",
+    "colorAccent": "#4338ca",
+    "descripcion": "Asesoría legal en gestión pública",
+    "activo": true
+  },
+  {
+    "id": "tema-10",
+    "nombre": "Asesoría Financiera",
+    "codigo": "FIN",
+    "icono": "faMoneyBillTrendUp",
+    "colorAccent": "#a21caf",
+    "descripcion": "Asesoría financiera en gestión pública",
+    "activo": true
+  }
+]

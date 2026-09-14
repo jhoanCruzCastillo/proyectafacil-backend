@@ -21,6 +21,11 @@ $routes->group('api', static function (RouteCollection $routes) {
     // Stripe llama a esto directo — no manda sesión, no puede ir detrás del filtro 'auth'. La
     // firma en el header Stripe-Signature es la única verificación (ver PagosController::webhook).
     $routes->post('pagos/webhook', 'PagosController::webhook');
+
+    // Descarga de un archivo de campo (tipo `archivo`) — un hipervínculo de Excel no manda
+    // Authorization, así que esta ruta no puede ir detrás del filtro 'auth'; se gatea con el token
+    // firmado de la URL (?t=), ver CampoArchivosController.
+    $routes->get('archivos-campo/(:num)/contenido', 'CampoArchivosController::descargarPublico/$1');
 });
 
 // Todo lo demás requiere sesión activa (Módulo 1 en adelante).
@@ -48,6 +53,10 @@ $routes->group('api', ['filter' => 'auth'], static function (RouteCollection $ro
     // Imágenes de campos tipo `imagen`: el binario se sube a Cloudinary y en el JSON se guarda su URL.
     $routes->post('imagenes', 'ImagenesController::subir');
     $routes->get('imagenes/capacidades', 'ImagenesController::capacidades');
+
+    // Archivos de campos tipo `archivo` (PDF/Excel/Word/TXT): el binario sube al bucket S3 de
+    // Railway (ver CampoArchivosController). La descarga (GET .../contenido) es pública, ver arriba.
+    $routes->post('archivos-campo', 'CampoArchivosController::subir');
 
     $routes->get('ejemplos', 'EjemplosController::index');
     $routes->get('ejemplos/(:num)', 'EjemplosController::show/$1');
@@ -96,6 +105,13 @@ $routes->group('api', ['filter' => 'auth'], static function (RouteCollection $ro
     $routes->get('especialidades-asesor/(:num)', 'EspecialidadesAsesorController::index/$1');
     $routes->put('especialidades-asesor/(:num)', 'EspecialidadesAsesorController::guardar/$1');
 
+    // Temas de especialidad (disciplinas: Proyectos de Inversión, Ejecución de Obras...) — catálogo
+    // SEPARADO de sectores/especialidades-asesor (sectores MEF de las fichas). Ver
+    // TemasEspecialidadController/TemasEspecialidadAsesorController.
+    $routes->get('temas-especialidad', 'TemasEspecialidadController::index');
+    $routes->get('temas-especialidad-asesor/(:num)', 'TemasEspecialidadAsesorController::index/$1');
+    $routes->put('temas-especialidad-asesor/(:num)', 'TemasEspecialidadAsesorController::guardar/$1');
+
     $routes->get('subtemas-especialidad', 'SubtemasEspecialidadController::index');
     $routes->get('subtemas-asesor/(:num)', 'SubtemasEspecialidadController::delAsesor/$1');
     $routes->put('subtemas-asesor/(:num)', 'SubtemasEspecialidadController::guardarDelAsesor/$1');
@@ -131,6 +147,9 @@ $routes->group('api', ['filter' => 'auth'], static function (RouteCollection $ro
     $routes->post('pagos/checkout-addon', 'PagosController::checkoutAddon');
     $routes->post('pagos/quitar-addon', 'PagosController::quitarAddon');
     $routes->get('pagos/portal', 'PagosController::portal');
+    // Confirma una Checkout Session al volver de Stripe, sin esperar al webhook — ver comentario
+    // de PagosController::verificarCheckout().
+    $routes->post('pagos/verificar-checkout', 'PagosController::verificarCheckout');
 
     $routes->get('plantillas/(:num)/contextos-ia', 'ContextosIAController::index/$1');
     $routes->get('plantillas/(:num)/contextos-ia/prompt-sistema-predeterminado', 'ContextosIAController::promptSistemaPredeterminado/$1');
