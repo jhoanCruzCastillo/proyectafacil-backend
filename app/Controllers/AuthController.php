@@ -219,9 +219,8 @@ class AuthController extends BaseController
     }
 
     // "Tiene plan" exige que la membresía siga VIGENTE, no solo que exista la fila: una cancelada o
-    // vencida no debe seguir desbloqueando "Proyectos de Inversión con IA" — pedido explícito del
-    // cliente ("mientras dura su membresía"). `fecha_renovacion` nula = plan sin fecha de corte
-    // (ej. Nivel 0 gratuito o un pago único ya cubierto), se trata como vigente.
+    // vencida no debe seguir desbloqueando "Proyectos de Inversión con IA". `fecha_renovacion` nula
+    // = plan sin fecha de corte (pago único ya cubierto), se trata como vigente.
     private function tienePlan(string $rol, int $usuarioId): bool
     {
         if ($rol !== 'cliente') {

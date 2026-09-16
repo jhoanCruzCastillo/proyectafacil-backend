@@ -116,10 +116,8 @@ class PagosController extends BaseController
         return $this->response->setJSON(['url' => $session->url]);
     }
 
-    // Cambia el plan de una suscripción YA activa (Nivel 1↔2) — swap directo del price del ítem
-    // principal, con prorrateo real de Stripe. No sirve para entrar/salir de Nivel 0 (pago único,
-    // no es un ítem de suscripción) — eso sigue siendo checkoutPlan() (y, para salir de una
-    // suscripción hacia Nivel 0, primero hay que cancelarla desde el Portal).
+    // Cambia el plan de una suscripción YA activa (Nivel 0↔1↔2) — swap directo del price del ítem
+    // principal, con prorrateo real de Stripe. Los 3 niveles son membresía mensual.
     public function cambiarPlan(): ResponseInterface
     {
         $dto       = $this->request->getJSON(true) ?? [];
@@ -479,8 +477,8 @@ class PagosController extends BaseController
             return $this->response->setStatusCode(502)->setJSON(['error' => 'No se pudo confirmar el pago con Stripe. Intenta de nuevo en unos minutos.']);
         }
 
-        // 'payment' (Nivel 0, pago único) confirma vía payment_status; 'subscription' también lo
-        // trae en 'paid' apenas se crea la suscripción — no hace falta distinguir el modo acá.
+        // 'payment' (pago único, si algún plan volviera a usarlo) confirma vía payment_status;
+        // 'subscription' también lo trae en 'paid' apenas se crea la suscripción.
         if ($session->payment_status !== 'paid') {
             return $this->response->setJSON(['ok' => false]);
         }
@@ -532,8 +530,8 @@ class PagosController extends BaseController
                 'stripe_subscription_item_id' => $itemId,
                 'updated_at'                  => $ahora,
             ];
-            // Sin esto, una suscripción recién creada quedaba con `fecha_renovacion` vacía (Nivel 0,
-            // pago único, nunca la tiene) o con la fecha vieja de un plan anterior — el chequeo de
+            // Sin esto, una suscripción recién creada quedaba con `fecha_renovacion` vacía
+            // (pago único, nunca la tiene) o con la fecha vieja de un plan anterior — el chequeo de
             // vigencia de tienePlan() (ver AuthController.php) la trataba como vencida al instante,
             // aunque el cobro sí se hubiera hecho. El evento `customer.subscription.updated` también
             // la actualiza más tarde (webhook()), esto solo evita el hueco entre ambos.
@@ -541,7 +539,7 @@ class PagosController extends BaseController
             if ($finPeriodo !== null) {
                 $cambios['fecha_renovacion'] = date('Y-m-d', $finPeriodo);
             } elseif ($subId === null) {
-                // Nivel 0 (pago único, sin suscripción): sin fecha de corte — tienePlan() ya trata
+                // Pago único (sin suscripción): sin fecha de corte — tienePlan() ya trata
                 // null como "vigente sin vencimiento".
                 $cambios['fecha_renovacion'] = null;
             }
@@ -563,7 +561,10 @@ class PagosController extends BaseController
             $addon    = $nombre !== null ? $db->table('add_ons')->where('nombre', $nombre)->get()->getRowArray() : null;
 
             if ($addon) {
-                $filaAddon     = $db->table('facturacion_addons')->where('facturacion_usuario_id', $cuentaId)->where('add_on_id', $addon['id'])->get()->getRowArray();
+                $tieneFacturacion = $db->table('facturaciones')->where('usuario_id', $cuentaId)->countAllResults() > 0;
+                $filaAddon        = $tieneFacturacion
+                    ? $db->table('facturacion_addons')->where('facturacion_usuario_id', $cuentaId)->where('add_on_id', $addon['id'])->get()->getRowArray()
+                    : null;
                 $cantidadTotal = ($filaAddon['cantidad'] ?? 0) + $cantidad;
 
                 $itemId = null;
@@ -573,19 +574,24 @@ class PagosController extends BaseController
                     $itemId = $sub->items->data[0]->id ?? null;
                 }
 
-                if ($filaAddon) {
-                    $cambiosAddon = ['cantidad' => $cantidadTotal];
-                    if ($itemId) {
-                        $cambiosAddon['stripe_subscription_item_id'] = $itemId;
+                // Sin fila de facturación (cliente que compra Live suelto, sin membresía) no se
+                // escribe facturacion_addons: esa tabla exige FK a facturaciones, y crearDefault()
+                // le asignaría Plan Nivel 1 de regalo. Los tickets de consultoría sí se emiten.
+                if ($tieneFacturacion) {
+                    if ($filaAddon) {
+                        $cambiosAddon = ['cantidad' => $cantidadTotal];
+                        if ($itemId) {
+                            $cambiosAddon['stripe_subscription_item_id'] = $itemId;
+                        }
+                        $db->table('facturacion_addons')->where('facturacion_usuario_id', $cuentaId)->where('add_on_id', $addon['id'])->update($cambiosAddon);
+                    } else {
+                        $db->table('facturacion_addons')->insert([
+                            'facturacion_usuario_id'      => $cuentaId,
+                            'add_on_id'                   => $addon['id'],
+                            'cantidad'                    => $cantidadTotal,
+                            'stripe_subscription_item_id' => $itemId,
+                        ]);
                     }
-                    $db->table('facturacion_addons')->where('facturacion_usuario_id', $cuentaId)->where('add_on_id', $addon['id'])->update($cambiosAddon);
-                } else {
-                    $db->table('facturacion_addons')->insert([
-                        'facturacion_usuario_id'      => $cuentaId,
-                        'add_on_id'                   => $addon['id'],
-                        'cantidad'                    => $cantidadTotal,
-                        'stripe_subscription_item_id' => $itemId,
-                    ]);
                 }
 
                 if ($slug === 'consultoria-1a1') {

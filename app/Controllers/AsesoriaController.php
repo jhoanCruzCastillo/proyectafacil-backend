@@ -203,6 +203,7 @@ class AsesoriaController extends BaseController
             return $this->response->setStatusCode(422)->setJSON(['error' => 'No tienes fichas disponibles para esta modalidad']);
         }
 
+        $db->transStart();
         $db->table('solicitudes_asesoria')->insert([
             'cliente_id'          => $clienteId,
             'docente_id'          => null,
@@ -232,6 +233,10 @@ class AsesoriaController extends BaseController
             'solicitud_asesoria_id' => $id,
             'updated_at'            => date('Y-m-d H:i:s'),
         ]);
+        $db->transComplete();
+        if ($db->transStatus() === false) {
+            return $this->response->setStatusCode(500)->setJSON(['error' => 'No se pudo registrar la solicitud']);
+        }
 
         $this->broadcast((int) $id, $tipo, $sectorId, $subtemaIds, $horarioFecha, $horarioHoraInicio, $horarioHoraFin);
         $this->notificarAdministrativos('nueva_solicitud_asesoria', 'Nueva solicitud de asesoría pendiente de asignar', (int) $id);
@@ -250,6 +255,10 @@ class AsesoriaController extends BaseController
         )
             ->where('sa.id', $id)
             ->get()->getRowArray();
+
+        if (! $fila) {
+            return $this->response->setStatusCode(500)->setJSON(['error' => 'No se pudo cargar la solicitud creada']);
+        }
 
         return $this->response->setJSON($this->toDtoSolicitud($fila));
     }

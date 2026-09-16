@@ -26,35 +26,34 @@ class PlanesYAddOnsSeeder extends Seeder
     {
         $planes = [
             [
-                'numero_nivel' => 0, 'nombre' => 'Pedagógico', 'precio' => 50, 'periodicidad' => 'Único',
-                'limite_fichas_base' => 2, 'limite_consultas_base' => 1, 'limite_usuarios_base' => 1,
+                'numero_nivel' => 0, 'nombre' => 'Profesional', 'precio' => 400, 'periodicidad' => 'Mensual',
+                'limite_fichas_base' => 3, 'limite_consultas_base' => 2, 'limite_usuarios_base' => 1,
                 'features' => [
-                    'Uso para entrenar el llenado de las plantillas',
-                    'Limitado a pruebas concretas y ejercicios ya diseñados',
-                    'Permite experimentar con la herramienta hasta 2 ejercicios simultáneos',
-                    '4 semanas activo (semanas finales)',
+                    '2 sesiones de 1 hora',
+                    'Chat ilimitado',
+                    'Acceso a plantillas ILPIIE',
+                    'Descuento 15% en sesiones adicionales',
                 ],
             ],
             [
-                'numero_nivel' => 1, 'nombre' => 'Profesional', 'precio' => 150, 'periodicidad' => 'Mensual',
-                'limite_fichas_base' => 3, 'limite_consultas_base' => 3, 'limite_usuarios_base' => 1,
+                'numero_nivel' => 1, 'nombre' => 'Consultora / Empresa', 'precio' => 1200, 'periodicidad' => 'Mensual',
+                'limite_fichas_base' => 10, 'limite_consultas_base' => 4, 'limite_usuarios_base' => 3,
                 'features' => [
-                    'Llenado de plantillas con proyectos reales',
-                    'Ayuda de la inteligencia artificial para mejorar títulos y textos',
-                    'Asistencia de dónde encontrar referencias de llenado en el curso',
-                    'Asesor de IA 24/7 para llenado de las plantillas',
-                    'Límite de 1 usuario y hasta 3 plantillas simultáneas',
-                    'Incluye todos los formatos',
+                    '4 sesiones de 1 hora',
+                    '1 sesión grupal (hasta 5 personas)',
+                    'Chat prioritario',
+                    'Acceso a IA asistente avanzada',
+                    'Reporte mensual de consultas',
                 ],
             ],
             [
-                'numero_nivel' => 2, 'nombre' => 'Premium', 'precio' => 250, 'periodicidad' => 'Mensual',
-                'limite_fichas_base' => 10, 'limite_consultas_base' => 6, 'limite_usuarios_base' => 3,
+                'numero_nivel' => 2, 'nombre' => 'Gobierno Regional / Local', 'precio' => 3500, 'periodicidad' => 'Mensual',
+                'limite_fichas_base' => 20, 'limite_consultas_base' => 10, 'limite_usuarios_base' => 5,
                 'features' => [
-                    'Hasta 3 usuarios colaborativos',
-                    'Hasta 10 plantillas simultáneas',
-                    'Histórico de cambio en las plantillas llenadas',
-                    'Sugerencias inteligentes de IA',
+                    '10 sesiones de 1 hora',
+                    'Acompañamiento en trámite específico',
+                    'Reporte mensual ejecutivo',
+                    'Facturación a entidad con orden de servicio',
                 ],
             ],
         ];
@@ -63,14 +62,21 @@ class PlanesYAddOnsSeeder extends Seeder
             $features = $plan['features'];
             unset($plan['features']);
 
-            $this->db->table('planes')->ignore(true)->insert($plan);
-            $planId = $this->db->table('planes')->where('numero_nivel', $plan['numero_nivel'])->get()->getRow('id');
+            $existente = $this->db->table('planes')->where('numero_nivel', $plan['numero_nivel'])->get()->getRowArray();
+            if ($existente) {
+                $this->db->table('planes')->where('id', $existente['id'])->update($plan);
+                $planId = $existente['id'];
+            } else {
+                $this->db->table('planes')->insert($plan);
+                $planId = $this->db->table('planes')->where('numero_nivel', $plan['numero_nivel'])->get()->getRow('id');
+            }
             $this->db->table('planes')->where('id', $planId)->update([
                 'stripe_price_id' => self::STRIPE_PRICE_IDS_PLANES[$plan['numero_nivel']],
             ]);
 
+            $this->db->table('plan_features')->where('plan_id', $planId)->delete();
             foreach ($features as $orden => $texto) {
-                $this->db->table('plan_features')->ignore(true)->insert([
+                $this->db->table('plan_features')->insert([
                     'plan_id'       => $planId,
                     'orden'         => $orden,
                     'feature_texto' => $texto,
@@ -86,13 +92,13 @@ class PlanesYAddOnsSeeder extends Seeder
             ],
             [
                 'nombre' => 'Usuario adicional',
-                'descripcion' => 'Usuarios adicionales para los niveles 1 y 2',
-                'precio' => 45, 'recurrente' => 1, 'niveles' => [1, 2],
+                'descripcion' => 'Usuarios adicionales para cualquier nivel de membresía',
+                'precio' => 45, 'recurrente' => 1, 'niveles' => [0, 1, 2],
             ],
             [
                 'nombre' => 'Plantilla adicional',
-                'descripcion' => 'Plantillas simultáneas adicionales para los niveles 1 y 2',
-                'precio' => 15, 'recurrente' => 1, 'niveles' => [1, 2],
+                'descripcion' => 'Plantillas simultáneas adicionales para cualquier nivel de membresía',
+                'precio' => 15, 'recurrente' => 1, 'niveles' => [0, 1, 2],
             ],
         ];
 
@@ -100,14 +106,21 @@ class PlanesYAddOnsSeeder extends Seeder
             $niveles = $addOn['niveles'];
             unset($addOn['niveles']);
 
-            $this->db->table('add_ons')->ignore(true)->insert($addOn);
-            $addOnId = $this->db->table('add_ons')->where('nombre', $addOn['nombre'])->get()->getRow('id');
+            $existente = $this->db->table('add_ons')->where('nombre', $addOn['nombre'])->get()->getRowArray();
+            if ($existente) {
+                $this->db->table('add_ons')->where('id', $existente['id'])->update($addOn);
+                $addOnId = $existente['id'];
+            } else {
+                $this->db->table('add_ons')->insert($addOn);
+                $addOnId = $this->db->table('add_ons')->where('nombre', $addOn['nombre'])->get()->getRow('id');
+            }
             $this->db->table('add_ons')->where('id', $addOnId)->update([
                 'stripe_price_id' => self::STRIPE_PRICE_IDS_ADDONS[$addOn['nombre']],
             ]);
 
+            $this->db->table('add_on_niveles_disponibles')->where('add_on_id', $addOnId)->delete();
             foreach ($niveles as $nivel) {
-                $this->db->table('add_on_niveles_disponibles')->ignore(true)->insert([
+                $this->db->table('add_on_niveles_disponibles')->insert([
                     'add_on_id'    => $addOnId,
                     'numero_nivel' => $nivel,
                 ]);
