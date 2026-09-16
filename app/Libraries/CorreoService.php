@@ -3,6 +3,7 @@
 namespace App\Libraries;
 
 use Config\Brevo as BrevoConfig;
+use Config\Stripe as StripeConfig;
 use GuzzleHttp\Client;
 
 // Primer y único punto de envío de correo del proyecto — antes no existía ninguno (ver
@@ -45,12 +46,14 @@ class CorreoService
     /** @throws \RuntimeException si el correo no se pudo enviar */
     public function enviarAccesos(string $correo, string $nombre, string $usuario, string $passwordTemporal): void
     {
-        $asunto = 'Tus accesos a Proyecta Fácil';
-        $cuerpo = "Hola {$nombre},\n\n"
+        $urlLogin = rtrim(config(StripeConfig::class)->frontendBaseUrl, '/') . '/login';
+        $asunto   = 'Tus accesos a Proyecta Fácil';
+        $cuerpo   = "Hola {$nombre},\n\n"
             . "Se creó (o se renovó el acceso a) tu cuenta en Proyecta Fácil. Estos son tus datos "
             . "de ingreso:\n\n"
             . "Usuario: {$usuario}\n"
             . "Contraseña: {$passwordTemporal}\n\n"
+            . "Inicia sesión aquí:\n{$urlLogin}\n\n"
             . "Te recomendamos cambiar la contraseña apenas ingreses.\n";
 
         $this->enviar($correo, $asunto, $cuerpo);

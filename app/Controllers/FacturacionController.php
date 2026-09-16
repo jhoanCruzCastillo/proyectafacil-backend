@@ -27,16 +27,11 @@ class FacturacionController extends BaseController
 
     public function get($usuarioId = null): ResponseInterface
     {
-        $usuarioId = (int) $usuarioId;
-        if (! (new FacturacionModel())->find($usuarioId)) {
-            $this->crearDefault($usuarioId);
-        }
-
-        return $this->response->setJSON($this->toDto($usuarioId));
+        // Solo lectura. El alta de membresía es Checkout o el panel admin de asignar beneficios.
+        return $this->response->setJSON($this->toDto((int) $usuarioId));
     }
 
     // Conteo de membresías activas por nivel — para el KPI de "Usuarios y permisos". A propósito
-    // NO usa crearDefault() ni toca ninguna cuenta: es una simple agregación de lectura sobre lo
     // que ya existe en `facturaciones`.
     public function resumenNiveles(): ResponseInterface
     {
@@ -59,7 +54,7 @@ class FacturacionController extends BaseController
         $usuarioId = (int) $usuarioId;
         $model     = new FacturacionModel();
         if (! $model->find($usuarioId)) {
-            $this->crearDefault($usuarioId);
+            return $this->response->setStatusCode(404)->setJSON(['error' => 'Este usuario no tiene facturación']);
         }
 
         $dto = $this->request->getJSON(true) ?? [];
@@ -93,22 +88,6 @@ class FacturacionController extends BaseController
         }
 
         $db->table('facturaciones')->where('usuario_id', $usuarioId)->update(['cancelada' => $cancelada ? 1 : 0, 'updated_at' => date('Y-m-d H:i:s')]);
-    }
-
-    private function crearDefault(int $usuarioId): void
-    {
-        $planBase = (new PlanModel())->where('numero_nivel', 1)->first();
-        (new FacturacionModel())->insert([
-            'usuario_id'        => $usuarioId,
-            'plan_id'           => $planBase['id'],
-            'cancelada'         => 0,
-            'fecha_renovacion'  => date('Y-m-d', strtotime('+1 month')),
-            'fecha_inicio_plan' => date('Y-m-d H:i:s'),
-            'metodo_pago'       => 'tarjeta',
-            'tarjeta_marca'     => 'Visa',
-            'tarjeta_ultimos4'  => '4242',
-        ]);
-        TicketsConsultaController::emitirTicketsDePlan($usuarioId, (int) $planBase['id']);
     }
 
     private function toDto(int $usuarioId): ?array

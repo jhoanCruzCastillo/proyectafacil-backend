@@ -575,8 +575,8 @@ class PagosController extends BaseController
                 }
 
                 // Sin fila de facturación (cliente que compra Live suelto, sin membresía) no se
-                // escribe facturacion_addons: esa tabla exige FK a facturaciones, y crearDefault()
-                // le asignaría Plan Nivel 1 de regalo. Los tickets de consultoría sí se emiten.
+                // escribe facturacion_addons: esa tabla exige FK a facturaciones. No se crea una
+                // membresía de regalo. Los tickets de consultoría sí se emiten.
                 if ($tieneFacturacion) {
                     if ($filaAddon) {
                         $cambiosAddon = ['cantidad' => $cantidadTotal];

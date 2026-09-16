@@ -13,7 +13,7 @@ use CodeIgniter\Config\BaseConfig;
 //   stripe.secretKey = sk_test_...
 //   stripe.publishableKey = pk_test_...
 //   stripe.webhookSecret = whsec_...   (lo imprime `stripe listen` en desarrollo)
-//   stripe.frontendBaseUrl = http://localhost:5180   (adonde vuelve Checkout tras pagar/cancelar)
+//   stripe.frontendBaseUrl = http://localhost:5180   (SPA: Checkout, verificación de correo, link de login)
 class Stripe extends BaseConfig
 {
     public string $secretKey = '';

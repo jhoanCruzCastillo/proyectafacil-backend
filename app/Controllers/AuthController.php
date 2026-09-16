@@ -19,11 +19,9 @@ use Throwable;
 // `tienePlan`/`alumnoVigente` viajan SIEMPRE fuera del JWT (no son claims de identidad, son estado
 // que cambia sin que la persona vuelva a loguearse — al comprar/cancelar un plan, o al vencer la
 // fecha de un alumno — meterlos en el token los dejaría desactualizados hasta el próximo login) y
-// se recalculan en cada llamada a login()/me() con un chequeo liviano y SIN efectos colaterales: a
-// propósito nunca se llama a FacturacionController::crearDefault() desde acá — ver el plan de
-// implementación de "registro público" para el porqué (un cliente sin plan debe ver únicamente la
-// pantalla de elegir plan, nunca uno de mentira asignado solo por consultar el estado de su
-// sesión). Juntos determinan si puede entrar a "Proyectos de Inversión con IA" — ver
+// se recalculan en cada llamada a login()/me() con un chequeo liviano y SIN efectos colaterales.
+// Un cliente sin plan debe ver la pantalla de elegir plan, nunca una membresía inventada.
+// Juntos determinan si puede entrar a "Proyectos de Inversión con IA" — ver
 // `puedeAccederProyectosIA()` en frontend/src/lib/permisos.ts.
 class AuthController extends BaseController
 {

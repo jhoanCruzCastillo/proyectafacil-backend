@@ -69,6 +69,15 @@ class TicketsConsultaController extends BaseController
         self::insertarTickets($usuarioId, 'addon', $faltantes);
     }
 
+    // Cupos otorgados a mano por un admin (UsuariosController::asignarBeneficios): se graban como
+    // origen 'addon' porque el CHECK de tickets_consulta solo admite plan|addon, y 'addon' ya es el
+    // origen de fichas extra (compra suelta o regalo). No toca los tickets de origen 'plan'.
+    public static function otorgarFichasModalidad(int $usuarioId, int $cantidadChat, int $cantidadVideo): void
+    {
+        self::insertarTicketsDeModalidad($usuarioId, 'addon', 'chat', self::DURACION_CHAT_MIN, max(0, $cantidadChat));
+        self::insertarTicketsDeModalidad($usuarioId, 'addon', 'video', self::DURACION_VIDEO_MIN, max(0, $cantidadVideo));
+    }
+
     // Reparte la cantidad emitida entre las dos fichas (chat/video) — mitad y mitad, la unidad
     // impar (cupos de plan de número impar) va a chat. Sin una regla de negocio distinta definida
     // todavía por plan/add-on (docs/proyectafacil-asesorias.md §2 solo da un total), es el reparto

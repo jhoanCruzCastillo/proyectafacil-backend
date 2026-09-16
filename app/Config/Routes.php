@@ -87,6 +87,8 @@ $routes->group('api', ['filter' => 'auth'], static function (RouteCollection $ro
     $routes->delete('usuarios/(:num)', 'UsuariosController::delete/$1');
     $routes->post('usuarios/(:num)/enviar-accesos', 'UsuariosController::enviarAccesos/$1');
     $routes->post('usuarios/(:num)/enviar-accesos-directo', 'UsuariosController::enviarAccesosDirecto/$1');
+    $routes->get('usuarios/(:num)/asignar-beneficios', 'UsuariosController::beneficiosAsignados/$1');
+    $routes->post('usuarios/(:num)/asignar-beneficios', 'UsuariosController::asignarBeneficios/$1');
 
     $routes->get('tipos-usuario', 'TiposUsuarioController::index');
     $routes->post('tipos-usuario', 'TiposUsuarioController::create');
