@@ -13,10 +13,10 @@ $routes->group('api', static function (RouteCollection $routes) {
     $routes->post('auth/registro', 'AuthController::register');
     $routes->get('auth/verificar/(:segment)', 'AuthController::verificar/$1');
 
-    // Catálogo de sectores para el paso "temas de interés" del registro público — antes de tener
-    // sesión no se puede llamar al GET /sectores normal (detrás del filtro auth). Mismo método,
-    // sin nada sensible que proteger (es un catálogo, no datos de usuario).
+    // Catálogo de sectores MEF (público) — legacy / otros usos. El paso 2 del registro usa
+    // temas-especialidad/publico (lista ILPIIE anidada tema→subtema).
     $routes->get('sectores/publico', 'SectoresController::index');
+    $routes->get('temas-especialidad/publico', 'TemasEspecialidadController::publico');
 
     // Stripe llama a esto directo — no manda sesión, no puede ir detrás del filtro 'auth'. La
     // firma en el header Stripe-Signature es la única verificación (ver PagosController::webhook).

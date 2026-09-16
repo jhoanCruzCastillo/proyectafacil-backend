@@ -25,6 +25,9 @@ class DeployProduccionSeeder extends Seeder
     {
         $pasos = [
             SectoresSeeder::class,
+            // Temas/subtemas de asesoría ILPIIE (paso 2 del registro + especialidades del asesor).
+            TemasEspecialidadSeeder::class,
+            SubtemasEspecialidadSeeder::class,
             PlanesYAddOnsSeeder::class,
             PermisosCatalogoSeeder::class,
             RolesPermisosBaseSeeder::class,

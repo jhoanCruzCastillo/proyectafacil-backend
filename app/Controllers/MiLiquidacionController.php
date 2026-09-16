@@ -153,10 +153,11 @@ class MiLiquidacionController extends BaseController
     private function filasCompletadas(int $usuarioId): array
     {
         $filas = db_connect()->table('solicitudes_asesoria sa')
-            ->select('sa.id, sa.tipo, sa.completado_en, sa.updated_at, sa.pago_autorizado_en, c.nombre as cliente_nombre, c.foto_url as cliente_foto_url, s.nombre as sector_nombre, t.nombre as subtema_nombre')
+            ->select('sa.id, sa.tipo, sa.completado_en, sa.updated_at, sa.pago_autorizado_en, c.nombre as cliente_nombre, c.foto_url as cliente_foto_url, s.nombre as sector_nombre, t.nombre as subtema_nombre, te.nombre as tema_nombre')
             ->join('usuarios c', 'c.id = sa.cliente_id')
             ->join('sectores s', 's.id = sa.sector_id', 'left')
             ->join('subtemas_especialidad t', 't.id = sa.subtema_id', 'left')
+            ->join('temas_especialidad te', 'te.id = t.tema_id', 'left')
             ->where('sa.docente_id', $usuarioId)
             ->where('sa.estado', 'completado')
             ->get()->getResultArray();
@@ -177,7 +178,7 @@ class MiLiquidacionController extends BaseController
             'id'             => (string) $f['id'],
             'clienteNombre'  => $f['cliente_nombre'],
             'clienteFotoUrl' => $f['cliente_foto_url'] ?? null,
-            'sectorNombre'   => $f['sector_nombre'] ?? null,
+            'sectorNombre'   => $f['tema_nombre'] ?? $f['sector_nombre'] ?? null,
             'subtemaNombre'  => $f['subtema_nombre'] ?? null,
             'tipo'           => $f['tipo'],
             'atendidoEn'     => str_replace(' ', 'T', $f['corte']) . 'Z',

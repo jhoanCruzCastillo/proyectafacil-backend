@@ -37,26 +37,28 @@ class TicketsAsesoriaController extends BaseController
 
     public function index(): ResponseInterface
     {
-        $filas = db_connect()->table('solicitudes_asesoria sa')
-            ->select('sa.*, c.nombre as cliente_nombre, c.foto_url as cliente_foto_url, d.nombre as docente_nombre, d.foto_url as docente_foto_url, s.nombre as sector_nombre')
-            ->join('usuarios c', 'c.id = sa.cliente_id')
-            ->join('usuarios d', 'd.id = sa.docente_id', 'left')
-            ->join('sectores s', 's.id = sa.sector_id', 'left')
+        $filas = $this->joinCategoriaSolicitud(
+            db_connect()->table('solicitudes_asesoria sa')
+                ->select('sa.*, c.nombre as cliente_nombre, c.foto_url as cliente_foto_url, d.nombre as docente_nombre, d.foto_url as docente_foto_url, s.nombre as sector_nombre, st.nombre as subtema_nombre, te.nombre as tema_nombre')
+                ->join('usuarios c', 'c.id = sa.cliente_id')
+                ->join('usuarios d', 'd.id = sa.docente_id', 'left')
+        )
             ->orderBy('sa.created_at', 'DESC')
             ->get()->getResultArray();
         $filas = array_map([$this, 'resolverAsistenciaSiCorresponde'], $filas);
 
-        return $this->response->setJSON(array_map([$this, 'toDtoSolicitud'], $filas));
+        return $this->response->setJSON($this->dtosSolicitudes($filas));
     }
 
     public function detalle($id = null): ResponseInterface
     {
         $id   = (int) $id;
-        $fila = db_connect()->table('solicitudes_asesoria sa')
-            ->select('sa.*, c.nombre as cliente_nombre, c.correo as cliente_correo, c.foto_url as cliente_foto_url, d.nombre as docente_nombre, d.foto_url as docente_foto_url, s.nombre as sector_nombre')
-            ->join('usuarios c', 'c.id = sa.cliente_id')
-            ->join('usuarios d', 'd.id = sa.docente_id', 'left')
-            ->join('sectores s', 's.id = sa.sector_id', 'left')
+        $fila = $this->joinCategoriaSolicitud(
+            db_connect()->table('solicitudes_asesoria sa')
+                ->select('sa.*, c.nombre as cliente_nombre, c.correo as cliente_correo, c.foto_url as cliente_foto_url, d.nombre as docente_nombre, d.foto_url as docente_foto_url, s.nombre as sector_nombre, st.nombre as subtema_nombre, te.nombre as tema_nombre')
+                ->join('usuarios c', 'c.id = sa.cliente_id')
+                ->join('usuarios d', 'd.id = sa.docente_id', 'left')
+        )
             ->where('sa.id', $id)
             ->get()->getRowArray();
 
@@ -217,7 +219,10 @@ class TicketsAsesoriaController extends BaseController
 
         $ids = $sol['tipo'] === 'video'
             ? $this->asesoresPorHorario($sol['horario_fecha'], $sol['horario_hora_inicio'], $sol['horario_hora_fin'])
-            : $this->asesoresPorSector($sol['sector_id'] !== null ? (int) $sol['sector_id'] : null);
+            : $this->asesoresElegiblesChat(
+                $this->subtemaIdsDeFila($sol),
+                $sol['sector_id'] !== null ? (int) $sol['sector_id'] : null,
+            );
 
         if ($ids === []) {
             return $this->response->setJSON([]);
@@ -228,16 +233,28 @@ class TicketsAsesoriaController extends BaseController
 
         // Una especialidad "representativa" por docente (la primera alfabéticamente) para la
         // tarjeta del modal de intervención manual — el docente puede tener varias.
-        $especialidades = $db->table('asesor_especialidades ae')
-            ->select('ae.usuario_id, s.nombre as sector_nombre')
-            ->join('sectores s', 's.id = ae.sector_id')
-            ->whereIn('ae.usuario_id', $ids)
-            ->orderBy('s.nombre', 'ASC')
+        $especialidades = $db->table('asesor_temas_especialidad ate')
+            ->select('ate.usuario_id, t.nombre as sector_nombre')
+            ->join('temas_especialidad t', 't.id = ate.tema_id')
+            ->whereIn('ate.usuario_id', $ids)
+            ->orderBy('t.nombre', 'ASC')
             ->get()->getResultArray();
         $especialidadPorDocente = [];
         foreach ($especialidades as $e) {
             $uid = (int) $e['usuario_id'];
             $especialidadPorDocente[$uid] ??= $e['sector_nombre'];
+        }
+        if ($especialidadPorDocente === []) {
+            $especialidades = $db->table('asesor_especialidades ae')
+                ->select('ae.usuario_id, s.nombre as sector_nombre')
+                ->join('sectores s', 's.id = ae.sector_id')
+                ->whereIn('ae.usuario_id', $ids)
+                ->orderBy('s.nombre', 'ASC')
+                ->get()->getResultArray();
+            foreach ($especialidades as $e) {
+                $uid = (int) $e['usuario_id'];
+                $especialidadPorDocente[$uid] ??= $e['sector_nombre'];
+            }
         }
 
         // Calificación promedio y total de consultas completadas de siempre (no solo del mes) —
@@ -590,10 +607,11 @@ class TicketsAsesoriaController extends BaseController
         $horaInicio = $this->conSegundos((string) ($this->request->getGet('horaInicio') ?? ''));
         $horaFin    = $this->conSegundos((string) ($this->request->getGet('horaFin') ?? ''));
 
-        $filas = db_connect()->table('solicitudes_asesoria sa')
-            ->select('sa.*, c.nombre as cliente_nombre, c.foto_url as cliente_foto_url, s.nombre as sector_nombre')
-            ->join('usuarios c', 'c.id = sa.cliente_id')
-            ->join('sectores s', 's.id = sa.sector_id', 'left')
+        $filas = $this->joinCategoriaSolicitud(
+            db_connect()->table('solicitudes_asesoria sa')
+                ->select('sa.*, c.nombre as cliente_nombre, c.foto_url as cliente_foto_url, s.nombre as sector_nombre, st.nombre as subtema_nombre, te.nombre as tema_nombre')
+                ->join('usuarios c', 'c.id = sa.cliente_id')
+        )
             ->where('sa.tipo', 'video')
             ->whereIn('sa.estado', ['pendiente', 'en_espera'])
             ->where('sa.horario_fecha', $fecha)
@@ -602,7 +620,7 @@ class TicketsAsesoriaController extends BaseController
             ->orderBy('sa.sla_vence_en', 'ASC')
             ->get()->getResultArray();
 
-        return $this->response->setJSON(array_map([$this, 'toDtoSolicitud'], $filas));
+        return $this->response->setJSON($this->dtosSolicitudes($filas));
     }
 
     // Honorario = valor fijo del ticket × N.º de tickets completados en el periodo, sin importar

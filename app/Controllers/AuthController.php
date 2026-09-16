@@ -132,6 +132,9 @@ class AuthController extends BaseController
         $correo = trim((string) ($dto['correo'] ?? ''));
         $password = (string) ($dto['password'] ?? '');
         $preferencia = trim((string) ($dto['preferencia'] ?? ''));
+        // Paso 2 del registro: subtemas ILPIIE (`cliente_subtemas`). `sectorIds`/`cliente_intereses`
+        // queda aceptado por compatibilidad con clientes viejos, pero la UI nueva manda subtemaIds.
+        $subtemaIds = is_array($dto['subtemaIds'] ?? null) ? array_map('intval', $dto['subtemaIds']) : [];
         $sectorIds = is_array($dto['sectorIds'] ?? null) ? array_map('intval', $dto['sectorIds']) : [];
 
         if ($nombre === '' || $correo === '' || mb_strlen($password) < 8) {
@@ -160,8 +163,20 @@ class AuthController extends BaseController
             'token_verificacion_expira' => date('Y-m-d H:i:s', strtotime('+24 hours')),
         ], true);
 
+        $db = db_connect();
+        if ($subtemaIds !== []) {
+            $subtemasValidos = $db->table('subtemas_especialidad')
+                ->whereIn('id', $subtemaIds)
+                ->where('activo', 1)
+                ->get()->getResultArray();
+            foreach ($subtemasValidos as $s) {
+                $db->table('cliente_subtemas')->ignore(true)->insert([
+                    'usuario_id' => $id,
+                    'subtema_id' => $s['id'],
+                ]);
+            }
+        }
         if ($sectorIds !== []) {
-            $db = db_connect();
             $sectoresValidos = $db->table('sectores')->whereIn('id', $sectorIds)->get()->getResultArray();
             foreach ($sectoresValidos as $s) {
                 $db->table('cliente_intereses')->ignore(true)->insert(['usuario_id' => $id, 'sector_id' => $s['id']]);

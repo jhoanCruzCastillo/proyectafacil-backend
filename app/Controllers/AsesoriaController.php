@@ -32,11 +32,12 @@ class AsesoriaController extends BaseController
         $rol       = (string) ($this->request->getGet('rol') ?? 'cliente');
         $db        = db_connect();
 
-        $builder = $db->table('solicitudes_asesoria sa')
-            ->select('sa.*, c.nombre as cliente_nombre, c.foto_url as cliente_foto_url, d.nombre as docente_nombre, d.foto_url as docente_foto_url, s.nombre as sector_nombre')
-            ->join('usuarios c', 'c.id = sa.cliente_id')
-            ->join('usuarios d', 'd.id = sa.docente_id', 'left')
-            ->join('sectores s', 's.id = sa.sector_id', 'left');
+        $builder = $this->joinCategoriaSolicitud(
+            $db->table('solicitudes_asesoria sa')
+                ->select('sa.*, c.nombre as cliente_nombre, c.foto_url as cliente_foto_url, d.nombre as docente_nombre, d.foto_url as docente_foto_url, s.nombre as sector_nombre, st.nombre as subtema_nombre, te.nombre as tema_nombre')
+                ->join('usuarios c', 'c.id = sa.cliente_id')
+                ->join('usuarios d', 'd.id = sa.docente_id', 'left')
+        );
 
         if ($rol === 'cliente') {
             $builder->where('sa.cliente_id', $usuarioId);
@@ -57,7 +58,7 @@ class AsesoriaController extends BaseController
         $filas = $builder->orderBy('sa.created_at', 'DESC')->get()->getResultArray();
         $filas = array_map([$this, 'resolverAsistenciaSiCorresponde'], $filas);
 
-        return $this->response->setJSON(array_map([$this, 'toDtoSolicitud'], $filas));
+        return $this->response->setJSON($this->dtosSolicitudes($filas));
     }
 
     // Pantalla "No atendidas / reasignadas" del asesor — dos listas que le muestran lo que dejó
@@ -120,11 +121,12 @@ class AsesoriaController extends BaseController
 
     private function builderSolicitudes(\CodeIgniter\Database\BaseConnection $db)
     {
-        return $db->table('solicitudes_asesoria sa')
-            ->select('sa.*, c.nombre as cliente_nombre, c.foto_url as cliente_foto_url, d.nombre as docente_nombre, d.foto_url as docente_foto_url, s.nombre as sector_nombre')
-            ->join('usuarios c', 'c.id = sa.cliente_id')
-            ->join('usuarios d', 'd.id = sa.docente_id', 'left')
-            ->join('sectores s', 's.id = sa.sector_id', 'left');
+        return $this->joinCategoriaSolicitud(
+            $db->table('solicitudes_asesoria sa')
+                ->select('sa.*, c.nombre as cliente_nombre, c.foto_url as cliente_foto_url, d.nombre as docente_nombre, d.foto_url as docente_foto_url, s.nombre as sector_nombre, st.nombre as subtema_nombre, te.nombre as tema_nombre')
+                ->join('usuarios c', 'c.id = sa.cliente_id')
+                ->join('usuarios d', 'd.id = sa.docente_id', 'left')
+        );
     }
 
     private function motivoNoAceptada(array $s): string
@@ -173,9 +175,28 @@ class AsesoriaController extends BaseController
         $cuentaId          = $this->idCuentaDe($clienteId);
         $tipo              = (string) ($dto['tipo'] ?? 'chat');
         $sectorId          = ! empty($dto['sectorId']) ? (int) $dto['sectorId'] : null;
+        $subtemaIds        = [];
+        if (is_array($dto['subtemaIds'] ?? null)) {
+            $subtemaIds = array_values(array_unique(array_filter(array_map('intval', $dto['subtemaIds']))));
+        } elseif (! empty($dto['subtemaId'])) {
+            $subtemaIds = [(int) $dto['subtemaId']];
+        }
+        $subtemaId         = $subtemaIds[0] ?? null;
         $horarioFecha      = $dto['horarioFecha'] ?? null;
         $horarioHoraInicio = ! empty($dto['horarioHoraInicio']) ? $this->conSegundos((string) $dto['horarioHoraInicio']) : null;
         $horarioHoraFin    = ! empty($dto['horarioHoraFin']) ? $this->conSegundos((string) $dto['horarioHoraFin']) : null;
+
+        if ($subtemaIds === []) {
+            return $this->response->setStatusCode(422)->setJSON(['error' => 'Elige al menos un tema o subtema de asesoría']);
+        }
+        $validos = $db->table('subtemas_especialidad')
+            ->select('id')
+            ->whereIn('id', $subtemaIds)
+            ->where('activo', 1)
+            ->get()->getResultArray();
+        if (count($validos) !== count($subtemaIds)) {
+            return $this->response->setStatusCode(422)->setJSON(['error' => 'Algún subtema elegido no es válido']);
+        }
 
         $ticket = $this->reservarTicket($cuentaId, $tipo);
         if (! $ticket) {
@@ -187,6 +208,7 @@ class AsesoriaController extends BaseController
             'docente_id'          => null,
             'ejemplo_id'          => ! empty($dto['ejemploId']) ? (int) $dto['ejemploId'] : null,
             'sector_id'           => $sectorId,
+            'subtema_id'          => $subtemaId,
             'tipo_documento'      => $dto['tipoDocumento'] ?? null,
             'tipo'                => $tipo,
             'estado'              => 'pendiente',
@@ -200,13 +222,18 @@ class AsesoriaController extends BaseController
         ]);
         $id = $db->insertID();
 
+        $db->table('solicitud_subtemas')->insertBatch(array_map(
+            static fn (int $sid) => ['solicitud_id' => $id, 'subtema_id' => $sid],
+            $subtemaIds,
+        ));
+
         $db->table('tickets_consulta')->where('id', $ticket['id'])->update([
             'estado'                => 'reservado',
             'solicitud_asesoria_id' => $id,
             'updated_at'            => date('Y-m-d H:i:s'),
         ]);
 
-        $this->broadcast((int) $id, $tipo, $sectorId, $horarioFecha, $horarioHoraInicio, $horarioHoraFin);
+        $this->broadcast((int) $id, $tipo, $sectorId, $subtemaIds, $horarioFecha, $horarioHoraInicio, $horarioHoraFin);
         $this->notificarAdministrativos('nueva_solicitud_asesoria', 'Nueva solicitud de asesoría pendiente de asignar', (int) $id);
 
         (new ActividadModel())->insert([
@@ -217,11 +244,10 @@ class AsesoriaController extends BaseController
             'created_at' => date('Y-m-d H:i:s'),
         ]);
 
-        // La respuesta alimenta el modal de confirmación del alumno (muestra la categoría elegida),
-        // así que a diferencia de fila() acá sí hace falta el join a sectores.
-        $fila = $db->table('solicitudes_asesoria sa')
-            ->select('sa.*, s.nombre as sector_nombre')
-            ->join('sectores s', 's.id = sa.sector_id', 'left')
+        $fila = $this->joinCategoriaSolicitud(
+            $db->table('solicitudes_asesoria sa')
+                ->select('sa.*, s.nombre as sector_nombre, st.nombre as subtema_nombre, te.nombre as tema_nombre')
+        )
             ->where('sa.id', $id)
             ->get()->getRowArray();
 
@@ -552,12 +578,12 @@ class AsesoriaController extends BaseController
     }
 
     // Notifica (solicitud_notificaciones + inbox) a todos los asesores elegibles al crear.
-    private function broadcast(int $solicitudId, string $tipo, ?int $sectorId, ?string $horarioFecha, ?string $horaInicio, ?string $horaFin): void
+    private function broadcast(int $solicitudId, string $tipo, ?int $sectorId, array $subtemaIds, ?string $horarioFecha, ?string $horaInicio, ?string $horaFin): void
     {
         $db       = db_connect();
         $asesores = $tipo === 'video'
             ? $this->asesoresPorHorario($horarioFecha, $horaInicio, $horaFin)
-            : $this->asesoresPorSector($sectorId);
+            : $this->asesoresElegiblesChat($subtemaIds, $sectorId);
 
         $ahora = date('Y-m-d H:i:s');
         foreach (array_unique($asesores) as $asesorId) {

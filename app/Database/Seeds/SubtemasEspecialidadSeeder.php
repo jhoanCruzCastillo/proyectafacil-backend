@@ -4,39 +4,56 @@ namespace App\Database\Seeds;
 
 use CodeIgniter\Database\Seeder;
 
-// Catálogo OFICIAL de subtemas por tema de especialidad, tal como lo envió el cliente (tabla
-// "Tema de Especialización / Subtemas", 2026-09-13). `temas_especialidad` es un catálogo SEPARADO
-// de `sectores` (los 13 sectores MEF de las fichas/plantillas) — ver TemasEspecialidadSeeder. Los
-// temas sin subtemas en la tabla del cliente (Contrataciones con el Estado, Planeamiento,
-// Presupuesto, Peritaje Económico/Financiero/Contable, Control Gubernamental, Economía, Asesoría
-// Legal, Asesoría Financiera) simplemente no tienen entrada aquí — el frontend los muestra como un
-// seleccionable simple, sin acordeón.
+// Catálogo OFICIAL de subtemas por tema de especialidad — lista ILPIIE IVE (Excel "LISTA DE
+// TEMAS Y SUB TEMAS DE ASESORÍA"). `temas_especialidad` es un catálogo SEPARADO de `sectores`
+// (los 13 sectores MEF de las fichas/plantillas) — ver TemasEspecialidadSeeder. Typos del Excel
+// corregidos en el nombre canónico (Prerfiles→Perfiles, Espcificaciones→Especificaciones, etc.).
 //
 // Uso: php spark db:seed SubtemasEspecialidadSeeder (requiere que TemasEspecialidadSeeder ya corrió)
 class SubtemasEspecialidadSeeder extends Seeder
 {
     /** Subtemas por código de tema de especialidad (ver data/temas_especialidad.json). */
     private const SUBTEMAS = [
-        'PIN' => [
-            'Formatos',
-            'Fichas Técnicas',
-            'Programación Multianual de Inversiones',
-            'IOARR',
-            'Perfiles',
+        'LFO' => [
+            'Por Administración Directa',
+            'Por Contrata de Terceros',
         ],
-        'EJO' => [
-            'Expediente Técnico',
+        'IPD' => [
+            'Sistema Inversión Pública',
+            'Programación Multianual',
+            'IOARR',
+            'Fichas Técnicas',
+            'Perfiles',
+            'Formatos de Registro',
+        ],
+        'ETO' => [
+            'Expedientes Técnicos',
             'Especificaciones Técnicas',
-            'Residencia de Obras',
-            'Supervisión de Obras',
-            'Administración de Obras',
-            'Contabilidad de Obras',
-            'Programación de Obras',
-            'Valorización y Liquidación de Obras',
-            'Liquidación Financiera de Obras',
-            'Cierre de Inversiones',
-            'BIM',
-            'PMBOK',
+        ],
+        'TDR' => [
+            'TDRs Consultoría en General',
+            'TDRs Consultoría de Obra',
+        ],
+        'CON' => [
+            'Ley, Reglamento, Directiva',
+        ],
+        'VLO' => [
+            'Por Administración Directa',
+            'Por Contrata de Terceros',
+        ],
+        'OIA' => [
+            'Obras Por Impuestos',
+            'Asociaciones Público Privadas',
+            'Proyectos en Activos',
+        ],
+        'PEC' => [
+            'Peritaje económico',
+            'Peritaje Financiero',
+            'Peritaje Contable',
+        ],
+        'TES' => [
+            'Tesis Pregrado',
+            'Tesis Post Grado',
         ],
     ];
 
