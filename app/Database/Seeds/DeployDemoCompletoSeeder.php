@@ -53,6 +53,10 @@ class DeployDemoCompletoSeeder extends Seeder
             AsesoriasDemoSeeder::class,
             CoberturaHorariosDemoSeeder::class,
             AsesoriasDemoAsesor1Seeder::class,
+            // Catálogo ILPIIE (temas + subtemas). Temas va ANTES de subtemas; ambos son
+            // idempotentes. Si la BD ya tenía el catálogo viejo (PIN/EJO), correr aparte
+            // SyncTemasIlpiieSeeder para reemplazarlo.
+            TemasEspecialidadSeeder::class,
             SubtemasEspecialidadSeeder::class,
             ContextosIAGlobalesSeeder::class,
             ContextosIACuidadoDiurnoSeeder::class,

@@ -2514,9 +2514,9 @@ class LlenadoIAController extends BaseController
             }
 
             $ch = curl_init($url);
-            curl_setopt_array($ch, [
-                CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_POST           => true,
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_POST           => true,
                 CURLOPT_POSTFIELDS     => $body,
                 CURLOPT_TIMEOUT        => (int) ceil($restante),
                 CURLOPT_HTTPHEADER     => ['content-type: application/json'],
@@ -2819,11 +2819,11 @@ class LlenadoIAController extends BaseController
         $body = json_encode([
             'model'                 => $modelo,
             'max_completion_tokens' => $maxTokens,
-            'response_format'       => ['type' => 'json_object'],
-            'messages'              => [
+                'response_format'       => ['type' => 'json_object'],
+                'messages'              => [
                 ['role' => 'system', 'content' => $sistemaTexto],
-                ['role' => 'user', 'content' => $usuario],
-            ],
+                    ['role' => 'user', 'content' => $usuario],
+                ],
         ]);
 
         $limiteAbsoluto = microtime(true) + $timeout;
@@ -2846,18 +2846,18 @@ class LlenadoIAController extends BaseController
                 CURLOPT_POSTFIELDS     => $body,
                 CURLOPT_TIMEOUT        => (int) ceil($restante),
                 CURLOPT_HTTPHEADER     => [
-                    'content-type: application/json',
-                    'authorization: Bearer ' . $config->openaiApiKey,
-                ],
+                'content-type: application/json',
+                'authorization: Bearer ' . $config->openaiApiKey,
+            ],
                 CURLOPT_HEADERFUNCTION => function ($curl, $linea) use (&$cabecerasCrudas) {
                     $cabecerasCrudas[] = $linea;
                     return strlen($linea);
                 },
-            ]);
-            $cuerpo    = curl_exec($ch);
-            $estado    = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            $errorCurl = curl_error($ch);
-            curl_close($ch);
+        ]);
+        $cuerpo    = curl_exec($ch);
+        $estado    = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $errorCurl = curl_error($ch);
+        curl_close($ch);
 
             if ($estado === 429 && $intento < $intentosMax) {
                 $espera = $this->retryAfterDeHeaders($cabecerasCrudas) ?? (2 ** $intento);
@@ -2872,13 +2872,13 @@ class LlenadoIAController extends BaseController
                 continue;
             }
 
-            if ($cuerpo === false || $estado < 200 || $estado >= 300) {
+        if ($cuerpo === false || $estado < 200 || $estado >= 300) {
                 log_message('error', '[llenado-ia] OpenAI ({etiqueta}) respondió {estado}: {cuerpo} {curl}', [
                     'etiqueta' => $etiqueta ?? '?',
-                    'estado' => $estado,
-                    'cuerpo' => is_string($cuerpo) ? substr($cuerpo, 0, 500) : '(sin cuerpo)',
-                    'curl'   => $errorCurl,
-                ]);
+                'estado' => $estado,
+                'cuerpo' => is_string($cuerpo) ? substr($cuerpo, 0, 500) : '(sin cuerpo)',
+                'curl'   => $errorCurl,
+            ]);
                 return null;
             }
 

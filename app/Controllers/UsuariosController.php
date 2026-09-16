@@ -4,6 +4,7 @@ namespace App\Controllers;
 
 use App\Libraries\CorreoService;
 use App\Models\ActividadModel;
+use App\Models\PlanModel;
 use App\Models\UsuarioModel;
 use CodeIgniter\HTTP\ResponseInterface;
 use Throwable;
@@ -171,6 +172,252 @@ class UsuariosController extends BaseController
         }
 
         return $this->response->setJSON(['enviado' => true]);
+    }
+
+    // Cupos actuales de un cliente (alumno o externo) para el panel admin "Membresía y pagos".
+    // Lee la cuenta titular; no crea facturación (eso era el bug de GET /facturacion).
+    public function beneficiosAsignados($id = null): ResponseInterface
+    {
+        $gate = $this->exigirAdmin();
+        if ($gate !== null) {
+            return $gate;
+        }
+
+        $usuario = (new UsuarioModel())->find($id);
+        if (! $usuario) {
+            return $this->response->setStatusCode(404)->setJSON(['error' => 'Usuario no encontrado']);
+        }
+        if (($usuario['rol'] ?? '') !== 'cliente') {
+            return $this->response->setStatusCode(400)->setJSON(['error' => 'Solo se pueden asignar beneficios a clientes (alumnos o externos).']);
+        }
+
+        return $this->response->setJSON($this->dtoBeneficios($this->idCuentaDe($usuario)));
+    }
+
+    // Otorga plan y/o cupos sin pasar por Stripe. Fichas de chat/video se SUMAN; plantillas
+    // simultáneas se FIJAN al total pedido (el extra sobre la base del plan va al add-on
+    // "Plantilla adicional").
+    public function asignarBeneficios($id = null): ResponseInterface
+    {
+        $gate = $this->exigirAdmin();
+        if ($gate !== null) {
+            return $gate;
+        }
+
+        $usuario = (new UsuarioModel())->find($id);
+        if (! $usuario) {
+            return $this->response->setStatusCode(404)->setJSON(['error' => 'Usuario no encontrado']);
+        }
+        if (($usuario['rol'] ?? '') !== 'cliente') {
+            return $this->response->setStatusCode(400)->setJSON(['error' => 'Solo se pueden asignar beneficios a clientes (alumnos o externos).']);
+        }
+
+        $cuentaId          = $this->idCuentaDe($usuario);
+        $dto               = $this->request->getJSON(true) ?? [];
+        $planIdSlug        = trim((string) ($dto['planId'] ?? ''));
+        $agregarChat       = max(0, (int) ($dto['agregarFichasChat'] ?? 0));
+        $agregarVideo      = max(0, (int) ($dto['agregarFichasVideo'] ?? 0));
+        $limitePlantillas  = array_key_exists('limitePlantillas', $dto) && $dto['limitePlantillas'] !== null && $dto['limitePlantillas'] !== ''
+            ? max(0, (int) $dto['limitePlantillas'])
+            : null;
+
+        if ($planIdSlug === '' && $agregarChat === 0 && $agregarVideo === 0 && $limitePlantillas === null) {
+            return $this->response->setStatusCode(400)->setJSON(['error' => 'Indica un plan, fichas o un cupo de plantillas para asignar.']);
+        }
+
+        if ($planIdSlug !== '') {
+            $error = $this->asignarPlan($cuentaId, $planIdSlug);
+            if ($error !== null) {
+                return $error;
+            }
+        }
+
+        if ($limitePlantillas !== null) {
+            $error = $this->asignarLimitePlantillas($cuentaId, $limitePlantillas);
+            if ($error !== null) {
+                return $error;
+            }
+        }
+
+        if ($agregarChat > 0 || $agregarVideo > 0) {
+            TicketsConsultaController::otorgarFichasModalidad($cuentaId, $agregarChat, $agregarVideo);
+        }
+
+        (new ActividadModel())->insert([
+            'mensaje'     => 'Se le asignaron beneficios de membresía',
+            'color'       => 'green',
+            'categoria'   => 'Membresía',
+            'actor_id'    => session()->get('usuario_id'),
+            'objetivo_id' => (int) $id,
+            'created_at'  => date('Y-m-d H:i:s'),
+        ]);
+
+        return $this->response->setJSON($this->dtoBeneficios($cuentaId));
+    }
+
+    private function exigirAdmin(): ?ResponseInterface
+    {
+        $rol = session()->get('usuario_rol');
+        if (! in_array($rol, ['administrador', 'superusuario'], true)) {
+            return $this->response->setStatusCode(403)->setJSON(['error' => 'No tienes permiso para esta acción']);
+        }
+
+        return null;
+    }
+
+    private function idCuentaDe(array $usuario): int
+    {
+        return $usuario['cuenta_cliente_id'] !== null
+            ? (int) $usuario['cuenta_cliente_id']
+            : (int) $usuario['id'];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function dtoBeneficios(int $cuentaId): array
+    {
+        $db            = db_connect();
+        $fact          = $db->table('facturaciones')->where('usuario_id', $cuentaId)->get()->getRowArray();
+        $planId        = null;
+        $planNombre    = null;
+        $base          = 0;
+        $extra         = 0;
+
+        if ($fact) {
+            $plan = (new PlanModel())->find($fact['plan_id']);
+            if ($plan) {
+                $planId     = 'nivel-' . $plan['numero_nivel'];
+                $planNombre = $plan['nombre'];
+                $base       = (int) $plan['limite_fichas_base'];
+            }
+            $addon = $db->table('add_ons')->where('nombre', 'Plantilla adicional')->get()->getRowArray();
+            if ($addon) {
+                $filaAddon = $db->table('facturacion_addons')
+                    ->where('facturacion_usuario_id', $cuentaId)
+                    ->where('add_on_id', $addon['id'])
+                    ->get()->getRowArray();
+                $extra = (int) ($filaAddon['cantidad'] ?? 0);
+            }
+        }
+
+        $tickets   = $db->table('tickets_consulta')->where('usuario_id', $cuentaId)->get()->getResultArray();
+        $chatDisp  = 0;
+        $videoDisp = 0;
+        foreach ($tickets as $t) {
+            if (($t['estado'] ?? '') !== 'disponible') {
+                continue;
+            }
+            if (($t['modalidad'] ?? '') === 'chat') {
+                $chatDisp++;
+            }
+            if (($t['modalidad'] ?? '') === 'video') {
+                $videoDisp++;
+            }
+        }
+
+        return [
+            'cuentaId'               => (string) $cuentaId,
+            'planId'                 => $planId,
+            'planNombre'             => $planNombre,
+            'limitePlantillas'       => $base + $extra,
+            'limitePlantillasBase'   => $base,
+            'fichasChatDisponibles'  => $chatDisp,
+            'fichasVideoDisponibles' => $videoDisp,
+        ];
+    }
+
+    private function asignarPlan(int $cuentaId, string $planIdSlug): ?ResponseInterface
+    {
+        if (! preg_match('/^nivel-(\d+)$/', $planIdSlug, $m)) {
+            return $this->response->setStatusCode(400)->setJSON(['error' => 'Plan no válido']);
+        }
+
+        $plan = (new PlanModel())->where('numero_nivel', (int) $m[1])->first();
+        if (! $plan) {
+            return $this->response->setStatusCode(404)->setJSON(['error' => 'Ese plan no está cargado en el sistema']);
+        }
+
+        $db    = db_connect();
+        $ahora = date('Y-m-d H:i:s');
+        $fila  = $db->table('facturaciones')->where('usuario_id', $cuentaId)->get()->getRowArray();
+
+        if ($fila) {
+            $cambios = [
+                'plan_id'    => $plan['id'],
+                'cancelada'  => 0,
+                'updated_at' => $ahora,
+            ];
+            if (empty($fila['fecha_inicio_plan'])) {
+                $cambios['fecha_inicio_plan'] = $ahora;
+            }
+            // Sin suscripción Stripe: vigencia sin fecha de corte (AuthController::tienePlan trata
+            // fecha_renovacion nula como vigente). Con Stripe se deja la fecha que ya puso el webhook.
+            if (empty($fila['stripe_subscription_id'])) {
+                $cambios['fecha_renovacion'] = null;
+            }
+            $db->table('facturaciones')->where('usuario_id', $cuentaId)->update($cambios);
+        } else {
+            $db->table('facturaciones')->insert([
+                'usuario_id'        => $cuentaId,
+                'plan_id'           => $plan['id'],
+                'cancelada'         => 0,
+                'fecha_renovacion'  => null,
+                'fecha_inicio_plan' => $ahora,
+                'metodo_pago'       => 'tarjeta',
+                'created_at'        => $ahora,
+                'updated_at'        => $ahora,
+            ]);
+        }
+
+        TicketsConsultaController::emitirTicketsDePlan($cuentaId, (int) $plan['id']);
+
+        return null;
+    }
+
+    private function asignarLimitePlantillas(int $cuentaId, int $limiteDeseado): ?ResponseInterface
+    {
+        $db   = db_connect();
+        $fact = $db->table('facturaciones')->where('usuario_id', $cuentaId)->get()->getRowArray();
+        if (! $fact) {
+            return $this->response->setStatusCode(400)->setJSON(['error' => 'Asigna un plan para poder definir plantillas simultáneas.']);
+        }
+
+        $plan  = (new PlanModel())->find($fact['plan_id']);
+        $base  = (int) ($plan['limite_fichas_base'] ?? 0);
+        $extra = max(0, $limiteDeseado - $base);
+
+        $addon = $db->table('add_ons')->where('nombre', 'Plantilla adicional')->get()->getRowArray();
+        if (! $addon) {
+            return $this->response->setStatusCode(500)->setJSON(['error' => 'No está configurado el add-on de plantilla adicional.']);
+        }
+
+        $filaAddon = $db->table('facturacion_addons')
+            ->where('facturacion_usuario_id', $cuentaId)
+            ->where('add_on_id', $addon['id'])
+            ->get()->getRowArray();
+
+        if ($extra === 0) {
+            if ($filaAddon) {
+                $db->table('facturacion_addons')
+                    ->where('facturacion_usuario_id', $cuentaId)
+                    ->where('add_on_id', $addon['id'])
+                    ->delete();
+            }
+        } elseif ($filaAddon) {
+            $db->table('facturacion_addons')
+                ->where('facturacion_usuario_id', $cuentaId)
+                ->where('add_on_id', $addon['id'])
+                ->update(['cantidad' => $extra]);
+        } else {
+            $db->table('facturacion_addons')->insert([
+                'facturacion_usuario_id' => $cuentaId,
+                'add_on_id'              => $addon['id'],
+                'cantidad'               => $extra,
+            ]);
+        }
+
+        return null;
     }
 
     private function toDto(array $fila): array

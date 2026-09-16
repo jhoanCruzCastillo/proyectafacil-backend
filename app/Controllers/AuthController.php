@@ -19,11 +19,9 @@ use Throwable;
 // `tienePlan`/`alumnoVigente` viajan SIEMPRE fuera del JWT (no son claims de identidad, son estado
 // que cambia sin que la persona vuelva a loguearse — al comprar/cancelar un plan, o al vencer la
 // fecha de un alumno — meterlos en el token los dejaría desactualizados hasta el próximo login) y
-// se recalculan en cada llamada a login()/me() con un chequeo liviano y SIN efectos colaterales: a
-// propósito nunca se llama a FacturacionController::crearDefault() desde acá — ver el plan de
-// implementación de "registro público" para el porqué (un cliente sin plan debe ver únicamente la
-// pantalla de elegir plan, nunca uno de mentira asignado solo por consultar el estado de su
-// sesión). Juntos determinan si puede entrar a "Proyectos de Inversión con IA" — ver
+// se recalculan en cada llamada a login()/me() con un chequeo liviano y SIN efectos colaterales.
+// Un cliente sin plan debe ver la pantalla de elegir plan, nunca una membresía inventada.
+// Juntos determinan si puede entrar a "Proyectos de Inversión con IA" — ver
 // `puedeAccederProyectosIA()` en frontend/src/lib/permisos.ts.
 class AuthController extends BaseController
 {
@@ -132,6 +130,9 @@ class AuthController extends BaseController
         $correo = trim((string) ($dto['correo'] ?? ''));
         $password = (string) ($dto['password'] ?? '');
         $preferencia = trim((string) ($dto['preferencia'] ?? ''));
+        // Paso 2 del registro: subtemas ILPIIE (`cliente_subtemas`). `sectorIds`/`cliente_intereses`
+        // queda aceptado por compatibilidad con clientes viejos, pero la UI nueva manda subtemaIds.
+        $subtemaIds = is_array($dto['subtemaIds'] ?? null) ? array_map('intval', $dto['subtemaIds']) : [];
         $sectorIds = is_array($dto['sectorIds'] ?? null) ? array_map('intval', $dto['sectorIds']) : [];
 
         if ($nombre === '' || $correo === '' || mb_strlen($password) < 8) {
@@ -160,8 +161,20 @@ class AuthController extends BaseController
             'token_verificacion_expira' => date('Y-m-d H:i:s', strtotime('+24 hours')),
         ], true);
 
+        $db = db_connect();
+        if ($subtemaIds !== []) {
+            $subtemasValidos = $db->table('subtemas_especialidad')
+                ->whereIn('id', $subtemaIds)
+                ->where('activo', 1)
+                ->get()->getResultArray();
+            foreach ($subtemasValidos as $s) {
+                $db->table('cliente_subtemas')->ignore(true)->insert([
+                    'usuario_id' => $id,
+                    'subtema_id' => $s['id'],
+                ]);
+            }
+        }
         if ($sectorIds !== []) {
-            $db = db_connect();
             $sectoresValidos = $db->table('sectores')->whereIn('id', $sectorIds)->get()->getResultArray();
             foreach ($sectoresValidos as $s) {
                 $db->table('cliente_intereses')->ignore(true)->insert(['usuario_id' => $id, 'sector_id' => $s['id']]);
@@ -204,9 +217,8 @@ class AuthController extends BaseController
     }
 
     // "Tiene plan" exige que la membresía siga VIGENTE, no solo que exista la fila: una cancelada o
-    // vencida no debe seguir desbloqueando "Proyectos de Inversión con IA" — pedido explícito del
-    // cliente ("mientras dura su membresía"). `fecha_renovacion` nula = plan sin fecha de corte
-    // (ej. Nivel 0 gratuito o un pago único ya cubierto), se trata como vigente.
+    // vencida no debe seguir desbloqueando "Proyectos de Inversión con IA". `fecha_renovacion` nula
+    // = plan sin fecha de corte (pago único ya cubierto), se trata como vigente.
     private function tienePlan(string $rol, int $usuarioId): bool
     {
         if ($rol !== 'cliente') {

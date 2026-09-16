@@ -22,11 +22,9 @@ class AsesoriasDemoAsesor1Seeder extends Seeder
     private const SECTORES_PROPIOS = ['SAL', 'VYS', 'DIS'];
 
     /** Temas de especialidad (tabla `temas_especialidad` / `asesor_temas_especialidad` — catálogo
-     * SEPARADO de `sectores`, ver TemasEspecialidadSeeder) que atiende el asesor demo — es lo que
-     * abre marcado en el bloque "2. Temas de especialidad". Incluye dos con subtemas (PIN, EJO) y
-     * dos sin subtemas (PLN, PRE) para que la demo muestre ambos estados de esa pantalla (acordeón
-     * vs. seleccionable simple). */
-    private const TEMAS_PROPIOS = ['PIN', 'EJO', 'PLN', 'PRE'];
+     * SEPARADO de `sectores`, ver TemasEspecialidadSeeder / lista ILPIIE IVE) que atiende el
+     * asesor demo — es lo que abre marcado en el bloque "2. Temas de especialidad". */
+    private const TEMAS_PROPIOS = ['LFO', 'IPD', 'ETO', 'CON'];
 
     public function run(): void
     {

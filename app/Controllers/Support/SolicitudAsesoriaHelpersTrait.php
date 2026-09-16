@@ -110,8 +110,10 @@ trait SolicitudAsesoriaHelpersTrait
         }
     }
 
-    // Chat: por especialidad de sector + toggle 'disponible'. Video: solo quienes marcaron ESE
-    // horario exacto como disponible (docs §4 Fase 2).
+    // Chat: por subtema ILPIIE (`asesor_subtemas`) + toggle 'disponible'. Si nadie marcó ese
+    // subtema puntual, se cae al tema padre (`asesor_temas_especialidad`) y, para tickets viejos
+    // sin subtema_id, a sectores MEF (`asesor_especialidades`). Video: solo quienes marcaron ESE
+    // horario como disponible (docs §4 Fase 2).
     private function asesoresPorSector(?int $sectorId): array
     {
         if ($sectorId === null) {
@@ -128,6 +130,134 @@ trait SolicitudAsesoriaHelpersTrait
             ->get()->getResultArray();
 
         return array_map(static fn (array $f) => (int) $f['id'], $filas);
+    }
+
+    /** Unión de asesores que cubren CUALQUIERA de los subtemas (o el tema padre si nadie los tiene). */
+    private function asesoresPorSubtemas(array $subtemaIds): array
+    {
+        $ids = array_values(array_unique(array_filter(array_map('intval', $subtemaIds))));
+        if ($ids === []) {
+            return [];
+        }
+
+        $filas = db_connect()->table('usuarios u')
+            ->select('u.id')
+            ->join('asesor_subtemas ast', 'ast.usuario_id = u.id')
+            ->where('u.rol', 'asesor')
+            ->where('u.estado', 'activo')
+            ->where('u.disponible', 1)
+            ->whereIn('ast.subtema_id', $ids)
+            ->get()->getResultArray();
+
+        $encontrados = array_values(array_unique(array_map(static fn (array $f) => (int) $f['id'], $filas)));
+        if ($encontrados !== []) {
+            return $encontrados;
+        }
+
+        $filas = db_connect()->table('usuarios u')
+            ->select('u.id')
+            ->join('asesor_temas_especialidad ate', 'ate.usuario_id = u.id')
+            ->join('subtemas_especialidad st', 'st.tema_id = ate.tema_id')
+            ->where('u.rol', 'asesor')
+            ->where('u.estado', 'activo')
+            ->where('u.disponible', 1)
+            ->whereIn('st.id', $ids)
+            ->get()->getResultArray();
+
+        return array_values(array_unique(array_map(static fn (array $f) => (int) $f['id'], $filas)));
+    }
+
+    private function asesoresElegiblesChat(array $subtemaIds, ?int $sectorId): array
+    {
+        $porSubtema = $this->asesoresPorSubtemas($subtemaIds);
+        if ($porSubtema !== []) {
+            return $porSubtema;
+        }
+
+        return $this->asesoresPorSector($sectorId);
+    }
+
+    /**
+     * @param list<int> $solicitudIds
+     * @return array<int, list<array{id: string, nombre: string, temaNombre: ?string}>>
+     */
+    private function subtemasDeSolicitudes(array $solicitudIds): array
+    {
+        $ids = array_values(array_unique(array_filter(array_map('intval', $solicitudIds))));
+        if ($ids === [] || ! db_connect()->tableExists('solicitud_subtemas')) {
+            return [];
+        }
+
+        $filas = db_connect()->table('solicitud_subtemas ss')
+            ->select('ss.solicitud_id, st.id as subtema_id, st.nombre as subtema_nombre, te.nombre as tema_nombre')
+            ->join('subtemas_especialidad st', 'st.id = ss.subtema_id')
+            ->join('temas_especialidad te', 'te.id = st.tema_id', 'left')
+            ->whereIn('ss.solicitud_id', $ids)
+            ->orderBy('te.id', 'ASC')
+            ->orderBy('st.id', 'ASC')
+            ->get()->getResultArray();
+
+        $out = [];
+        foreach ($filas as $f) {
+            $out[(int) $f['solicitud_id']][] = [
+                'id'         => (string) $f['subtema_id'],
+                'nombre'     => $f['subtema_nombre'],
+                'temaNombre' => $f['tema_nombre'] ?? null,
+            ];
+        }
+
+        return $out;
+    }
+
+    /** @return list<int> */
+    private function subtemaIdsDeFila(array $sol): array
+    {
+        $nombres = $this->subtemasDeSolicitudes([(int) $sol['id']])[(int) $sol['id']] ?? [];
+        $ids     = array_map(static fn (array $s) => (int) $s['id'], $nombres);
+        if ($ids === [] && ! empty($sol['subtema_id'])) {
+            $ids = [(int) $sol['subtema_id']];
+        }
+
+        return $ids;
+    }
+
+    /** @param list<array{id: string, nombre: string, temaNombre: ?string}> $subtemas */
+    private function anexarSubtemasDto(array $dto, array $subtemas): array
+    {
+        $dto['subtemas']   = $subtemas;
+        $dto['subtemaIds'] = array_column($subtemas, 'id');
+        if ($subtemas === []) {
+            return $dto;
+        }
+
+        $dto['subtemaNombre'] = implode(', ', array_column($subtemas, 'nombre'));
+        $temas = array_values(array_unique(array_filter(array_column($subtemas, 'temaNombre'))));
+        if ($temas !== []) {
+            $dto['temaNombre']   = implode(', ', $temas);
+            $dto['sectorNombre'] = $dto['temaNombre'];
+        }
+
+        return $dto;
+    }
+
+    /**
+     * @param list<array> $filas
+     * @return list<array>
+     */
+    private function dtosSolicitudes(array $filas): array
+    {
+        $map = $this->subtemasDeSolicitudes(array_map(static fn (array $f) => (int) $f['id'], $filas));
+
+        return array_map(fn (array $f) => $this->toDtoSolicitud($f, $map[(int) $f['id']] ?? []), $filas);
+    }
+
+    /** Joins de categoría (tema/subtema ILPIIE + sector MEF legacy) sobre alias `sa`. */
+    private function joinCategoriaSolicitud($builder)
+    {
+        return $builder
+            ->join('sectores s', 's.id = sa.sector_id', 'left')
+            ->join('subtemas_especialidad st', 'st.id = sa.subtema_id', 'left')
+            ->join('temas_especialidad te', 'te.id = st.tema_id', 'left');
     }
 
     private function asesoresPorHorario(?string $fecha, ?string $horaInicio, ?string $horaFin): array
@@ -200,9 +330,10 @@ trait SolicitudAsesoriaHelpersTrait
             ->update(['estado' => 'consumido', 'updated_at' => date('Y-m-d H:i:s')]);
     }
 
-    private function toDtoSolicitud(array $s): array
+    /** @param list<array{id: string, nombre: string, temaNombre: ?string}>|null $subtemasPrecargados */
+    private function toDtoSolicitud(array $s, ?array $subtemasPrecargados = null): array
     {
-        return [
+        $dto = [
             'id'             => (string) $s['id'],
             'clienteId'      => (string) $s['cliente_id'],
             'clienteNombre'  => $s['cliente_nombre'] ?? null,
@@ -212,7 +343,10 @@ trait SolicitudAsesoriaHelpersTrait
             'docenteFotoUrl' => $s['docente_foto_url'] ?? null,
             'ejemploId'      => $s['ejemplo_id'] !== null ? (string) $s['ejemplo_id'] : null,
             'sectorId'       => $s['sector_id'] !== null ? (string) $s['sector_id'] : null,
-            'sectorNombre'   => $s['sector_nombre'] ?? null,
+            'sectorNombre'   => $s['tema_nombre'] ?? $s['sector_nombre'] ?? null,
+            'temaNombre'     => $s['tema_nombre'] ?? null,
+            'subtemaId'      => $s['subtema_id'] !== null ? (string) $s['subtema_id'] : null,
+            'subtemaNombre'  => $s['subtema_nombre'] ?? null,
             'tipoDocumento'  => $s['tipo_documento'] ?? null,
             'tipo'           => $s['tipo'],
             'estado'         => $s['estado'],
@@ -230,6 +364,20 @@ trait SolicitudAsesoriaHelpersTrait
             'actualizadoEn'  => $s['updated_at'] !== null ? $this->datetimeAIso($s['updated_at']) : null,
             'completadoEn'   => ($s['completado_en'] ?? null) !== null ? $this->datetimeAIso($s['completado_en']) : null,
         ];
+
+        $subtemas = $subtemasPrecargados;
+        if ($subtemas === null) {
+            $subtemas = $this->subtemasDeSolicitudes([(int) $s['id']])[(int) $s['id']] ?? [];
+        }
+        if ($subtemas === [] && ! empty($s['subtema_id'])) {
+            $subtemas = [[
+                'id'         => (string) $s['subtema_id'],
+                'nombre'     => (string) ($s['subtema_nombre'] ?? ''),
+                'temaNombre' => $s['tema_nombre'] ?? null,
+            ]];
+        }
+
+        return $this->anexarSubtemasDto($dto, $subtemas);
     }
 
     // Mismo margen que MARGEN_SALIDA_MIN en frontend/src/lib/consultaAsesorUI.ts — mientras la
