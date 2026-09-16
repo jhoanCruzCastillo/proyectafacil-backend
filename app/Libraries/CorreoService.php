@@ -10,7 +10,10 @@ use GuzzleHttp\Client;
 // que el admin la copie a mano). Envía vía la API HTTP de Brevo en vez de SMTP: en producción
 // (Railway) el puerto saliente 587 hacia smtp.gmail.com daba timeout de conexión — la plataforma
 // bloquea SMTP saliente, no era un problema de credenciales — así que se abandonó CodeIgniter
-// Email/SMTP por completo a favor de una API sobre HTTPS (443), que nunca se bloquea.
+// Email/SMTP por completo a favor de una API sobre HTTPS (443), que nunca se bloquea. Se probó
+// también el servicio propio del cliente ("avisomail") pero el servidor (174.136.38.42) da
+// connection timeout tanto por HTTP como por HTTPS — probablemente un firewall con lista blanca de
+// IPs — así que se volvió a Brevo mientras se resuelve el acceso a ese servidor.
 class CorreoService
 {
     private Client $http;

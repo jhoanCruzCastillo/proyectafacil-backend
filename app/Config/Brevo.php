@@ -4,9 +4,11 @@ namespace Config;
 
 use CodeIgniter\Config\BaseConfig;
 
-// Brevo (correo transaccional vía API HTTP) — mismo motivo que se evaluó con Resend: Railway
-// bloquea el puerto SMTP saliente en producción, así que el envío va por HTTPS (443). Se optó por
-// Brevo como proveedor final. Docs: https://developers.brevo.com/reference/sendtransacemail
+// Brevo (correo transaccional vía API HTTP) — mismo motivo que se evaluó con Resend y luego con el
+// servicio propio del cliente ("avisomail", inalcanzable desde acá — connection timeout tanto por
+// HTTP como por HTTPS, probablemente firewall con lista blanca de IPs): Railway bloquea el puerto
+// SMTP saliente en producción, así que el envío va por HTTPS (443). Docs:
+// https://developers.brevo.com/reference/sendtransacemail
 //
 // En el .env del backend:
 //   brevo.apiKey = xkeysib-...
