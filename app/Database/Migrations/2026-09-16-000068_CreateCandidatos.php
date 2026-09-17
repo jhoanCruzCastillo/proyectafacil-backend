@@ -42,59 +42,68 @@ class CreateCandidatos extends Migration
 
     public function up()
     {
-        $this->forge->addField([
-            'id'                  => ['type' => 'INT', 'constraint' => 11, 'unsigned' => true, 'auto_increment' => true],
-            'nombre'              => ['type' => 'VARCHAR', 'constraint' => 150],
-            'dni'                 => ['type' => 'VARCHAR', 'constraint' => 12],
-            'correo'              => ['type' => 'VARCHAR', 'constraint' => 150],
-            'telefono'            => ['type' => 'VARCHAR', 'constraint' => 30],
-            'password_hash'       => ['type' => 'VARCHAR', 'constraint' => 255],
-            'profesion'           => ['type' => 'VARCHAR', 'constraint' => 150],
-            'nivel_academico'     => ['type' => 'VARCHAR', 'constraint' => 60],
-            'colegiatura'         => ['type' => 'VARCHAR', 'constraint' => 30, 'null' => true],
-            'anios_experiencia'   => ['type' => 'VARCHAR', 'constraint' => 30],
-            'nivel_especialidad'  => $this->enumField(['Especialista', 'Senior', 'Altamente especializado']),
-            'otros_temas'         => ['type' => 'TEXT', 'null' => true],
-            'actividades'         => ['type' => 'TEXT'],
-            'cv_url'              => ['type' => 'VARCHAR', 'constraint' => 500],
-            'cv_nombre_original'  => ['type' => 'VARCHAR', 'constraint' => 255],
-            'linkedin'            => ['type' => 'VARCHAR', 'constraint' => 255, 'null' => true],
-            'otras_redes'         => ['type' => 'VARCHAR', 'constraint' => 255, 'null' => true],
-            'comentarios'         => ['type' => 'TEXT', 'null' => true],
-            'estado'              => ['type' => 'VARCHAR', 'constraint' => 30, 'default' => 'registrado'],
-            'created_at'          => ['type' => 'DATETIME', 'null' => true],
-            'updated_at'          => ['type' => 'DATETIME', 'null' => true],
-        ]);
-        $this->forge->addKey('id', true);
-        $this->forge->addUniqueKey('dni');
-        $this->forge->addUniqueKey('correo');
-        $this->forge->createTable('candidatos');
-        $this->addEnumCheck('candidatos', 'nivel_especialidad', ['Especialista', 'Senior', 'Altamente especializado']);
-        $this->addEnumCheck('candidatos', 'estado', ['registrado', 'en_evaluacion', 'para_entrevista', 'aprobado', 'desaprobado']);
+        if (! $this->db->tableExists('candidatos')) {
+            $this->forge->addField([
+                'id'                  => ['type' => 'INT', 'constraint' => 11, 'unsigned' => true, 'auto_increment' => true],
+                'nombre'              => ['type' => 'VARCHAR', 'constraint' => 150],
+                'dni'                 => ['type' => 'VARCHAR', 'constraint' => 12],
+                'correo'              => ['type' => 'VARCHAR', 'constraint' => 150],
+                'telefono'            => ['type' => 'VARCHAR', 'constraint' => 30],
+                'password_hash'       => ['type' => 'VARCHAR', 'constraint' => 255],
+                'profesion'           => ['type' => 'VARCHAR', 'constraint' => 150],
+                'nivel_academico'     => ['type' => 'VARCHAR', 'constraint' => 60],
+                'colegiatura'         => ['type' => 'VARCHAR', 'constraint' => 30, 'null' => true],
+                'anios_experiencia'   => ['type' => 'VARCHAR', 'constraint' => 30],
+                'nivel_especialidad'  => $this->enumField(['Especialista', 'Senior', 'Altamente especializado']),
+                'otros_temas'         => ['type' => 'TEXT', 'null' => true],
+                'actividades'         => ['type' => 'TEXT'],
+                'cv_url'              => ['type' => 'VARCHAR', 'constraint' => 500],
+                'cv_nombre_original'  => ['type' => 'VARCHAR', 'constraint' => 255],
+                'linkedin'            => ['type' => 'VARCHAR', 'constraint' => 255, 'null' => true],
+                'otras_redes'         => ['type' => 'VARCHAR', 'constraint' => 255, 'null' => true],
+                'comentarios'         => ['type' => 'TEXT', 'null' => true],
+                'estado'              => ['type' => 'VARCHAR', 'constraint' => 30, 'default' => 'registrado'],
+                'created_at'          => ['type' => 'DATETIME', 'null' => true],
+                'updated_at'          => ['type' => 'DATETIME', 'null' => true],
+            ]);
+            $this->forge->addKey('id', true);
+            $this->forge->addUniqueKey('dni');
+            $this->forge->addUniqueKey('correo');
+            $this->forge->createTable('candidatos');
+        }
 
-        $this->forge->addField([
-            'candidato_id' => ['type' => 'INT', 'constraint' => 11, 'unsigned' => true],
-            'tema_id'      => ['type' => 'INT', 'constraint' => 11, 'unsigned' => true],
-        ]);
-        $this->forge->addPrimaryKey(['candidato_id', 'tema_id']);
-        $this->forge->addForeignKey('candidato_id', 'candidatos', 'id', 'CASCADE', 'CASCADE');
-        $this->forge->addForeignKey('tema_id', 'temas_especialidad', 'id', 'CASCADE', 'CASCADE');
-        $this->forge->createTable('candidato_temas_especialidad');
+        if ($this->db->tableExists('candidatos')) {
+            $this->addEnumCheck('candidatos', 'nivel_especialidad', ['Especialista', 'Senior', 'Altamente especializado']);
+            $this->addEnumCheck('candidatos', 'estado', ['registrado', 'en_evaluacion', 'para_entrevista', 'aprobado', 'desaprobado']);
+        }
 
-        $this->forge->addField([
-            'candidato_id' => ['type' => 'INT', 'constraint' => 11, 'unsigned' => true],
-            'dia_semana'   => ['type' => 'TINYINT', 'constraint' => 1, 'unsigned' => true],
-            'hora_inicio'  => ['type' => 'TIME'],
-        ]);
-        $this->forge->addPrimaryKey(['candidato_id', 'dia_semana', 'hora_inicio']);
-        $this->forge->addForeignKey('candidato_id', 'candidatos', 'id', 'CASCADE', 'CASCADE');
-        $this->forge->createTable('candidato_disponibilidad');
+        if (! $this->db->tableExists('candidato_temas_especialidad')) {
+            $this->forge->addField([
+                'candidato_id' => ['type' => 'INT', 'constraint' => 11, 'unsigned' => true],
+                'tema_id'      => ['type' => 'INT', 'constraint' => 11, 'unsigned' => true],
+            ]);
+            $this->forge->addPrimaryKey(['candidato_id', 'tema_id']);
+            $this->forge->addForeignKey('candidato_id', 'candidatos', 'id', 'CASCADE', 'CASCADE');
+            $this->forge->addForeignKey('tema_id', 'temas_especialidad', 'id', 'CASCADE', 'CASCADE');
+            $this->forge->createTable('candidato_temas_especialidad');
+        }
+
+        if (! $this->db->tableExists('candidato_disponibilidad')) {
+            $this->forge->addField([
+                'candidato_id' => ['type' => 'INT', 'constraint' => 11, 'unsigned' => true],
+                'dia_semana'   => ['type' => 'TINYINT', 'constraint' => 1, 'unsigned' => true],
+                'hora_inicio'  => ['type' => 'TIME'],
+            ]);
+            $this->forge->addPrimaryKey(['candidato_id', 'dia_semana', 'hora_inicio']);
+            $this->forge->addForeignKey('candidato_id', 'candidatos', 'id', 'CASCADE', 'CASCADE');
+            $this->forge->createTable('candidato_disponibilidad');
+        }
     }
 
     public function down()
     {
-        $this->forge->dropTable('candidato_disponibilidad');
-        $this->forge->dropTable('candidato_temas_especialidad');
-        $this->forge->dropTable('candidatos');
+        $this->forge->dropTable('candidato_disponibilidad', true);
+        $this->forge->dropTable('candidato_temas_especialidad', true);
+        $this->forge->dropTable('candidatos', true);
     }
 }

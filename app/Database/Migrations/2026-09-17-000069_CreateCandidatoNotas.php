@@ -13,6 +13,10 @@ class CreateCandidatoNotas extends Migration
 {
     public function up()
     {
+        if ($this->db->tableExists('candidato_notas')) {
+            return;
+        }
+
         $this->forge->addField([
             'id'           => ['type' => 'INT', 'constraint' => 11, 'unsigned' => true, 'auto_increment' => true],
             'candidato_id' => ['type' => 'INT', 'constraint' => 11, 'unsigned' => true],
@@ -28,6 +32,6 @@ class CreateCandidatoNotas extends Migration
 
     public function down()
     {
-        $this->forge->dropTable('candidato_notas');
+        $this->forge->dropTable('candidato_notas', true);
     }
 }

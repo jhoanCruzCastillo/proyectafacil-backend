@@ -56,9 +56,11 @@ class CandidatosController extends BaseController
         }
 
         $db = db_connect();
-        if ($db->table('candidatos')->where('dni', $dni)->countAllResults() > 0
-            || $db->table('candidatos')->where('correo', $correo)->countAllResults() > 0) {
-            return $this->response->setStatusCode(409)->setJSON(['error' => 'Ya existe una postulación con ese DNI o correo.']);
+        if ($this->correoExisteEn('usuarios', $correo) || $this->correoExisteEn('candidatos', $correo)) {
+            return $this->response->setStatusCode(409)->setJSON(['error' => 'Correo ya registrado']);
+        }
+        if ($db->table('candidatos')->where('dni', $dni)->countAllResults() > 0) {
+            return $this->response->setStatusCode(409)->setJSON(['error' => 'Ya existe una postulación con ese DNI.']);
         }
 
         $file = $this->request->getFile('archivo');
@@ -618,5 +620,21 @@ class CandidatosController extends BaseController
         }
 
         return null;
+    }
+
+    // Comparación sin importar mayúsculas — un alumno/admin/asesor con "Ana@x.com" no debe
+    // poder postular como "ana@x.com". Tablas permitidas: usuarios | candidatos.
+    private function correoExisteEn(string $tabla, string $correo): bool
+    {
+        if (! in_array($tabla, ['usuarios', 'candidatos'], true)) {
+            return false;
+        }
+
+        $db = db_connect();
+        $fila = $db->query(
+            'SELECT 1 FROM ' . $tabla . ' WHERE correo IS NOT NULL AND LOWER(correo) = ' . $db->escape(strtolower($correo)) . ' LIMIT 1',
+        )->getRowArray();
+
+        return $fila !== null;
     }
 }

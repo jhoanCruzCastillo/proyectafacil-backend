@@ -31,6 +31,18 @@ trait PortableEnumTrait
             $values,
         ));
 
-        $this->db->query("ALTER TABLE {$table} ADD CONSTRAINT chk_{$table}_{$column} CHECK ({$column} IN ({$quoted}))");
+        try {
+            $this->db->query("ALTER TABLE {$table} ADD CONSTRAINT chk_{$table}_{$column} CHECK ({$column} IN ({$quoted}))");
+        } catch (\Throwable $e) {
+            $msg = strtolower($e->getMessage());
+            if (
+                str_contains($msg, 'already exists')
+                || str_contains($msg, 'duplicate')
+                || str_contains($msg, 'ya existe')
+            ) {
+                return;
+            }
+            throw $e;
+        }
     }
 }

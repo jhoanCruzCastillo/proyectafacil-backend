@@ -14,6 +14,10 @@ class CreateClienteSubtemas extends Migration
 {
     public function up()
     {
+        if ($this->db->tableExists('cliente_subtemas')) {
+            return;
+        }
+
         $this->forge->addField([
             'usuario_id' => ['type' => 'INT', 'constraint' => 11, 'unsigned' => true],
             'subtema_id' => ['type' => 'INT', 'constraint' => 11, 'unsigned' => true],
@@ -26,6 +30,6 @@ class CreateClienteSubtemas extends Migration
 
     public function down()
     {
-        $this->forge->dropTable('cliente_subtemas');
+        $this->forge->dropTable('cliente_subtemas', true);
     }
 }
