@@ -26,6 +26,15 @@ $routes->group('api', static function (RouteCollection $routes) {
     // Authorization, así que esta ruta no puede ir detrás del filtro 'auth'; se gatea con el token
     // firmado de la URL (?t=), ver CampoArchivosController.
     $routes->get('archivos-campo/(:num)/contenido', 'CampoArchivosController::descargarPublico/$1');
+
+    // Postulación pública al equipo de especialistas ILPIIE Live (formulario
+    // /registro-especialista) — sin sesión, igual que auth/registro.
+    $routes->post('candidatos', 'CandidatosController::postular');
+
+    // Link de descarga del CV usado en el .xlsx exportado — un hipervínculo de Excel no manda
+    // Authorization, así que va gateado por el token firmado de la URL (?t=), no por sesión;
+    // mismo patrón que archivos-campo/(:num)/contenido de arriba.
+    $routes->get('candidatos/(:num)/cv-publico', 'CandidatosController::cvPublico/$1');
 });
 
 // Todo lo demás requiere sesión activa (Módulo 1 en adelante).
@@ -135,6 +144,17 @@ $routes->group('api', ['filter' => 'auth'], static function (RouteCollection $ro
     $routes->put('docentes/(:num)/horario', 'DocentesController::actualizarHorario/$1');
     $routes->get('docentes/(:num)/excepciones', 'DocentesController::excepciones/$1');
     $routes->put('docentes/(:num)/excepciones', 'DocentesController::actualizarExcepciones/$1');
+
+    // Candidatos (postulaciones a especialista ILPIIE Live) — admin, ver CandidatosController.
+    $routes->get('candidatos', 'CandidatosController::index');
+    $routes->get('candidatos/resumen', 'CandidatosController::resumen');
+    $routes->get('candidatos/exportar', 'CandidatosController::exportarExcel');
+    $routes->get('candidatos/(:num)/cv', 'CandidatosController::cv/$1');
+    $routes->get('candidatos/(:num)/notas', 'CandidatosController::notas/$1');
+    $routes->post('candidatos/(:num)/notas', 'CandidatosController::agregarNota/$1');
+    $routes->patch('candidatos/(:num)/estado', 'CandidatosController::cambiarEstado/$1');
+    $routes->delete('candidatos/(:num)', 'CandidatosController::eliminar/$1');
+    $routes->get('candidatos/(:num)', 'CandidatosController::detalle/$1');
     $routes->get('disponibilidad-horarios', 'DocentesController::disponibilidadAgregada');
 
     $routes->get('asesoria/solicitudes', 'AsesoriaController::misSolicitudes');
