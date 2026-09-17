@@ -13,23 +13,40 @@ class CreateSolicitudSubtemas extends Migration
 {
     public function up()
     {
-        $this->forge->addField([
-            'solicitud_id' => ['type' => 'INT', 'constraint' => 11, 'unsigned' => true],
-            'subtema_id'   => ['type' => 'INT', 'constraint' => 11, 'unsigned' => true],
-        ]);
-        $this->forge->addPrimaryKey(['solicitud_id', 'subtema_id']);
-        $this->forge->addForeignKey('solicitud_id', 'solicitudes_asesoria', 'id', 'CASCADE', 'CASCADE');
-        $this->forge->addForeignKey('subtema_id', 'subtemas_especialidad', 'id', 'CASCADE', 'CASCADE');
-        $this->forge->createTable('solicitud_subtemas');
+        if (! $this->db->tableExists('solicitud_subtemas')) {
+            $this->forge->addField([
+                'solicitud_id' => ['type' => 'INT', 'constraint' => 11, 'unsigned' => true],
+                'subtema_id'   => ['type' => 'INT', 'constraint' => 11, 'unsigned' => true],
+            ]);
+            $this->forge->addPrimaryKey(['solicitud_id', 'subtema_id']);
+            $this->forge->addForeignKey('solicitud_id', 'solicitudes_asesoria', 'id', 'CASCADE', 'CASCADE');
+            $this->forge->addForeignKey('subtema_id', 'subtemas_especialidad', 'id', 'CASCADE', 'CASCADE');
+            $this->forge->createTable('solicitud_subtemas');
+        }
 
+        if (
+            ! $this->db->tableExists('solicitud_subtemas')
+            || ! $this->db->tableExists('solicitudes_asesoria')
+            || ! $this->db->fieldExists('subtema_id', 'solicitudes_asesoria')
+        ) {
+            return;
+        }
+
+        // Portable: no ON CONFLICT / INSERT IGNORE. Re-corrida no duplica la PK.
         $this->db->query(
             'INSERT INTO solicitud_subtemas (solicitud_id, subtema_id)
-             SELECT id, subtema_id FROM solicitudes_asesoria WHERE subtema_id IS NOT NULL'
+             SELECT sa.id, sa.subtema_id
+             FROM solicitudes_asesoria sa
+             WHERE sa.subtema_id IS NOT NULL
+               AND NOT EXISTS (
+                   SELECT 1 FROM solicitud_subtemas ss
+                   WHERE ss.solicitud_id = sa.id AND ss.subtema_id = sa.subtema_id
+               )'
         );
     }
 
     public function down()
     {
-        $this->forge->dropTable('solicitud_subtemas');
+        $this->forge->dropTable('solicitud_subtemas', true);
     }
 }
