@@ -92,6 +92,9 @@ $routes->group('api', ['filter' => 'auth'], static function (RouteCollection $ro
 
     $routes->get('usuarios', 'UsuariosController::index');
     $routes->post('usuarios', 'UsuariosController::create');
+    $routes->post('usuarios/importar-alumnos', 'UsuariosController::importarAlumnosExcel');
+    $routes->get('cursos', 'CursosController::index');
+    $routes->post('cursos', 'CursosController::create');
     $routes->put('usuarios/(:num)', 'UsuariosController::update/$1');
     $routes->delete('usuarios/(:num)', 'UsuariosController::delete/$1');
     $routes->post('usuarios/(:num)/enviar-accesos', 'UsuariosController::enviarAccesos/$1');
@@ -149,6 +152,7 @@ $routes->group('api', ['filter' => 'auth'], static function (RouteCollection $ro
     $routes->get('candidatos', 'CandidatosController::index');
     $routes->get('candidatos/resumen', 'CandidatosController::resumen');
     $routes->get('candidatos/exportar', 'CandidatosController::exportarExcel');
+    $routes->post('candidatos/importar', 'CandidatosController::importarExcel');
     $routes->get('candidatos/(:num)/cv', 'CandidatosController::cv/$1');
     $routes->get('candidatos/(:num)/notas', 'CandidatosController::notas/$1');
     $routes->post('candidatos/(:num)/notas', 'CandidatosController::agregarNota/$1');

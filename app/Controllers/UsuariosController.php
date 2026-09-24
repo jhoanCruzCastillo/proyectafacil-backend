@@ -7,6 +7,9 @@ use App\Models\ActividadModel;
 use App\Models\PlanModel;
 use App\Models\UsuarioModel;
 use CodeIgniter\HTTP\ResponseInterface;
+use PhpOffice\PhpSpreadsheet\IOFactory;
+use PhpOffice\PhpSpreadsheet\Shared\Date as ExcelDate;
+use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 use Throwable;
 
 // Espejo de `Usuario` en frontend/src/types/index.ts. `password` nunca se lee del cliente en el
@@ -26,7 +29,13 @@ class UsuariosController extends BaseController
         // DEBUG TEMPORAL — quitar cuando se resuelva el issue de producción devolviendo datos mock.
         error_log('[DEBUG usuarios.index] host=' . ($_SERVER['HTTP_HOST'] ?? '?') . ' filas_en_bd=' . count($filas) . ' usuario_id_en_sesion=' . (session()->get('usuario_id') ?? 'null'));
 
-        return $this->response->setJSON(array_map([$this, 'toDto'], $filas));
+        $cursos = db_connect()->table('cursos')->select('id, nombre, color_accent')->get()->getResultArray();
+        $cursosPorId = [];
+        foreach ($cursos as $c) {
+            $cursosPorId[(int) $c['id']] = $c;
+        }
+
+        return $this->response->setJSON(array_map(fn (array $f) => $this->toDto($f, $cursosPorId), $filas));
     }
 
     public function create(): ResponseInterface
@@ -255,6 +264,139 @@ class UsuariosController extends BaseController
         return $this->response->setJSON($this->dtoBeneficios($cuentaId));
     }
 
+    /**
+     * Admin: carga masiva de clientes-alumnos desde un Excel — mismo criterio que
+     * CandidatosController::importarExcel (crea `usuarios` directo, contraseña aleatoria
+     * descartada, "Enviar accesos" queda para después). Filas con un correo ya registrado se
+     * omiten (no se actualiza al usuario existente) y se reportan en la respuesta. "Vigencia
+     * hasta" es la misma fecha opcional que pide el modal "Crea un nuevo acceso al panel" cuando
+     * Origen=Alumno (columna `vigencia_alumno_hasta`) — se lee la celda directamente (no vía
+     * toArray) para no depender de cómo Excel formatea la fecha para mostrarla.
+     */
+    public function importarAlumnosExcel(): ResponseInterface
+    {
+        if ($gate = $this->exigirAdmin()) {
+            return $gate;
+        }
+
+        $file = $this->request->getFile('archivo');
+        if (! $file || ! $file->isValid() || $file->hasMoved()) {
+            return $this->response->setStatusCode(400)->setJSON(['error' => 'Falta el archivo Excel.']);
+        }
+
+        try {
+            $sheet = IOFactory::load($file->getTempName())->getActiveSheet();
+            $filas = $sheet->toArray(null, true, true, false);
+        } catch (Throwable $e) {
+            return $this->response->setStatusCode(400)->setJSON(['error' => 'No se pudo leer el archivo. Verifica que sea un .xlsx válido.']);
+        }
+        array_shift($filas); // fila 1 = encabezados
+
+        $db = db_connect();
+        $creados  = 0;
+        $omitidos = [];
+        $numeroFila = 1;
+        foreach ($filas as $f) {
+            $numeroFila++;
+            $nombre   = trim((string) ($f[0] ?? ''));
+            $correo   = trim((string) ($f[1] ?? ''));
+            $telefono = trim((string) ($f[2] ?? ''));
+
+            if ($nombre === '' && $correo === '') {
+                continue; // fila en blanco, se ignora sin reportar
+            }
+            if ($nombre === '' || ! filter_var($correo, FILTER_VALIDATE_EMAIL)) {
+                $omitidos[] = ['fila' => $numeroFila, 'motivo' => 'Falta el nombre o el correo no es válido'];
+                continue;
+            }
+            if ($this->correoYaRegistrado($correo)) {
+                $omitidos[] = ['fila' => $numeroFila, 'motivo' => "Correo ya registrado ({$correo})"];
+                continue;
+            }
+
+            [$vigencia, $vigenciaValida] = $this->fechaDeCelda($sheet, 'D' . $numeroFila);
+            if (! $vigenciaValida) {
+                $omitidos[] = ['fila' => $numeroFila, 'motivo' => 'La fecha de "Vigencia hasta" no es válida (usa AAAA-MM-DD)'];
+                continue;
+            }
+
+            $ahora = date('Y-m-d H:i:s');
+            $db->table('usuarios')->insert([
+                'nombre'                => $nombre,
+                'usuario'               => $this->loginDisponibleDesde($correo, $nombre),
+                'password_hash'         => password_hash(bin2hex(random_bytes(16)), PASSWORD_DEFAULT),
+                'rol'                   => 'cliente',
+                'origen'                => 'alumno',
+                'estado'                => 'activo',
+                'correo'                => $correo,
+                'telefono'              => $telefono !== '' ? $telefono : null,
+                'vigencia_alumno_hasta' => $vigencia,
+                'created_at'            => $ahora,
+                'updated_at'            => $ahora,
+            ]);
+            $creados++;
+        }
+
+        return $this->response->setJSON(['creados' => $creados, 'omitidos' => $omitidos]);
+    }
+
+    /**
+     * Lee una celda de fecha admitiendo tanto una celda con formato de fecha real de Excel como
+     * texto plano "AAAA-MM-DD" — celda vacía es válida (sin vigencia). Devuelve
+     * [fecha ('Y-m-d') | null, esVálida].
+     *
+     * @return array{0: string|null, 1: bool}
+     */
+    private function fechaDeCelda(Worksheet $sheet, string $referencia): array
+    {
+        $celda = $sheet->getCell($referencia);
+        $valor = $celda->getValue();
+        if ($valor === null || trim((string) $valor) === '') {
+            return [null, true];
+        }
+
+        if (is_numeric($valor) && ExcelDate::isDateTime($celda)) {
+            $fecha = ExcelDate::excelToDateTimeObject($valor);
+
+            return [$fecha->format('Y-m-d'), true];
+        }
+
+        $texto = trim((string) $valor);
+        $fecha = \DateTime::createFromFormat('Y-m-d', $texto);
+
+        return $fecha && $fecha->format('Y-m-d') === $texto ? [$texto, true] : [null, false];
+    }
+
+    private function correoYaRegistrado(string $correo): bool
+    {
+        $db = db_connect();
+
+        return $db->query(
+            'SELECT 1 FROM usuarios WHERE correo IS NOT NULL AND LOWER(correo) = ' . $db->escape(strtolower($correo)) . ' LIMIT 1',
+        )->getRowArray() !== null;
+    }
+
+    /** Login libre a partir del correo (o del nombre), con sufijo numérico si ya está tomado —
+     *  mismo criterio que CandidatosController::loginDisponible. */
+    private function loginDisponibleDesde(string $correo, string $nombre): string
+    {
+        $local = strtok($correo, '@');
+        $base  = strtolower((string) preg_replace('/[^A-Za-z0-9._-]/', '', $local === false ? '' : $local));
+        if ($base === '') {
+            $base = strtolower((string) preg_replace('/[^A-Za-z0-9]/', '', $nombre));
+        }
+        $base = substr($base !== '' ? $base : 'usuario', 0, 40);
+
+        $db    = db_connect();
+        $login = $base;
+        $n     = 1;
+        while ($db->table('usuarios')->where('usuario', $login)->countAllResults() > 0) {
+            $login = $base . ++$n;
+        }
+
+        return $login;
+    }
+
     private function exigirAdmin(): ?ResponseInterface
     {
         $rol = session()->get('usuario_rol');
@@ -420,7 +562,8 @@ class UsuariosController extends BaseController
         return null;
     }
 
-    private function toDto(array $fila): array
+    /** @param array<int, array{id: mixed, nombre: string, color_accent: string}>|null $cursosPorId */
+    private function toDto(array $fila, ?array $cursosPorId = null): array
     {
         $db = db_connect();
         $permisos = $db->table('usuario_permisos')
@@ -428,6 +571,14 @@ class UsuariosController extends BaseController
             ->where('usuario_id', $fila['id'])
             ->get()
             ->getResultArray();
+
+        $cursoId = $fila['curso_id'] ?? null;
+        $curso = null;
+        if ($cursoId !== null) {
+            $curso = $cursosPorId !== null
+                ? ($cursosPorId[(int) $cursoId] ?? null)
+                : $db->table('cursos')->where('id', $cursoId)->get()->getRowArray();
+        }
 
         return [
             'id'              => (string) $fila['id'],
@@ -442,6 +593,9 @@ class UsuariosController extends BaseController
             'permisos'        => $permisos === [] ? null : array_map(static fn (array $p) => $p['permiso_clave'], $permisos),
             'tipoUsuarioId'   => $fila['tipo_usuario_id'] !== null ? (string) $fila['tipo_usuario_id'] : null,
             'origen'          => $fila['origen'] ?? null,
+            'cursoId'         => $cursoId !== null ? (string) $cursoId : null,
+            'cursoNombre'     => $curso['nombre'] ?? null,
+            'cursoColorAccent' => $curso['color_accent'] ?? null,
             'correo'          => $fila['correo'] ?? null,
             'fotoUrl'         => $fila['foto_url'] ?? null,
             'vigenciaAlumnoHasta' => $fila['vigencia_alumno_hasta'] ?? null,
@@ -484,6 +638,7 @@ class UsuariosController extends BaseController
             'cuentaClienteId' => 'cuenta_cliente_id',
             'tipoUsuarioId'   => 'tipo_usuario_id',
             'origen'          => 'origen',
+            'cursoId'         => 'curso_id',
             'correo'          => 'correo',
             'fotoUrl'         => 'foto_url',
             'vigenciaAlumnoHasta' => 'vigencia_alumno_hasta',
