@@ -153,7 +153,7 @@ class CandidatosController extends BaseController
 
         $db = db_connect();
         $filas = $db->table('candidatos')
-            ->select('id, nombre, dni, correo, telefono, profesion, nivel_academico, anios_experiencia, estado, created_at')
+            ->select('id, nombre, dni, correo, telefono, profesion, nivel_academico, anios_experiencia, estado, usuario_id, created_at')
             ->orderBy('created_at', 'DESC')
             ->get()->getResultArray();
 
@@ -475,6 +475,33 @@ class CandidatosController extends BaseController
     }
 
     /**
+     * Admin: promueve a un aprobado puntual que se quedó sin cuenta de asesor — el caso de los
+     * candidatos aprobados ANTES de que `cambiarEstado()` empezara a llamar `promover()`
+     * automáticamente (ver el comentario de cabecera de esta clase). El botón correspondiente en
+     * la tabla de candidatos solo se muestra habilitado para esos casos (aprobado + sin
+     * `usuarioId`); reutiliza `promover()`, que ya es idempotente, así que llamarlo de más no
+     * duplica nada.
+     */
+    public function promoverUno($id = null): ResponseInterface
+    {
+        if ($gate = $this->exigirAdminAsesorias()) {
+            return $gate;
+        }
+
+        $candidato = db_connect()->table('candidatos')->where('id', (int) $id)->get()->getRowArray();
+        if (! $candidato) {
+            return $this->response->setStatusCode(404)->setJSON(['error' => 'Candidato no encontrado']);
+        }
+        if ($candidato['estado'] !== 'aprobado') {
+            return $this->response->setStatusCode(400)->setJSON(['error' => 'Solo se puede promover a un candidato aprobado.']);
+        }
+
+        $this->promover((int) $id);
+
+        return $this->detalle($id);
+    }
+
+    /**
      * Admin: carga masiva de especialistas ya conocidos por ILPIIE — a diferencia del wizard
      * público, entran DIRECTO como asesores (usuarios rol='asesor'), sin pasar por `candidatos`:
      * un Excel no puede traer un CV adjunto por fila ni una contraseña real elegida por la
@@ -789,6 +816,7 @@ class CandidatosController extends BaseController
             'aniosExperiencia' => $c['anios_experiencia'],
             'temas'            => $temas,
             'estado'           => $c['estado'],
+            'usuarioId'        => $c['usuario_id'] !== null ? (string) $c['usuario_id'] : null,
             'fechaRegistro'    => $c['created_at'],
         ];
     }

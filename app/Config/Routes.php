@@ -153,6 +153,7 @@ $routes->group('api', ['filter' => 'auth'], static function (RouteCollection $ro
     $routes->get('candidatos/resumen', 'CandidatosController::resumen');
     $routes->get('candidatos/exportar', 'CandidatosController::exportarExcel');
     $routes->post('candidatos/importar', 'CandidatosController::importarExcel');
+    $routes->post('candidatos/(:num)/promover', 'CandidatosController::promoverUno/$1');
     $routes->get('candidatos/(:num)/cv', 'CandidatosController::cv/$1');
     $routes->get('candidatos/(:num)/notas', 'CandidatosController::notas/$1');
     $routes->post('candidatos/(:num)/notas', 'CandidatosController::agregarNota/$1');
