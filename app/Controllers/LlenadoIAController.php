@@ -118,11 +118,11 @@ class LlenadoIAController extends BaseController
 
     public function llenarFicha($ejemploId = null): ResponseInterface
     {
-        set_time_limit(180); // 1 sección por petición (el cliente itera); margen para Kimi + contexto.
+        set_time_limit(180); // 1 sección por petición (el cliente itera); margen para OpenAI + contexto.
         $ejemploId = (int) $ejemploId;
 
         $config = config('Ia');
-        if ($config->kimiApiKey === '') {
+        if ($config->apiKeyActiva() === '') {
             return $this->response->setStatusCode(503)->setJSON(['error' => 'El llenado con IA todavía no está configurado en el servidor.']);
         }
 
@@ -315,7 +315,7 @@ class LlenadoIAController extends BaseController
         $ejemploId = (int) $ejemploId;
 
         $config = config('Ia');
-        if ($config->kimiApiKey === '') {
+        if ($config->apiKeyActiva() === '') {
             return $this->response->setStatusCode(503)->setJSON(['error' => 'El llenado con IA todavía no está configurado en el servidor.']);
         }
 
@@ -429,14 +429,15 @@ class LlenadoIAController extends BaseController
         $sistema = $this->construirSistemaTabla($rol, $promptSistema, $reglas, $generales, $contextoSeccion, $fuenteVerdad, $esquemaTabla);
         $usuario = $this->construirPromptTabla($campo, $subtipo, $agrupador, $columnas, $valorActual, $opcionesPorColumna, $contextoAdicional, $valorReferencia, $otrasSeccionesConfirmadas);
 
-        // Cambiado a Kimi (2026-09-09) — llamarClaudeCrudo()/llamarModeloCrudo() (Gemini) y
-        // llamarOpenAICrudo() se dejan intactas por si hace falta volver a swapear. Modelo híbrido:
-        // kimi-k2.6 (barato) para el grueso de las tablas, pero cuando el frontend manda
+        // El proveedor lo decide `ia.proveedor` en el .env (ver Config\Ia y llamarChatCrudo()); desde
+        // el 2026-09-23 es Kimi. llamarClaudeCrudo()/llamarModeloCrudo() (Gemini) siguen intactas pero
+        // fuera del switch. Modelo híbrido, independiente del proveedor: el modelo barato
+        // (`modeloLlenadoActivo()`) para el grueso de las tablas, pero cuando el frontend manda
         // `contextoAdicional` (guía condicional de cascada — hoy solo las 3 tablas de la Sección 5
-        // Problema-Objetivo) se usa kimi-k3 (más caro, `$config->kimiModelo`) — ese es el prompt más
-        // denso/exigente de toda la ficha (árbol + reglas por rama) y el modelo barato no lo seguía de
-        // forma confiable; se mantiene el mismo criterio de split que ya existía con OpenAI.
-        $modeloParaEstaTabla = $contextoAdicional !== '' ? $config->kimiModelo : $config->kimiModeloLlenado;
+        // Problema-Objetivo) se usa el modelo insignia (`modeloActivo()`, más caro) — ese es el prompt
+        // más denso/exigente de toda la ficha (árbol + reglas por rama) y el modelo barato no lo seguía
+        // de forma confiable; mismo criterio de split desde antes del primer paso por Kimi.
+        $modeloParaEstaTabla = $contextoAdicional !== '' ? $config->modeloActivo() : $config->modeloLlenadoActivo();
         // 8000 se quedaba corto para tablas grandes (ej. 16.01.1 "Plan de implementación": 12 columnas
         // × varios grupos) — encontrado en vivo (2026-08-19): el modelo cortaba la respuesta a mitad del
         // primer grupo (finish_reason "length"), el JSON quedaba incompleto y el parseo fallaba, lo
@@ -483,7 +484,7 @@ class LlenadoIAController extends BaseController
         $valorPropuesto  = null;
         for ($intento = 1; $intento <= $intentosMaximos; $intento++) {
             $etiqueta  = $intento === 1 ? "tabla {$identificador}" : "tabla {$identificador} (reintento)";
-            $respuesta = $this->llamarKimiCrudo($config, $sistema, $usuario, 32000, 170, $modeloParaEstaTabla, $etiqueta);
+            $respuesta = $this->llamarChatCrudo($config, $sistema, $usuario, 32000, 170, $modeloParaEstaTabla, $etiqueta);
             if ($respuesta === null) {
                 if ($intento === $intentosMaximos) {
                     return $this->response->setStatusCode(502)->setJSON(['error' => 'No se pudo consultar a la IA. Intenta de nuevo.']);
@@ -664,14 +665,16 @@ class LlenadoIAController extends BaseController
      */
     public function enviarLoteFicha($ejemploId = null): ResponseInterface
     {
-        // Kimi no tiene Batches API (ver ejecutarLoteKimiEnParalelo) — este request resuelve TODO el
-        // lote en paralelo antes de responder, así que necesita margen para la solicitud más lenta
-        // (una tabla puede tardar hasta ~170s, ver llenarTabla()) más el resto del procesamiento.
+        // Se mantiene el mecanismo síncrono en paralelo (ver ejecutarLoteEnParalelo) aunque el
+        // proveedor haya vuelto a OpenAI — evita reintroducir el polling de la Batches API real del
+        // lado del cliente (ver nota en Config\Ia). Este request resuelve TODO el lote antes de
+        // responder, así que necesita margen para la solicitud más lenta (una tabla puede tardar
+        // hasta ~170s, ver llenarTabla()) más el resto del procesamiento.
         set_time_limit(240);
         $ejemploId = (int) $ejemploId;
 
         $config = config('Ia');
-        if ($config->kimiApiKey === '') {
+        if ($config->apiKeyActiva() === '') {
             return $this->response->setStatusCode(503)->setJSON(['error' => 'El llenado con IA todavía no está configurado en el servidor.']);
         }
 
@@ -739,7 +742,7 @@ class LlenadoIAController extends BaseController
                 $customId = 'seccion__' . $seccionId;
                 $lineas[] = [
                     'customId'  => $customId,
-                    'modelo'    => $config->kimiModeloLlenado,
+                    'modelo'    => $config->modeloLlenadoActivo(),
                     'maxTokens' => 8000,
                     'sistema'   => $sistema['variable'] !== '' ? "{$sistema['cacheable']}\n\n{$sistema['variable']}" : $sistema['cacheable'],
                     'usuario'   => $usuario,
@@ -748,7 +751,7 @@ class LlenadoIAController extends BaseController
                     'tipo'      => 'seccion',
                     'seccionId' => $seccionId,
                     'nombre'    => (string) ($seccion['nombre'] ?? ''),
-                    'modelo'    => $config->kimiModeloLlenado,
+                    'modelo'    => $config->modeloLlenadoActivo(),
                     'totalCampos' => count($campos),
                     // Igual que $opcionesPorIdentif en llenarFicha() — sin esto, procesarResultadosLote()
                     // no tenía forma de saber qué campos tienen catálogo cerrado y guardaba lo que la IA
@@ -807,7 +810,7 @@ class LlenadoIAController extends BaseController
                     $customId     = 'tabla__' . $identificador;
                     $lineas[]     = [
                         'customId'  => $customId,
-                        'modelo'    => $config->kimiModeloLlenado,
+                        'modelo'    => $config->modeloLlenadoActivo(),
                         'maxTokens' => 32000,
                         'sistema'   => $sistemaTabla['variable'] !== '' ? "{$sistemaTabla['cacheable']}\n\n{$sistemaTabla['variable']}" : $sistemaTabla['cacheable'],
                         'usuario'   => $usuarioTabla,
@@ -827,7 +830,7 @@ class LlenadoIAController extends BaseController
                     $mapeo[$customId] = [
                         'tipo'                    => 'tabla',
                         'identificador'           => $identificador,
-                        'modelo'                  => $config->kimiModeloLlenado,
+                        'modelo'                  => $config->modeloLlenadoActivo(),
                         'valorActual'             => $valorActual,
                         'columnasCalculadas'      => $columnasCalculadas,
                         'ultimaColumnaCalculada'  => $ultimaColumnaCalculada,
@@ -843,12 +846,13 @@ class LlenadoIAController extends BaseController
             return $this->response->setStatusCode(400)->setJSON(['error' => 'No hay nada que llenar en las secciones indicadas (o todo lo que había quedó fuera del lote — revisa el botón individual para esos campos).']);
         }
 
-        // Sin Batches API en Kimi: se manda todo el lote EN PARALELO (ver ejecutarLoteKimiEnParalelo)
-        // y se procesa el resultado de una — este request ya resuelve el lote completo antes de
-        // responder, a diferencia del flujo anterior con OpenAI (enviar → 'enviado' → el cliente hacía
-        // poll a estadoLoteFicha() hasta que el job asíncrono terminara).
-        $respuestas = $this->ejecutarLoteKimiEnParalelo($config, $lineas);
-        $resultado  = $this->procesarResultadosLote($ejemploId, $mapeo, $respuestas);
+        // Se sigue mandando todo el lote EN PARALELO (ver ejecutarLoteEnParalelo, heredado del
+        // paso por Kimi que no tenía Batches API) en vez de volver a la Batches API real de OpenAI —
+        // este request ya resuelve el lote completo antes de responder, a diferencia del flujo viejo
+        // (enviar → 'enviado' → el cliente hacía poll a estadoLoteFicha() hasta que el job asíncrono
+        // terminara); se prefirió mantener el mecanismo síncrono para no reintroducir ese polling.
+        $respuestas = $this->ejecutarLoteEnParalelo($config, $lineas);
+        $resultado  = $this->procesarResultadosLote($config, $ejemploId, $mapeo, $respuestas);
 
         $loteModel = new LoteLlenadoIAModel();
         $loteId    = $loteModel->insert([
@@ -901,16 +905,16 @@ class LlenadoIAController extends BaseController
     }
 
     /**
-     * Recorre cada solicitud del lote (ver ejecutarLoteKimiEnParalelo), aplica el mismo procesamiento
+     * Recorre cada solicitud del lote (ver ejecutarLoteEnParalelo), aplica el mismo procesamiento
      * que llenarFicha() (normalizarPropuesta + persistir) para las secciones de texto, y el mismo que
      * llenarTabla() (validarFormaTabla + UBIGEO) para las tablas — estas últimas NO se persisten, se
      * devuelven para que el cliente las aplique como borrador igual que hoy.
      *
      * @param array<string,array<string,mixed>> $mapeo custom_id => metadata guardada en enviarLoteFicha()
-     * @param array<string,array|null> $respuestasPorCustomId custom_id => cuerpo JSON de la respuesta de Kimi, o null si esa solicitud falló
+     * @param array<string,array|null> $respuestasPorCustomId custom_id => cuerpo JSON de la respuesta del proveedor activo, o null si esa solicitud falló
      * @return array{secciones: list<array<string,mixed>>, tablas: list<array<string,mixed>>, costoTotalUsd: float}
      */
-    private function procesarResultadosLote(int $ejemploId, array $mapeo, array $respuestasPorCustomId): array
+    private function procesarResultadosLote(object $config, int $ejemploId, array $mapeo, array $respuestasPorCustomId): array
     {
         $valoresFinal  = [];
         $estadosFinal  = [];
@@ -922,12 +926,12 @@ class LlenadoIAController extends BaseController
         $costoTotalUsd = 0.0;
 
         // Se recorre $mapeo (no las respuestas) para que un custom_id sin respuesta (solicitud que
-        // falló del todo, ver ejecutarLoteKimiEnParalelo) siga produciendo su entrada de resumen/error
+        // falló del todo, ver ejecutarLoteEnParalelo) siga produciendo su entrada de resumen/error
         // en vez de desaparecer en silencio del resultado del lote.
         foreach ($mapeo as $customId => $meta) {
             $respuestaJson = $respuestasPorCustomId[$customId] ?? null;
             $propuesta = is_array($respuestaJson)
-                ? $this->procesarRespuestaChatKimi($respuestaJson, (string) ($meta['modelo'] ?? ''), $customId)
+                ? $this->procesarRespuestaChat($config, $respuestaJson, (string) ($meta['modelo'] ?? ''), $customId)
                 : null;
 
             if ($meta['tipo'] === 'seccion') {
@@ -1042,7 +1046,7 @@ class LlenadoIAController extends BaseController
      * DORMIDA desde el 2026-09-09 junto con subirArchivoLoteOpenAI()/esperarArchivoListoOpenAI()/
      * crearLoteOpenAI()/consultarLoteOpenAI()/descargarArchivoOpenAI() — toda esta Batches API de
      * OpenAI quedó sin llamadas cuando el llenado automático migró a Kimi (que no tiene equivalente a
-     * esta API, ver ejecutarLoteKimiEnParalelo() en enviarLoteFicha()). Se conserva intacta por si hay
+     * esta API, ver ejecutarLoteEnParalelo() en enviarLoteFicha()). Se conserva intacta por si hay
      * que volver a swapear, mismo criterio que llamarClaudeCrudo()/llamarModeloCrudo()/
      * llamarOpenAICrudo() (ver Config\Ia).
      *
@@ -1520,6 +1524,15 @@ class LlenadoIAController extends BaseController
         $lineas = [
             "Vas a llenar la tabla \"{$campo['etiqueta']}\" (identificador: {$campo['identificador']}).",
         ];
+        // La "Descripción / ayuda" que el admin escribe por campo en el editor de plantillas es el
+        // mecanismo con el que se documenta una ficha campo por campo (en vez de un markdown aparte).
+        // construirPromptSeccion() ya la mandaba para los campos simples, pero acá se perdía: una
+        // ficha como FTE-EBR-V03, que es 57% tablas, tenía 57 descripciones escritas que nunca
+        // llegaban al modelo. Va justo después del encabezado para que el modelo lea PARA QUÉ es la
+        // tabla antes de ver la lista de columnas.
+        if (! empty($campo['descripcion'])) {
+            $lineas[] = $campo['descripcion'];
+        }
         if ($otrasSeccionesConfirmadas !== []) {
             $lineas[] = 'Valores YA CONFIRMADOS en otras secciones de esta misma ficha — mantente consistente con esto '
                 . '(mismo nombre de entidad, mismo CIAI, mismo UBIGEO si aplica, etc.), no los repitas en esta tabla salvo que una columna lo pida:';
@@ -2432,11 +2445,10 @@ class LlenadoIAController extends BaseController
     /** @param array{cacheable: string, variable: string} $sistema */
     private function llamarModeloJson(object $config, array $sistema, string $usuario, ?string $etiqueta = null): ?array
     {
-        // Cambiado a Kimi (2026-09-09) — llamarClaudeCrudo()/llamarModeloCrudo() (Gemini) y
-        // llamarOpenAICrudo() se dejan intactas por si hace falta volver a swapear (ver nota en
+        // El proveedor lo decide `ia.proveedor` en el .env (ver llamarChatCrudo() y la nota en
         // llenarTabla()). Los campos de texto de sección usan el modelo barato siempre (no hay caso de
         // cascada aquí, a diferencia de llenarTabla()).
-        $respuesta = $this->llamarKimiCrudo($config, $sistema, $usuario, 8000, 120, $config->kimiModeloLlenado, $etiqueta);
+        $respuesta = $this->llamarChatCrudo($config, $sistema, $usuario, 8000, 120, $config->modeloLlenadoActivo(), $etiqueta);
         if ($respuesta === null) {
             return null;
         }
@@ -2785,10 +2797,9 @@ class LlenadoIAController extends BaseController
     }
 
     /**
-     * DORMIDA desde el 2026-09-09 (junto con procesarRespuestaChatOpenAI()/registrarUsoOpenAI() más
-     * abajo) — el llenado automático migró a Kimi, ver llamarKimiCrudo() (mismo contrato de retorno,
-     * body de request prácticamente idéntico por la compatibilidad de formato con OpenAI). Se
-     * conserva intacta por si hay que volver a swapear.
+     * En espera desde el 2026-09-23 (junto con procesarRespuestaChatOpenAI()/registrarUsoOpenAI() más
+     * abajo): el proveedor activo pasó a ser Kimi. Nada acá se borró — basta poner `ia.proveedor =
+     * openai` en el .env para que llamarChatCrudo() vuelva a enrutar a esta función.
      *
      * Llama a la API Chat Completions de OpenAI y devuelve el objeto JSON crudo que propuso el
      * modelo (sin normalización específica de flujo — la usan tanto el llenado de sección, vía
@@ -2812,6 +2823,32 @@ class LlenadoIAController extends BaseController
      * @param array{cacheable: string, variable: string} $sistema Mismo split que llamarClaudeCrudo().
      * @return array{valor: array, usage: array, costoUsd: float}|null
      */
+    /**
+     * Enrutan al proveedor activo (`ia.proveedor` en el .env, ver Config\Ia::$proveedor).
+     *
+     * Existen para que cambiar de Kimi a OpenAI y de vuelta sea una línea del .env en vez de editar
+     * cada punto de llamada y renombrar funciones, que es como se hizo cada swap anterior. Los dos
+     * caminos —llamarOpenAICrudo/procesarRespuestaChatOpenAI y llamarKimiCrudo/procesarRespuestaChatKimi—
+     * quedan intactos; el par de respuesta importa porque cada uno tarifa con su propia tabla de
+     * precios (PRECIOS_OPENAI_POR_MTOK vs PRECIOS_KIMI_POR_MTOK) y con un modelo del otro proveedor
+     * el costo estimado saldría del fallback, es decir, mal.
+     *
+     * Gemini y Anthropic no entran acá: tienen otro formato de request y siguen sin uso activo.
+     */
+    private function llamarChatCrudo(object $config, array $sistema, string $usuario, int $maxTokens, int $timeout, ?string $modelo = null, ?string $etiqueta = null): ?array
+    {
+        return $config->usaKimi()
+            ? $this->llamarKimiCrudo($config, $sistema, $usuario, $maxTokens, $timeout, $modelo, $etiqueta)
+            : $this->llamarOpenAICrudo($config, $sistema, $usuario, $maxTokens, $timeout, $modelo, $etiqueta);
+    }
+
+    private function procesarRespuestaChat(object $config, array $json, string $modelo, ?string $etiqueta = null): ?array
+    {
+        return $config->usaKimi()
+            ? $this->procesarRespuestaChatKimi($json, $modelo, $etiqueta)
+            : $this->procesarRespuestaChatOpenAI($json, $modelo, $etiqueta);
+    }
+
     private function llamarOpenAICrudo(object $config, array $sistema, string $usuario, int $maxTokens, int $timeout, ?string $modelo = null, ?string $etiqueta = null): ?array
     {
         $modelo       = $modelo ?? $config->openaiModeloLlenado;
@@ -3010,13 +3047,16 @@ class LlenadoIAController extends BaseController
     }
 
     /**
+     * Cuál de las dos corre —esta o llamarOpenAICrudo() arriba— lo decide `ia.proveedor` en el .env
+     * (ver Config\Ia y llamarChatCrudo()). Activa de nuevo desde el 2026-09-23.
+     *
      * Llama a la API Chat Completions de Kimi (Moonshot AI) y devuelve el objeto JSON crudo que
      * propuso el modelo, junto con el costo estimado — mismo contrato de retorno que
-     * llamarOpenAICrudo() (dormida desde el 2026-09-09), llamarClaudeCrudo() (dormida) y
-     * llamarModeloCrudo() (Gemini, dormida). La API de Kimi es compatible con el formato de OpenAI
-     * Chat Completions (mismo `max_completion_tokens`, `response_format: json_object`, forma de
-     * `messages`) — el cuerpo de la solicitud es prácticamente idéntico al de llamarOpenAICrudo(),
-     * solo cambian el endpoint, la clave y el nombre del modelo.
+     * llamarOpenAICrudo(), llamarClaudeCrudo() (dormida) y llamarModeloCrudo() (Gemini, dormida). La
+     * API de Kimi es compatible con el formato de OpenAI Chat Completions (mismo
+     * `max_completion_tokens`, `response_format: json_object`, forma de `messages`) — el cuerpo de la
+     * solicitud es prácticamente idéntico al de llamarOpenAICrudo(), solo cambian el endpoint, la
+     * clave y el nombre del modelo.
      *
      * @param array{cacheable: string, variable: string} $sistema Mismo split que llamarClaudeCrudo().
      * @return array{valor: array, usage: array, costoUsd: float}|null
@@ -3100,8 +3140,9 @@ class LlenadoIAController extends BaseController
     }
 
     /**
-     * Igual que procesarRespuestaChatOpenAI() (dormida) pero registrando el costo con los precios de
-     * Kimi — ver el comentario de llamarKimiCrudo() sobre la compatibilidad de formato de respuesta.
+     * Activa de nuevo desde el 2026-09-23, junto con llamarKimiCrudo(). Igual que procesarRespuestaChatOpenAI()
+     * (activa de nuevo) pero registrando el costo con los precios de Kimi — ver el comentario de
+     * llamarKimiCrudo() sobre la compatibilidad de formato de respuesta.
      *
      * @return array{valor: array, usage: array, costoUsd: float}|null
      */
@@ -3142,25 +3183,27 @@ class LlenadoIAController extends BaseController
     }
 
     /**
-     * Ejecuta TODAS las solicitudes de un lote contra Kimi EN PARALELO (curl_multi), dentro de este
-     * mismo request síncrono — reemplaza el flujo de Batches API de OpenAI (subir archivo + crear job
+     * Ejecuta TODAS las solicitudes de un lote contra OpenAI EN PARALELO (curl_multi), dentro de este
+     * mismo request síncrono, en vez de la Batches API real de OpenAI (subir archivo + crear job
      * asíncrono + poll, ver subirArchivoLoteOpenAI/crearLoteOpenAI/consultarLoteOpenAI, dormidas desde
-     * el 2026-09-09) porque Kimi no tiene un equivalente a esa API. El tiempo total de esta llamada
-     * queda acotado por la solicitud más lenta, no por la suma de todas — mismo orden de magnitud que
-     * una sola llamada síncrona ya existente hoy (llenarTabla() ya espera hasta 170s por una tabla
-     * grande), aceptable porque el cliente ya muestra un "Procesando con IA…" mientras dura (ver
-     * enviarLoteFicha(), que llama a este método y resuelve el lote completo antes de responder).
+     * el 2026-09-09) — este mecanismo nació cuando el proveedor activo era Kimi (sin equivalente a esa
+     * API) y se conservó al volver a OpenAI (2026-09-17) para no reintroducir el polling del lado del
+     * cliente (ver nota en Config\Ia). El tiempo total de esta llamada queda acotado por la solicitud
+     * más lenta, no por la suma de todas — mismo orden de magnitud que una sola llamada síncrona ya
+     * existente hoy (llenarTabla() ya espera hasta 170s por una tabla grande), aceptable porque el
+     * cliente ya muestra un "Procesando con IA…" mientras dura (ver enviarLoteFicha(), que llama a
+     * este método y resuelve el lote completo antes de responder).
      *
      * @param list<array{customId:string,modelo:string,maxTokens:int,sistema:string,usuario:string}> $solicitudes
-     * @return array<string,array|null> custom_id => cuerpo JSON decodificado de la respuesta de Kimi, o null si esa solicitud puntual falló (no tumba las demás)
+     * @return array<string,array|null> custom_id => cuerpo JSON decodificado de la respuesta de OpenAI, o null si esa solicitud puntual falló (no tumba las demás)
      */
-    private function ejecutarLoteKimiEnParalelo(object $config, array $solicitudes): array
+    private function ejecutarLoteEnParalelo(object $config, array $solicitudes): array
     {
         $multi   = curl_multi_init();
         $handles = [];
 
         foreach ($solicitudes as $s) {
-            $ch = curl_init($config->kimiEndpoint);
+            $ch = curl_init($config->endpointActivo());
             curl_setopt_array($ch, [
                 CURLOPT_RETURNTRANSFER => true,
                 CURLOPT_POST           => true,
@@ -3180,7 +3223,7 @@ class LlenadoIAController extends BaseController
                 CURLOPT_TIMEOUT    => 200,
                 CURLOPT_HTTPHEADER => [
                     'content-type: application/json',
-                    'authorization: Bearer ' . $config->kimiApiKey,
+                    'authorization: Bearer ' . $config->apiKeyActiva(),
                 ],
             ]);
             curl_multi_add_handle($multi, $ch);
@@ -3204,7 +3247,7 @@ class LlenadoIAController extends BaseController
             curl_close($ch);
 
             if ($cuerpo === false || $cuerpo === '' || $estado < 200 || $estado >= 300) {
-                log_message('error', '[llenado-ia-lote] Kimi ({customId}) respondió {estado}: {cuerpo} {error}', [
+                log_message('error', '[llenado-ia-lote] El proveedor ({customId}) respondió {estado}: {cuerpo} {error}', [
                     'customId' => $customId, 'estado' => $estado, 'cuerpo' => substr((string) $cuerpo, 0, 500), 'error' => $error,
                 ]);
                 $resultados[$customId] = null;

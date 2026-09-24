@@ -9,6 +9,7 @@ use CodeIgniter\HTTP\ResponseInterface;
 use Config\Encryption;
 use Config\Stripe as StripeConfig;
 use GuzzleHttp\Client;
+use PhpOffice\PhpSpreadsheet\IOFactory;
 use Throwable;
 
 // Postulaciones públicas al equipo de especialistas ILPIIE Live (formulario
@@ -16,8 +17,9 @@ use Throwable;
 // del panel admin. Un candidato NO es una cuenta `usuarios`: `postular()` es la única acción
 // pública de este controlador (sin filtro 'auth', ver Routes.php); todo lo demás requiere
 // administrativo_asesorias/superusuario. El detalle ("Ver", CandidatoDetalleModal.vue), las notas
-// internas y el cambio de estado (ver TRANSICIONES) ya son funcionales. Promover un candidato
-// aprobado a una cuenta de asesor real sigue fuera de alcance — no especificado todavía.
+// internas y el cambio de estado (ver TRANSICIONES) ya son funcionales. Al pasar a 'aprobado' el
+// candidato se promueve automáticamente a una cuenta `usuarios` con rol='asesor' (ver promover()),
+// que es lo que lo hace aparecer en "Especialistas › Docentes / Asesores".
 class CandidatosController extends BaseController
 {
     private const ESTADOS = ['registrado', 'en_evaluacion', 'para_entrevista', 'aprobado', 'desaprobado'];
@@ -288,7 +290,117 @@ class CandidatosController extends BaseController
             'updated_at' => date('Y-m-d H:i:s'),
         ]);
 
+        // Aprobar es lo que convierte al postulante en asesor: sin esto la cuenta nunca existe y
+        // el candidato jamás aparece en "Docentes / Asesores".
+        if ($nuevoEstado === 'aprobado') {
+            $this->promover((int) $id);
+        }
+
         return $this->detalle($id);
+    }
+
+    /**
+     * Crea (o recupera) la cuenta de asesor del candidato aprobado.
+     *
+     * Es idempotente: si ya se promovió, no vuelve a crear nada — por eso existe `candidatos.usuario_id`.
+     *
+     * Reutiliza el `password_hash` capturado en la postulación, que es exactamente para lo que el
+     * formulario pide contraseña desde el día uno (ver la migración CreateCandidatos): el asesor
+     * entra con las credenciales que él mismo eligió, sin un paso extra de "define tu contraseña"
+     * ni una temporal que alguien tenga que comunicarle.
+     *
+     * Los temas marcados en el formulario se copian a `asesor_temas_especialidad` (mismo catálogo
+     * `temas_especialidad`). Los SECTORES (`asesor_especialidades`, lo que la tabla de Docentes
+     * muestra bajo "Especialidades") NO se tocan: la postulación no los pregunta, así que los marca
+     * después el propio asesor o el admin. Por eso un recién aprobado aparece "Sin especialidades".
+     */
+    private function promover(int $candidatoId): void
+    {
+        $db = db_connect();
+        $candidato = $db->table('candidatos')->where('id', $candidatoId)->get()->getRowArray();
+        if (! $candidato) {
+            return;
+        }
+
+        $yaPromovido = (int) ($candidato['usuario_id'] ?? 0);
+        if ($yaPromovido > 0 && $db->table('usuarios')->where('id', $yaPromovido)->countAllResults() > 0) {
+            return;
+        }
+
+        $db->transStart();
+
+        $correo = trim((string) ($candidato['correo'] ?? ''));
+        // Si ya existe una cuenta con ese correo (el asesor ya estaba en la plataforma con otro rol),
+        // se reutiliza en vez de duplicar a la persona.
+        $existente = $correo !== ''
+            ? $db->table('usuarios')->where('correo', $correo)->get()->getRowArray()
+            : null;
+
+        $ahora = date('Y-m-d H:i:s');
+
+        if ($existente) {
+            $usuarioId = (int) $existente['id'];
+            $db->table('usuarios')->where('id', $usuarioId)->update([
+                'rol'        => 'asesor',
+                'estado'     => 'activo',
+                'updated_at' => $ahora,
+            ]);
+        } else {
+            $db->table('usuarios')->insert([
+                'nombre'        => (string) $candidato['nombre'],
+                'usuario'       => $this->loginDisponible($correo, (string) $candidato['nombre']),
+                'password_hash' => (string) $candidato['password_hash'],
+                'rol'           => 'asesor',
+                'estado'        => 'activo',
+                'disponible'    => 1,
+                'correo'        => $correo !== '' ? $correo : null,
+                'telefono'      => trim((string) ($candidato['telefono'] ?? '')) ?: null,
+                'created_at'    => $ahora,
+                'updated_at'    => $ahora,
+            ]);
+            $usuarioId = (int) $db->insertID();
+        }
+
+        foreach ($db->table('candidato_temas_especialidad')->select('tema_id')
+            ->where('candidato_id', $candidatoId)->get()->getResultArray() as $t) {
+            $repetido = $db->table('asesor_temas_especialidad')
+                ->where('usuario_id', $usuarioId)
+                ->where('tema_id', (int) $t['tema_id'])
+                ->countAllResults() > 0;
+            if (! $repetido) {
+                $db->table('asesor_temas_especialidad')->insert([
+                    'usuario_id' => $usuarioId,
+                    'tema_id'    => (int) $t['tema_id'],
+                ]);
+            }
+        }
+
+        $db->table('candidatos')->where('id', $candidatoId)->update([
+            'usuario_id' => $usuarioId,
+            'updated_at' => $ahora,
+        ]);
+
+        $db->transComplete();
+    }
+
+    /** Login libre a partir del correo (o del nombre), con sufijo numérico si ya está tomado. */
+    private function loginDisponible(string $correo, string $nombre): string
+    {
+        $local = strtok($correo, '@');
+        $base  = strtolower((string) preg_replace('/[^A-Za-z0-9._-]/', '', $local === false ? '' : $local));
+        if ($base === '') {
+            $base = strtolower((string) preg_replace('/[^A-Za-z0-9]/', '', $nombre));
+        }
+        $base = substr($base !== '' ? $base : 'asesor', 0, 40);
+
+        $db    = db_connect();
+        $login = $base;
+        $n     = 1;
+        while ($db->table('usuarios')->where('usuario', $login)->countAllResults() > 0) {
+            $login = $base . ++$n;
+        }
+
+        return $login;
     }
 
     /** Admin: notas internas del equipo sobre esta postulación. */
@@ -360,6 +472,99 @@ class CandidatosController extends BaseController
             'total'    => array_sum($porEstado),
             'porEstado' => $porEstado,
         ]);
+    }
+
+    /**
+     * Admin: carga masiva de especialistas ya conocidos por ILPIIE — a diferencia del wizard
+     * público, entran DIRECTO como asesores (usuarios rol='asesor'), sin pasar por `candidatos`:
+     * un Excel no puede traer un CV adjunto por fila ni una contraseña real elegida por la
+     * persona, así que replicar el flujo de postulación no tendría sentido acá. Se genera una
+     * contraseña aleatoria descartada (nadie la ve) — el admin usa "Enviar accesos" (ya existente
+     * en Usuarios y permisos → Organización, o en Especialistas → Docentes/Asesores) cuando
+     * quiera que esa persona pueda entrar.
+     */
+    public function importarExcel(): ResponseInterface
+    {
+        if ($gate = $this->exigirAdminAsesorias()) {
+            return $gate;
+        }
+
+        $file = $this->request->getFile('archivo');
+        if (! $file || ! $file->isValid() || $file->hasMoved()) {
+            return $this->response->setStatusCode(400)->setJSON(['error' => 'Falta el archivo Excel.']);
+        }
+
+        try {
+            $filas = IOFactory::load($file->getTempName())->getActiveSheet()->toArray(null, true, true, false);
+        } catch (Throwable $e) {
+            return $this->response->setStatusCode(400)->setJSON(['error' => 'No se pudo leer el archivo. Verifica que sea un .xlsx válido.']);
+        }
+        array_shift($filas); // fila 1 = encabezados
+
+        $db = db_connect();
+        $sectoresPorNombre = [];
+        foreach ($db->table('sectores')->select('id, nombre')->where('activo', 1)->get()->getResultArray() as $s) {
+            $sectoresPorNombre[$this->normalizarClave($s['nombre'])] = (int) $s['id'];
+        }
+
+        $creados  = 0;
+        $omitidos = [];
+        $numeroFila = 1;
+        foreach ($filas as $f) {
+            $numeroFila++;
+            $nombre     = trim((string) ($f[0] ?? ''));
+            $correo     = trim((string) ($f[1] ?? ''));
+            $telefono   = trim((string) ($f[2] ?? ''));
+            $especialidadesTexto = trim((string) ($f[3] ?? ''));
+
+            if ($nombre === '' && $correo === '') {
+                continue; // fila en blanco, se ignora sin reportar
+            }
+            if ($nombre === '' || ! filter_var($correo, FILTER_VALIDATE_EMAIL)) {
+                $omitidos[] = ['fila' => $numeroFila, 'motivo' => 'Falta el nombre o el correo no es válido'];
+                continue;
+            }
+            if ($this->correoExisteEn('usuarios', $correo) || $this->correoExisteEn('candidatos', $correo)) {
+                $omitidos[] = ['fila' => $numeroFila, 'motivo' => "Correo ya registrado ({$correo})"];
+                continue;
+            }
+
+            $ahora = date('Y-m-d H:i:s');
+            $db->table('usuarios')->insert([
+                'nombre'        => $nombre,
+                'usuario'       => $this->loginDisponible($correo, $nombre),
+                'password_hash' => password_hash(bin2hex(random_bytes(16)), PASSWORD_DEFAULT),
+                'rol'           => 'asesor',
+                'estado'        => 'activo',
+                'disponible'    => 1,
+                'correo'        => $correo,
+                'telefono'      => $telefono !== '' ? $telefono : null,
+                'created_at'    => $ahora,
+                'updated_at'    => $ahora,
+            ]);
+            $usuarioId = (int) $db->insertID();
+
+            if ($especialidadesTexto !== '') {
+                foreach (explode(',', $especialidadesTexto) as $nombreSector) {
+                    $sectorId = $sectoresPorNombre[$this->normalizarClave($nombreSector)] ?? null;
+                    if ($sectorId !== null) {
+                        $db->table('asesor_especialidades')->ignore(true)->insert([
+                            'usuario_id' => $usuarioId,
+                            'sector_id'  => $sectorId,
+                        ]);
+                    }
+                }
+            }
+
+            $creados++;
+        }
+
+        return $this->response->setJSON(['creados' => $creados, 'omitidos' => $omitidos]);
+    }
+
+    private function normalizarClave(string $texto): string
+    {
+        return mb_strtolower(trim($texto));
     }
 
     /** Admin: descarga del CV en streaming (S3/Cloudinary → cliente), nunca URL pública directa. */

@@ -32,7 +32,7 @@ class AsistenteIAController extends BaseController
         }
 
         $config = config('Ia');
-        if ($config->kimiApiKey === '') {
+        if ($config->apiKeyActiva() === '') {
             return $this->response->setStatusCode(503)->setJSON([
                 'error' => 'El asesor de IA todavía no está configurado en el servidor.',
             ]);
@@ -53,7 +53,7 @@ class AsistenteIAController extends BaseController
         }
         $mensajes[] = ['role' => 'user', 'content' => $pregunta];
 
-        $texto = $this->llamarKimi($config, $this->construirSistema($plantillaId, $seccionId), $mensajes);
+        $texto = $this->llamarChat($config, $this->construirSistema($plantillaId, $seccionId), $mensajes);
         if ($texto === null) {
             return $this->response->setStatusCode(502)->setJSON([
                 'error' => 'No se pudo consultar al asesor de IA en este momento. Inténtalo de nuevo.',
@@ -101,7 +101,7 @@ class AsistenteIAController extends BaseController
         }
 
         $config = config('Ia');
-        if ($config->kimiApiKey === '') {
+        if ($config->apiKeyActiva() === '') {
             return $this->response->setStatusCode(503)->setJSON([
                 'error' => 'El asesor de IA todavía no está configurado en el servidor.',
             ]);
@@ -154,7 +154,7 @@ class AsistenteIAController extends BaseController
         $usuario = $this->construirPromptCampo($campo, $modo);
 
         $sistema1  = $sistemaBase . "\n\n" . $this->reglasRespuestaCampo($modo);
-        $resultado = $this->llamarKimiJson($config, $sistema1, $usuario);
+        $resultado = $this->llamarChatJson($config, $sistema1, $usuario);
         if ($resultado === null) {
             return $this->response->setStatusCode(502)->setJSON([
                 'error' => 'No se pudo consultar al asesor de IA en este momento. Inténtalo de nuevo.',
@@ -181,7 +181,7 @@ class AsistenteIAController extends BaseController
             . "\n\nMás información de referencia sobre esta ficha técnica (documentos oficiales cargados por el administrador — "
             . "revísalos con atención, aquí puede estar el dato concreto que te faltaba):\n" . implode("\n\n", $bloquePdfs)
             . "\n\n" . $this->reglasRespuestaCampo($modo);
-        $resultado2 = $this->llamarKimiJson($config, $sistema2, $usuario);
+        $resultado2 = $this->llamarChatJson($config, $sistema2, $usuario);
         if ($resultado2 === null || ! $resultado2['suficiente']) {
             return $this->response->setJSON($this->salidaSinInformacion($resultado2 ?? $resultado, $archivos));
         }
@@ -271,9 +271,8 @@ class AsistenteIAController extends BaseController
     }
 
     /**
-     * DORMIDA desde el 2026-09-09 (junto con llamarOpenAI() más abajo) — el asesor de IA migró a
-     * Kimi, ver llamarKimiJson() al final de este archivo. Se conserva intacta por si hay que volver
-     * a swapear.
+     * ACTIVA de nuevo desde el 2026-09-17 (el asesor de IA volvió a OpenAI, ver Config\Ia) —
+     * llamarKimiJson() al final de este archivo queda dormida por el mismo criterio.
      *
      * Igual que llamarOpenAI() pero en JSON mode y devolviendo ya el array parseado — usado solo por
      * ayudaCampo(). Se mantiene aparte de llamarOpenAI() porque el contrato de salida es distinto
@@ -289,6 +288,26 @@ class AsistenteIAController extends BaseController
     // reasoning_tokens=800). Un tope generoso no encarece nada por sí solo — el costo real sigue
     // siendo por tokens efectivamente usados, esto solo evita el corte en seco.
     private const MAX_TOKENS_AYUDA_CAMPO = 4000;
+
+    /**
+     * Enrutan al proveedor activo (`ia.proveedor` en el .env, ver Config\Ia::$proveedor).
+     *
+     * Existen para que cambiar de Kimi a OpenAI y de vuelta sea una línea del .env en vez de editar
+     * cada punto de llamada: las funciones llamarOpenAI... y llamarKimi... quedan las dos intactas debajo.
+     */
+    private function llamarChat(object $config, string $sistema, array $mensajes): ?string
+    {
+        return $config->usaKimi()
+            ? $this->llamarKimi($config, $sistema, $mensajes)
+            : $this->llamarOpenAI($config, $sistema, $mensajes);
+    }
+
+    private function llamarChatJson(object $config, string $sistema, string $usuario): ?array
+    {
+        return $config->usaKimi()
+            ? $this->llamarKimiJson($config, $sistema, $usuario)
+            : $this->llamarOpenAIJson($config, $sistema, $usuario);
+    }
 
     private function llamarOpenAIJson(object $config, string $sistema, string $usuario): ?array
     {
@@ -607,10 +626,11 @@ class AsistenteIAController extends BaseController
     }
 
     /**
-     * Igual que llamarOpenAIJson() (dormida desde el 2026-09-09, ver Config\Ia) pero contra Kimi
-     * (Moonshot AI) — la API es compatible con el formato de OpenAI Chat Completions, así que el
-     * cuerpo de la solicitud y el parseo de la respuesta son idénticos; solo cambian el endpoint, la
-     * clave y el nombre del modelo.
+     * DORMIDA desde el 2026-09-17 (ver Config\Ia) — el asesor de IA volvió a OpenAI, ver
+     * llamarOpenAIJson() arriba. Se conserva intacta por si hay que volver a swapear. Igual que esa
+     * función pero contra Kimi (Moonshot AI) — la API es compatible con el formato de OpenAI Chat
+     * Completions, así que el cuerpo de la solicitud y el parseo de la respuesta son idénticos; solo
+     * cambian el endpoint, la clave y el nombre del modelo.
      *
      * @return array{explicacion:string,opciones:list<string>,correcto:?bool,suficiente:bool}|null
      */
@@ -683,8 +703,8 @@ class AsistenteIAController extends BaseController
     }
 
     /**
-     * Igual que llamarOpenAI() (dormida desde el 2026-09-09) pero contra Kimi — ver el comentario de
-     * llamarKimiJson() sobre la compatibilidad de formato.
+     * DORMIDA desde el 2026-09-17 (ver Config\Ia) — igual que llamarOpenAI() pero contra Kimi, ver el
+     * comentario de llamarKimiJson() sobre la compatibilidad de formato.
      *
      * @return string|null texto de la respuesta, o null si la llamada falló
      */

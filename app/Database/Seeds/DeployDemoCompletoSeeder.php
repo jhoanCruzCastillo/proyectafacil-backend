@@ -67,6 +67,14 @@ class DeployDemoCompletoSeeder extends Seeder
             AnotarOpcionesIncluidoPIEnTabla0803Seeder::class,
             CorregirTiposCostosAlternativa1Seeder::class,
             CorregirRiesgosSostenibilidadSeeder::class,
+            // FTE-EBR-V03 (Educación). Los tres primeros siembran sus contextos IA (sección,
+            // general y prompt del sistema); el cuarto completa la ficha para el llenado con IA
+            // por el mecanismo de "Descripción / ayuda" por campo. Sin ellos, un ambiente recién
+            // sembrado tenía la ficha cargada pero sin nada de lo que la IA consume.
+            ContextosIAFTEEBRSeeder::class,
+            ContextoGeneralFTEEBRSeeder::class,
+            PromptSistemaFTEEBRSeeder::class,
+            PrepararIAFTEEBRSeeder::class,
             CronogramaDemoAsesor1Seeder::class,
             NoAtendidasDemoAsesor1Seeder::class,
             LiquidacionDemoAsesor1Seeder::class,
