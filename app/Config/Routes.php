@@ -89,6 +89,13 @@ $routes->group('api', ['filter' => 'auth'], static function (RouteCollection $ro
     // enviarLoteFicha(). El botón individual sigue en llenar-ia/llenar-tabla-ia de arriba, sin tocar.
     $routes->post('ejemplos/(:num)/llenar-ia-lote', 'LlenadoIAController::enviarLoteFicha/$1');
     $routes->get('ejemplos/(:num)/llenar-ia-lote/(:num)', 'LlenadoIAController::estadoLoteFicha/$1/$2');
+    $routes->post('ejemplos/(:num)/llenado-ia-async', 'LlenadoIAController::iniciarLlenadoAsync/$1');
+    $routes->get('ejemplos/(:num)/llenado-ia-async', 'LlenadoIAController::estadoLlenadoAsync/$1');
+    $routes->post('ejemplos/(:num)/llenado-ia-async/cancelar', 'LlenadoIAController::cancelarLlenadoAsync/$1');
+
+    // Sandbox de prueba (/test en el frontend, solo superusuario) — ver PruebaIAController.
+    $routes->get('pruebas/ia/modelos', 'PruebaIAController::modelos');
+    $routes->post('pruebas/ia/chat', 'PruebaIAController::chat');
 
     $routes->get('usuarios', 'UsuariosController::index');
     $routes->post('usuarios', 'UsuariosController::create');

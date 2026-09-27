@@ -70,6 +70,25 @@ class CorreoService
         $this->enviar($correo, $asunto, $cuerpo);
     }
 
+    /**
+     * Aviso de que "Llenar toda la ficha" (worker asíncrono, ver LlenadoIAController) terminó — el
+     * cliente pudo cerrar la pestaña o la sesión apenas lo disparó, así que este correo es la única
+     * forma en que se entera de que ya puede volver a revisar los resultados.
+     *
+     * @throws \RuntimeException si el correo no se pudo enviar
+     */
+    public function enviarLlenadoIACompletado(string $correo, string $nombre, string $nombreFicha, string $resumenTexto): void
+    {
+        $urlFicha = rtrim(config(StripeConfig::class)->frontendBaseUrl, '/') . '/fichas-tecnicas';
+        $asunto   = 'Tu ficha terminó de llenarse con IA — Proyecta Fácil';
+        $cuerpo   = "Hola {$nombre},\n\n"
+            . "El llenado automático con IA de tu ficha \"{$nombreFicha}\" ya terminó.\n\n"
+            . "{$resumenTexto}\n\n"
+            . "Revísala aquí:\n{$urlFicha}\n";
+
+        $this->enviar($correo, $asunto, $cuerpo);
+    }
+
     private function enviar(string $correo, string $asunto, string $cuerpo): void
     {
         $response = $this->http->post('https://api.brevo.com/v3/smtp/email', [
