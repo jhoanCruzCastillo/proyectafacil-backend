@@ -75,6 +75,25 @@ class DeployDemoCompletoSeeder extends Seeder
             ContextoGeneralFTEEBRSeeder::class,
             PromptSistemaFTEEBRSeeder::class,
             PrepararIAFTEEBRSeeder::class,
+            // FTE-CARRETERAS (Transporte). Es la ficha más grande del catálogo — 488 campos en 15
+            // hojas —, así que sus descripciones están repartidas en varios seeders por tramo en vez
+            // de uno solo gigante. El ORDEN importa: CorregirDuplicados... renumera identificadores
+            // duplicados de las subsecciones "D) Costos Incrementales", y D1D2/E1E2 escriben sus
+            // descripciones contra los identificadores YA renumerados; CorregirDescripciones... va al
+            // final porque repara justamente el texto que esos dos dejaron en los 4 campos calculados.
+            PromptSistemaFTECarreterasSeeder::class,
+            ContextoGeneralFTECarreterasSeeder::class,
+            ContextosIAFTECarreterasSeeder::class,
+            PrepararIAFTECarreterasSeeder::class,
+            PrepararIAFTECarreterasA1TraficoSeeder::class,
+            PrepararIAFTECarreterasA2DemandaSeeder::class,
+            PrepararIAFTECarreterasAnexosMenoresSeeder::class,
+            PrepararIAFTECarreterasA5A6A7Seeder::class,
+            PrepararIAFTECarreterasCCostosSeeder::class,
+            CorregirDuplicadosCostosIncrementalesFTECarreterasSeeder::class,
+            PrepararIAFTECarreterasD1D2Seeder::class,
+            PrepararIAFTECarreterasE1E2Seeder::class,
+            CorregirDescripcionesCostosIncrementalesFTECarreterasSeeder::class,
             // FTE-PE-SAL (Salud, ES de 12 h con rol Puerta de Entrada). Mismo juego de cuatro que
             // EBR: prompt del sistema, contexto general, guías por sección y descripciones por
             // campo. Alcance actual: Sección A — los tres primeros ya cubren toda la ficha, el
