@@ -9,7 +9,12 @@ use App\Models\UsuarioModel;
 use CodeIgniter\HTTP\ResponseInterface;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Shared\Date as ExcelDate;
+use PhpOffice\PhpSpreadsheet\Cell\DataType;
+use PhpOffice\PhpSpreadsheet\Cell\DataValidation;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Style\NumberFormat;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use Throwable;
 
 // Espejo de `Usuario` en frontend/src/types/index.ts. `password` nunca se lee del cliente en el
@@ -22,6 +27,15 @@ use Throwable;
 // manda `null` y el frontend calcula el default por rol (ver lib/permisosCatalogo.ts, permisosDe()).
 class UsuariosController extends BaseController
 {
+    /**
+     * Columnas del Excel de alumnos, EN ORDEN. Una sola fuente para la plantilla que se descarga y
+     * para la lista que el modal muestra, así no pueden desincronizarse.
+     */
+    private const COLUMNAS_ALUMNOS = ['Nombre', 'Correo', 'Teléfono', 'Vigencia hasta', 'Curso', 'Beneficio'];
+
+    /** Hoja oculta que alimenta los desplegables de Curso y Beneficio de la plantilla. */
+    private const HOJA_LISTAS = 'Listas';
+
     public function index(): ResponseInterface
     {
         $filas = (new UsuarioModel())->orderBy('id')->findAll();
@@ -272,6 +286,16 @@ class UsuariosController extends BaseController
      * hasta" es la misma fecha opcional que pide el modal "Crea un nuevo acceso al panel" cuando
      * Origen=Alumno (columna `vigencia_alumno_hasta`) — se lee la celda directamente (no vía
      * toArray) para no depender de cómo Excel formatea la fecha para mostrarla.
+     *
+     * "Curso" y "Beneficio" van POR FILA en el propio Excel (columnas E y F), elegidos de las listas
+     * desplegables que trae la plantilla descargable — así un mismo archivo puede repartir alumnos
+     * entre varios cursos o planes. Los dos son opcionales, y un archivo viejo de 4 columnas se
+     * sigue importando igual (esas celdas simplemente no existen).
+     *
+     * Se aceptan por NOMBRE, que es lo que el admin ve y elige, no por id. El beneficio admite tanto
+     * "Nivel N — Nombre" (lo que pone la plantilla) como el nombre del plan a secas. El plan se
+     * otorga por la misma vía que "Asignar beneficios" del panel de detalle (asignarPlan()), así que
+     * un alumno importado queda exactamente igual que uno al que se le asignó a mano.
      */
     public function importarAlumnosExcel(): ResponseInterface
     {
@@ -284,6 +308,13 @@ class UsuariosController extends BaseController
             return $this->response->setStatusCode(400)->setJSON(['error' => 'Falta el archivo Excel.']);
         }
 
+        $db = db_connect();
+
+        // Diccionarios nombre-normalizado => valor, para resolver las columnas Curso y Beneficio sin
+        // pegarle a la BD una vez por fila.
+        $cursosPorNombre     = $this->cursosPorNombreNormalizado();
+        $beneficiosPorNombre = $this->beneficiosPorNombreNormalizado();
+
         try {
             $sheet = IOFactory::load($file->getTempName())->getActiveSheet();
             $filas = $sheet->toArray(null, true, true, false);
@@ -292,7 +323,6 @@ class UsuariosController extends BaseController
         }
         array_shift($filas); // fila 1 = encabezados
 
-        $db = db_connect();
         $creados  = 0;
         $omitidos = [];
         $numeroFila = 1;
@@ -320,6 +350,30 @@ class UsuariosController extends BaseController
                 continue;
             }
 
+            // Curso y Beneficio: vacío es válido (el alumno queda sin curso / sin plan), pero un
+            // valor que no está en la lista se rechaza en vez de crear al alumno a medias — si se
+            // creara igual, el admin se quedaría con un alumno sin el curso que creía haberle puesto
+            // y sin forma fácil de detectarlo entre doscientos.
+            $textoCurso = trim((string) ($f[4] ?? ''));
+            $cursoId    = null;
+            if ($textoCurso !== '') {
+                $cursoId = $cursosPorNombre[$this->claveDeNombre($textoCurso)] ?? null;
+                if ($cursoId === null) {
+                    $omitidos[] = ['fila' => $numeroFila, 'motivo' => "El curso \"{$textoCurso}\" no existe"];
+                    continue;
+                }
+            }
+
+            $textoBeneficio = trim((string) ($f[5] ?? ''));
+            $planSlug       = '';
+            if ($textoBeneficio !== '') {
+                $planSlug = $beneficiosPorNombre[$this->claveDeNombre($textoBeneficio)] ?? '';
+                if ($planSlug === '') {
+                    $omitidos[] = ['fila' => $numeroFila, 'motivo' => "El beneficio \"{$textoBeneficio}\" no existe"];
+                    continue;
+                }
+            }
+
             $ahora = date('Y-m-d H:i:s');
             $db->table('usuarios')->insert([
                 'nombre'                => $nombre,
@@ -330,14 +384,219 @@ class UsuariosController extends BaseController
                 'estado'                => 'activo',
                 'correo'                => $correo,
                 'telefono'              => $telefono !== '' ? $telefono : null,
+                'curso_id'              => $cursoId,
                 'vigencia_alumno_hasta' => $vigencia,
                 'created_at'            => $ahora,
                 'updated_at'            => $ahora,
             ]);
             $creados++;
+
+            // Recién creado y sin `cuenta_cliente_id`: su cuenta es él mismo (ver idCuentaDe()).
+            // El slug salió del diccionario de planes existentes, así que asignarPlan() no debería
+            // fallar; si lo hace igual, el alumno YA está creado — se reporta para que el admin
+            // sepa que a ese le falta el beneficio, en vez de dejarlo pasar en silencio.
+            if ($planSlug !== '' && $this->asignarPlan((int) $db->insertID(), $planSlug) !== null) {
+                $omitidos[] = ['fila' => $numeroFila, 'motivo' => "El alumno se creó, pero no se pudo asignar el beneficio \"{$textoBeneficio}\": hazlo a mano."];
+            }
         }
 
         return $this->response->setJSON(['creados' => $creados, 'omitidos' => $omitidos]);
+    }
+
+    /**
+     * Admin: descarga el .xlsx de ejemplo para la carga masiva de alumnos.
+     *
+     * Se genera en el servidor, y no en el frontend, para que el archivo que el administrador baja
+     * y el que importarAlumnosExcel() espera no puedan desincronizarse: las dos cosas salen de la
+     * misma constante de columnas. La fila de ejemplo va con "Vigencia hasta" como TEXTO en formato
+     * AAAA-MM-DD, que es el que la importación acepta sin ambigüedad de locale.
+     */
+    public function plantillaAlumnosExcel(): ResponseInterface
+    {
+        if ($gate = $this->exigirAdmin()) {
+            return $gate;
+        }
+
+        $cursos     = $this->cursosParaPlantilla();
+        $beneficios = $this->beneficiosParaPlantilla();
+
+        $libro = new Spreadsheet();
+        $hoja  = $libro->getActiveSheet();
+        $hoja->setTitle('Alumnos');
+
+        $hoja->fromArray(self::COLUMNAS_ALUMNOS, null, 'A1');
+        $hoja->getStyle('A1:F1')->getFont()->setBold(true);
+
+        $ejemplos = [
+            ['Rosa Delgado Ríos', 'rosa.delgado@example.com', '987654321', '2026-12-31', $cursos[0] ?? '', $beneficios[0] ?? ''],
+            ['Mateo Vargas Luna', 'mateo.vargas@example.com', '', '', '', ''],
+        ];
+        foreach ($ejemplos as $i => $ejemplo) {
+            $fila = $i + 2;
+            $hoja->setCellValue("A{$fila}", $ejemplo[0]);
+            $hoja->setCellValue("B{$fila}", $ejemplo[1]);
+            // Teléfono y fecha van como TEXTO EXPLÍCITO. Si se dejara que PhpSpreadsheet infiera el
+            // tipo, "987654321" se guardaría como número (y un teléfono con "+51" o con cero inicial
+            // se rompería al editarlo) y "2026-12-31" se volvería un serial que cada Excel muestra
+            // según su locale — justo el formato ambiguo que la importación no acepta.
+            $hoja->setCellValueExplicit("C{$fila}", $ejemplo[2], DataType::TYPE_STRING);
+            $hoja->setCellValueExplicit("D{$fila}", $ejemplo[3], DataType::TYPE_STRING);
+            $hoja->setCellValueExplicit("E{$fila}", $ejemplo[4], DataType::TYPE_STRING);
+            $hoja->setCellValueExplicit("F{$fila}", $ejemplo[5], DataType::TYPE_STRING);
+        }
+        $hoja->getStyle('C2:D3')->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_TEXT);
+
+        $this->agregarListasDesplegables($libro, $hoja, $cursos, $beneficios);
+
+        foreach (range('A', 'F') as $columna) {
+            $hoja->getColumnDimension($columna)->setAutoSize(true);
+        }
+
+        $temporal = tempnam(sys_get_temp_dir(), 'plantilla-alumnos-') . '.xlsx';
+        (new Xlsx($libro))->save($temporal);
+        $contenido = (string) file_get_contents($temporal);
+        @unlink($temporal);
+        $libro->disconnectWorksheets();
+
+        return $this->response
+            ->setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+            ->setHeader('Content-Disposition', 'attachment; filename="formato-alumnos.xlsx"')
+            ->setBody($contenido);
+    }
+
+    /**
+     * Clave para comparar nombres escritos a mano: sin mayúsculas, sin tildes y con los espacios
+     * colapsados.
+     *
+     * Hace falta porque el valor llega de una celda de Excel: aunque la plantilla trae desplegable,
+     * el admin puede pegar el texto, escribirlo sin tilde, o dejar un espacio doble al copiar. Se
+     * normalizan también los guiones largos, porque la etiqueta de beneficio usa "—" y al reescribir
+     * a mano sale un "-" común.
+     */
+    private function claveDeNombre(string $texto): string
+    {
+        $texto = strtr($texto, ['—' => '-', '–' => '-']);
+        $texto = mb_strtolower(trim($texto), 'UTF-8');
+        $texto = strtr($texto, [
+            'á' => 'a', 'é' => 'e', 'í' => 'i', 'ó' => 'o', 'ú' => 'u', 'ü' => 'u', 'ñ' => 'n',
+        ]);
+
+        return (string) preg_replace('/\s+/', ' ', $texto);
+    }
+
+    /** @return array<string,int> nombre normalizado => id del curso. */
+    private function cursosPorNombreNormalizado(): array
+    {
+        $mapa = [];
+        foreach (db_connect()->table('cursos')->select('id, nombre')->get()->getResultArray() as $c) {
+            $mapa[$this->claveDeNombre((string) $c['nombre'])] = (int) $c['id'];
+        }
+
+        return $mapa;
+    }
+
+    /**
+     * @return array<string,string> nombre normalizado => slug `nivel-N`.
+     *
+     * Se aceptan las dos formas con las que el valor puede llegar: la etiqueta completa que pone la
+     * plantilla ("Nivel 1 — Profesional") y el nombre del plan a secas ("Profesional"), que es lo
+     * que un admin escribe cuando llena la columna sin usar el desplegable.
+     */
+    private function beneficiosPorNombreNormalizado(): array
+    {
+        $mapa = [];
+        foreach ((new PlanModel())->findAll() as $p) {
+            $slug   = 'nivel-' . (int) $p['numero_nivel'];
+            $nombre = (string) $p['nombre'];
+
+            $mapa[$this->claveDeNombre('Nivel ' . (int) $p['numero_nivel'] . ' — ' . $nombre)] = $slug;
+            $mapa[$this->claveDeNombre($nombre)] = $slug;
+        }
+
+        return $mapa;
+    }
+
+    /** Nombres de los cursos existentes, en el mismo orden en que los ve el admin en el panel. */
+    private function cursosParaPlantilla(): array
+    {
+        return array_column(
+            db_connect()->table('cursos')->select('nombre')->orderBy('nombre', 'ASC')->get()->getResultArray(),
+            'nombre',
+        );
+    }
+
+    /**
+     * Beneficios elegibles, con el formato "Nivel N — Nombre" que también entiende la importación.
+     *
+     * Se arman desde la tabla `planes` y NO desde un catálogo fijo: lo que se otorga se busca por
+     * `numero_nivel` (ver asignarPlan()), así que la etiqueta que el admin elige y el plan que
+     * realmente se asigna salen de la misma fuente.
+     */
+    private function beneficiosParaPlantilla(): array
+    {
+        $filas = (new PlanModel())->orderBy('numero_nivel', 'ASC')->findAll();
+
+        return array_map(
+            static fn (array $p): string => 'Nivel ' . (int) $p['numero_nivel'] . ' — ' . $p['nombre'],
+            $filas,
+        );
+    }
+
+    /**
+     * Cuelga las listas desplegables de Curso y Beneficio en la plantilla.
+     *
+     * Las opciones NO van embebidas en la fórmula de validación (`'"a,b,c"'`): ese formato inline
+     * de Excel se corta a 255 caracteres y parte los valores que contienen comas —y un nombre de
+     * curso como "Invierte.pe, nivel avanzado" rompería la lista entera—. Por eso van en una hoja
+     * auxiliar OCULTA y la validación apunta a ese rango.
+     */
+    private function agregarListasDesplegables(Spreadsheet $libro, Worksheet $hoja, array $cursos, array $beneficios): void
+    {
+        if ($cursos === [] && $beneficios === []) {
+            return;
+        }
+
+        $listas = $libro->createSheet();
+        $listas->setTitle(self::HOJA_LISTAS);
+        foreach ($cursos as $i => $curso) {
+            $listas->setCellValueExplicit('A' . ($i + 1), $curso, DataType::TYPE_STRING);
+        }
+        foreach ($beneficios as $i => $beneficio) {
+            $listas->setCellValueExplicit('B' . ($i + 1), $beneficio, DataType::TYPE_STRING);
+        }
+        $listas->setSheetState(Worksheet::SHEETSTATE_HIDDEN);
+
+        // Hasta la fila 500: es el desplegable en las filas que el admin va a llenar. Pegarlo solo a
+        // las 2 de ejemplo obligaría a copiar formato hacia abajo para cada alumno nuevo.
+        $rangos = [];
+        if ($cursos !== []) {
+            $rangos['E'] = sprintf("'%s'!\$A\$1:\$A\$%d", self::HOJA_LISTAS, count($cursos));
+        }
+        if ($beneficios !== []) {
+            $rangos['F'] = sprintf("'%s'!\$B\$1:\$B\$%d", self::HOJA_LISTAS, count($beneficios));
+        }
+
+        foreach ($rangos as $columna => $formula) {
+            // Suelta, NO vía getCell("E2")->getDataValidation(): esa forma engancha la validación a
+            // E2 además del rango, y el archivo termina con la regla declarada dos veces sobre la
+            // misma celda.
+            $validacion = new DataValidation();
+            $validacion->setType(DataValidation::TYPE_LIST);
+            // STOP: si el admin escribe algo que no está en la lista, Excel lo rechaza en el momento
+            // en vez de dejar que se entere recién al importar.
+            $validacion->setErrorStyle(DataValidation::STYLE_STOP);
+            $validacion->setAllowBlank(true);
+            $validacion->setShowInputMessage(true);
+            $validacion->setShowErrorMessage(true);
+            $validacion->setShowDropDown(true);
+            $validacion->setErrorTitle('Valor no válido');
+            $validacion->setError('Elige una de las opciones de la lista, o deja la celda vacía.');
+            $validacion->setPromptTitle($columna === 'E' ? 'Curso' : 'Beneficio');
+            $validacion->setPrompt('Opcional. Elige de la lista.');
+            $validacion->setFormula1($formula);
+
+            $hoja->setDataValidation("{$columna}2:{$columna}500", $validacion);
+        }
     }
 
     /**

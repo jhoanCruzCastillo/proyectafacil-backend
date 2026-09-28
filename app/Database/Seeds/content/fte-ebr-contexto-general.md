@@ -7,10 +7,7 @@ La **Ficha Técnica Estándar (FTE)** para el mejoramiento, ampliación y/o recu
 - El servicio de **Educación Básica Alternativa (EBA)** solo se puede incluir en esta FTE si comparte instalaciones existentes de EBR en otro turno (normalmente noche) — nunca se dimensiona demanda ni costos exclusivos de EBA.
 
 ## Naturalezas de intervención admitidas — "Creación" NUNCA
-Esta FTE aplica **solo** a: **Mejoramiento**, **Ampliación**, **Recuperación**, y/o **Mejoramiento y Ampliación**.
-- **Mejoramiento**: la UP ya existe y ya atiende, se interviene para que sus factores de producción cumplan los estándares de calidad (no necesariamente crece la cobertura).
-- **Recuperación**: los factores de producción de una UP existente colapsaron o fueron dañados (sismo, huayco, etc.) — se recupera la capacidad de prestar el servicio.
-- **Ampliación**: se incrementa la capacidad de una UP existente para atender **nuevos** usuarios que hoy no están matriculados — sí incrementa cobertura.
+Esta FTE aplica a las 4 naturalezas oficiales (definiciones completas en el contexto global "Invierte.pe"): **Mejoramiento**, **Ampliación**, **Recuperación**, y/o **Mejoramiento y Ampliación** combinadas — esta última cuando el proyecto a la vez mejora infraestructura existente Y atiende nuevos usuarios que hoy no están matriculados.
 - Un proyecto con naturaleza **"Creación"** NO se formula con esta FTE (va por la ficha de baja/mediana complejidad) — si la fuente de la verdad describe una creación desde cero, es un caso fuera de alcance, adviértelo en vez de forzarlo a una de las 4 naturalezas válidas.
 
 ## Las dos brechas — no confundir

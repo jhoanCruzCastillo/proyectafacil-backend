@@ -64,8 +64,12 @@ class EjemplosController extends BaseController
         $dto = $this->request->getJSON(true) ?? [];
 
         // `fuentes` (Record<identificador, texto>) es opcional: de dónde salió cada dato llenado con
-        // IA, para el botón "?" del editor. Viaja en el mismo blob que `valores` (ver clase, arriba).
-        if (array_key_exists('valores', $dto) || array_key_exists('fuentes', $dto)) {
+        // IA, para el botón "?" del editor. `origen` (Record<identificador, 'ia'|'usuario'>) es quién
+        // puso/tocó por última vez cada valor — indicador verde/azul del editor de ficha del cliente
+        // (ver OrigenCampo en frontend/src/types/index.ts). El frontend ya manda el mapa COMPLETO
+        // fusionado (mismo criterio que `valores`/`fuentes`: reemplazo total, no parche) — ver
+        // useClienteFichaEditor.ts::handleSave. Los tres viajan en el mismo blob (ver clase, arriba).
+        if (array_key_exists('valores', $dto) || array_key_exists('fuentes', $dto) || array_key_exists('origen', $dto)) {
             $archivoModel = new ArchivoModel();
             $archivo      = $archivoModel->where('propietario_tipo', 'ejemplo')->where('ejemplo_id', $id)->first();
 
@@ -76,7 +80,8 @@ class EjemplosController extends BaseController
             }
             $valores   = array_key_exists('valores', $dto) ? $dto['valores'] : ($existente['valores'] ?? []);
             $fuentes   = array_key_exists('fuentes', $dto) ? $dto['fuentes'] : ($existente['fuentes'] ?? []);
-            $contenido = json_encode(['valores' => $valores, 'fuentes' => $fuentes], JSON_UNESCAPED_UNICODE);
+            $origen    = array_key_exists('origen', $dto) ? $dto['origen'] : ($existente['origen'] ?? []);
+            $contenido = json_encode(['valores' => $valores, 'fuentes' => $fuentes, 'origen' => $origen], JSON_UNESCAPED_UNICODE);
 
             if ($archivo) {
                 $archivoModel->update($archivo['id'], ['contenido_json' => $contenido]);
@@ -159,10 +164,12 @@ class EjemplosController extends BaseController
         $archivo = (new ArchivoModel())->where('propietario_tipo', 'ejemplo')->where('ejemplo_id', $fila['id'])->first();
         $valores = [];
         $fuentes = [];
+        $origen  = [];
         if ($archivo && $archivo['contenido_json']) {
             $contenido = json_decode((string) $archivo['contenido_json'], true);
             $valores = $contenido['valores'] ?? [];
             $fuentes = $contenido['fuentes'] ?? [];
+            $origen  = $contenido['origen'] ?? [];
         }
 
         return [
@@ -177,6 +184,8 @@ class EjemplosController extends BaseController
             'valores'           => (object) $valores,
             // Origen de cada valor llenado con IA (texto breve), para el botón "?" del editor.
             'fuentes'           => (object) $fuentes,
+            // Quién puso/tocó por última vez cada valor ('ia'|'usuario') — indicador verde/azul.
+            'origen'            => (object) $origen,
             'tipologiasIoarr'   => array_map(static fn (array $t) => $t['tipologia'], $tipologias),
             'propietarioId'     => $fila['propietario_usuario_id'] !== null ? (string) $fila['propietario_usuario_id'] : null,
             'creadoPorUsuarioId' => $fila['creado_por_usuario_id'] !== null ? (string) $fila['creado_por_usuario_id'] : null,

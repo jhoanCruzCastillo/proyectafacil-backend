@@ -41,8 +41,7 @@ En ningún caso se usa la Ficha Técnica de Baja y Mediana Complejidad ni la Fic
 ## 5. Conceptos clave
 
 - **Servicio de Cuidado Diurno (SCD)**: modalidad de atención del Programa Nacional Cuna Más (PNCM) que brinda atención integral a niñas y niños de **6 a 36 meses** que viven en zonas de pobreza y pobreza extrema y requieren cuidado extrafamiliar. Se presta de **lunes a viernes, de 8:00 a 16:00 horas**.
-- **Centro Infantil de Atención Integral (CIAI)**: espacio donde se brinda esa atención integral, organizado en salas (bebés y gateadores, caminantes y exploradores, o sala mixta). Es la **Unidad Productora** del SCD.
-- **Unidad Productora (UP)**: conjunto de factores de producción (infraestructura, equipos, personal, organización, capacidades de gestión) que, articulados, proveen el servicio a la población objetivo.
+- **Centro Infantil de Atención Integral (CIAI)**: espacio donde se brinda esa atención integral, organizado en salas (bebés y gateadores, caminantes y exploradores, o sala mixta). Es la **Unidad Productora** (ver definición general en el contexto global "Invierte.pe") del SCD.
 - **Programa Nacional Cuna Más (PNCM)**: programa social focalizado, adscrito al MIDIS, responsable del SCD.
 - **Unidad Territorial (UT)**: unidad del PNCM responsable de implementar y prestar los servicios en su jurisdicción.
 - **Desarrollo Infantil Temprano**: proceso progresivo, multidimensional e integral en las dimensiones motora, socioemocional, cognitiva y comunicativa.
@@ -65,8 +64,6 @@ Sala de cuidado diurno · Sala de usos múltiples · Ambiente de recreación act
 
 - **Brecha de calidad** — indicador `PCIAICI`: *porcentaje de centros infantiles de atención integral que brindan el servicio en condición inadecuada*. Un CIAI está en condición inadecuada cuando **al menos un** factor de producción no cumple los estándares.
 - **Brecha de cobertura** — indicador `PCIAIPI`: *porcentaje de centros infantiles de atención integral por implementar*, es decir, el déficit para atender a la población objetivo (niñas y niños de 6 a 36 meses en pobreza y pobreza extrema, según criterios de focalización del PNCM).
-
-Brecha, en general, es la diferencia entre la **oferta disponible** y la **demanda**, en una fecha y ámbito geográfico determinados.
 
 ## 7. Modelo de cogestión y actores
 

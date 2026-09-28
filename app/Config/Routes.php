@@ -13,6 +13,11 @@ $routes->group('api', static function (RouteCollection $routes) {
     $routes->post('auth/registro', 'AuthController::register');
     $routes->get('auth/verificar/(:segment)', 'AuthController::verificar/$1');
 
+    // Estado de mantenimiento (público, sin sesión) — el frontend lo consulta al arrancar la SPA,
+    // antes de saber si hay sesión, para poder redirigir incluso a un visitante sin cuenta. Ver
+    // Config\Mantenimiento / EstadoSistemaController.
+    $routes->get('estado-sistema', 'EstadoSistemaController::index');
+
     // Catálogo de sectores MEF (público) — legacy / otros usos. El paso 2 del registro usa
     // temas-especialidad/publico (lista ILPIIE anidada tema→subtema).
     $routes->get('sectores/publico', 'SectoresController::index');
@@ -89,9 +94,17 @@ $routes->group('api', ['filter' => 'auth'], static function (RouteCollection $ro
     // enviarLoteFicha(). El botón individual sigue en llenar-ia/llenar-tabla-ia de arriba, sin tocar.
     $routes->post('ejemplos/(:num)/llenar-ia-lote', 'LlenadoIAController::enviarLoteFicha/$1');
     $routes->get('ejemplos/(:num)/llenar-ia-lote/(:num)', 'LlenadoIAController::estadoLoteFicha/$1/$2');
+    $routes->post('ejemplos/(:num)/llenado-ia-async', 'LlenadoIAController::iniciarLlenadoAsync/$1');
+    $routes->get('ejemplos/(:num)/llenado-ia-async', 'LlenadoIAController::estadoLlenadoAsync/$1');
+    $routes->post('ejemplos/(:num)/llenado-ia-async/cancelar', 'LlenadoIAController::cancelarLlenadoAsync/$1');
+
+    // Sandbox de prueba (/test en el frontend, solo superusuario) — ver PruebaIAController.
+    $routes->get('pruebas/ia/modelos', 'PruebaIAController::modelos');
+    $routes->post('pruebas/ia/chat', 'PruebaIAController::chat');
 
     $routes->get('usuarios', 'UsuariosController::index');
     $routes->post('usuarios', 'UsuariosController::create');
+    $routes->get('usuarios/plantilla-alumnos', 'UsuariosController::plantillaAlumnosExcel');
     $routes->post('usuarios/importar-alumnos', 'UsuariosController::importarAlumnosExcel');
     $routes->get('cursos', 'CursosController::index');
     $routes->post('cursos', 'CursosController::create');

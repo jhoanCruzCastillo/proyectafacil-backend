@@ -365,6 +365,22 @@ trait SolicitudAsesoriaHelpersTrait
             'completadoEn'   => ($s['completado_en'] ?? null) !== null ? $this->datetimeAIso($s['completado_en']) : null,
         ];
 
+        // Reloj de la asesoría por chat, para el temporizador del panel. Solo se calcula mientras la
+        // consulta sigue en curso: una vez cerrada no hay cuenta regresiva que mostrar, y así no se
+        // paga el costo de estas dos consultas por cada fila de un historial largo.
+        $dto['chatIniciadoEn']      = null;
+        $dto['chatVenceEn']         = null;
+        $dto['chatDuracionMinutos'] = null;
+        if ($s['tipo'] === 'chat' && $s['estado'] === 'asignado') {
+            $ventana = $this->ventanaChat($s);
+            if ($ventana !== null) {
+                [$inicio, $fin, $duracion] = $ventana;
+                $dto['chatIniciadoEn']      = $this->datetimeAIso(date('Y-m-d H:i:s', $inicio));
+                $dto['chatVenceEn']         = $this->datetimeAIso(date('Y-m-d H:i:s', $fin));
+                $dto['chatDuracionMinutos'] = $duracion;
+            }
+        }
+
         $subtemas = $subtemasPrecargados;
         if ($subtemas === null) {
             $subtemas = $this->subtemasDeSolicitudes([(int) $s['id']])[(int) $s['id']] ?? [];
@@ -384,6 +400,87 @@ trait SolicitudAsesoriaHelpersTrait
     // ventana de "puede seguir conectado" sigue abierta, no tiene sentido evaluar asistencia
     // todavía (la llamada bien podría seguir en curso).
     private const MARGEN_SALIDA_MIN = 10;
+
+    /** Duración de una asesoría por chat cuando el ticket no la declara. */
+    private const DURACION_CHAT_MIN_POR_DEFECTO = 30;
+
+    /**
+     * Cuándo empieza y cuándo termina el reloj de una asesoría por chat.
+     *
+     * El cronómetro NO arranca cuando el asesor acepta la consulta, sino cuando manda su PRIMER
+     * mensaje al alumno: aceptar sin escribir no le consume tiempo a nadie, y si el reloj corriera
+     * desde la aceptación el alumno perdería minutos de asesoría mientras espera respuesta.
+     *
+     * @return array{0: int, 1: int, 2: int}|null [inicio, fin, duracionMinutos] o null si no aplica
+     */
+    private function ventanaChat(array $solicitud): ?array
+    {
+        if (($solicitud['tipo'] ?? '') !== 'chat' || ($solicitud['docente_id'] ?? null) === null) {
+            return null;
+        }
+
+        $db      = db_connect();
+        $primero = $db->table('mensajes_asesoria')
+            ->selectMin('created_at', 'primero')
+            ->where('solicitud_id', (int) $solicitud['id'])
+            ->where('autor_id', (int) $solicitud['docente_id'])
+            ->get()->getRowArray();
+
+        if ($primero === null || empty($primero['primero'])) {
+            return null; // el asesor todavía no escribió: el reloj no arrancó
+        }
+
+        $ticket = $db->table('tickets_consulta')
+            ->select('duracion_minutos')
+            ->where('solicitud_asesoria_id', (int) $solicitud['id'])
+            ->get()->getRowArray();
+        $duracion = (int) ($ticket['duracion_minutos'] ?? 0) ?: self::DURACION_CHAT_MIN_POR_DEFECTO;
+
+        $inicio = strtotime((string) $primero['primero']);
+
+        return [$inicio, $inicio + $duracion * 60, $duracion];
+    }
+
+    /**
+     * Cierra sola una asesoría por chat cuando se le acabó el tiempo y el asesor no le dio a
+     * "Finalizar asesoría".
+     *
+     * Misma estrategia "bajo demanda" que resolverAsistenciaSiCorresponde() para las videollamadas
+     * (ver el comentario largo de ahí): no hay cron ni worker, se evalúa cuando alguien lee la
+     * solicitud —el listado del alumno, el del asesor o el propio panel de chat, que hace polling
+     * cada 3 s—. La primera lectura posterior al vencimiento la cierra y la persiste; a partir de
+     * ahí ya no es 'asignado' y no se vuelve a evaluar.
+     */
+    private function resolverChatVencidoSiCorresponde(array $solicitud): array
+    {
+        if (($solicitud['tipo'] ?? '') !== 'chat' || ($solicitud['estado'] ?? '') !== 'asignado') {
+            return $solicitud;
+        }
+
+        $ventana = $this->ventanaChat($solicitud);
+        if ($ventana === null || time() < $ventana[1]) {
+            return $solicitud; // sin arrancar, o todavía dentro de su tiempo
+        }
+
+        $ahora = date('Y-m-d H:i:s');
+        // `completado_en` se fija en el VENCIMIENTO real, no en el momento en que alguien abrió la
+        // pantalla: si nadie entra en dos días, la asesoría no puede figurar como terminada dos
+        // días tarde — sobre esa fecha se calculan las liquidaciones.
+        $completadoEn = date('Y-m-d H:i:s', $ventana[1]);
+
+        db_connect()->table('solicitudes_asesoria')
+            ->where('id', (int) $solicitud['id'])
+            ->where('estado', 'asignado') // carrera: si otra lectura simultánea ya la cerró, no se pisa
+            ->update(['estado' => 'completado', 'completado_en' => $completadoEn, 'updated_at' => $ahora]);
+
+        $this->consumirTicket((int) $solicitud['id']);
+
+        $solicitud['estado']        = 'completado';
+        $solicitud['completado_en'] = $completadoEn;
+        $solicitud['updated_at']    = $ahora;
+
+        return $solicitud;
+    }
 
     // Resuelve automáticamente si una solicitud de video 'agendada' pasa a Completado/Observado/
     // Vencido, según la asistencia real registrada en Meet. Evaluación "bajo demanda": se llama

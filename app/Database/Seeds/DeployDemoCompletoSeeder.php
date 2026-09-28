@@ -75,11 +75,37 @@ class DeployDemoCompletoSeeder extends Seeder
             ContextoGeneralFTEEBRSeeder::class,
             PromptSistemaFTEEBRSeeder::class,
             PrepararIAFTEEBRSeeder::class,
+            // FTE-PE-SAL (Salud, ES de 12 h con rol Puerta de Entrada). Mismo juego de cuatro que
+            // EBR: prompt del sistema, contexto general, guías por sección y descripciones por
+            // campo. Alcance actual: Sección A — los tres primeros ya cubren toda la ficha, el
+            // cuarto y las guías se van completando sección por sección.
+            PromptSistemaFTEPESALSeeder::class,
+            ContextoGeneralFTEPESALSeeder::class,
+            ContextosIAFTEPESALSeeder::class,
+            PrepararIAFTEPESALSeeder::class,
+            // Formato 07-C (Registro de IOARR). Son tres y no cuatro: este formato NO lleva la
+            // "guía general" de las FTE — en su lugar va el contexto general "Lineamientos IOARR",
+            // porque no se formula ni se evalúan alternativas, solo se registra.
+            PromptSistemaIOARR7CSeeder::class,
+            LineamientosIOARR7CSeeder::class,
+            ContextosIAIOARR7CSeeder::class,
+            PrepararIAIOARR7CSeeder::class,
+            // FTE-SAN-URBANO (Vivienda y Saneamiento, ámbito urbano). Mismo juego de cuatro que
+            // EBR y PE-SAL. Alcance actual: Sección I — los dos primeros ya cubren toda la ficha,
+            // las guías y las descripciones se completan sección por sección.
+            PromptSistemaFTESANURBANOSeeder::class,
+            ContextoGeneralFTESANURBANOSeeder::class,
+            ContextosIAFTESANURBANOSeeder::class,
+            PrepararIAFTESANURBANOSeeder::class,
             CronogramaDemoAsesor1Seeder::class,
             NoAtendidasDemoAsesor1Seeder::class,
             LiquidacionDemoAsesor1Seeder::class,
             ChatsActivosPruebaJuanSeeder::class,
             BeneficiosDemoSeeder::class,
+            // Va al FINAL a propósito: recorre TODAS las plantillas ya sembradas y le devuelve sus
+            // filas a las tablas que quedaron con valorEjemplo vacío pese a declarar filasBase. Sin
+            // esto, esas tablas no se pueden llenar con IA (ver el comentario del seeder).
+            RellenarFilasBaseTablasSeeder::class,
         ];
 
         foreach ($pasos as $seeder) {

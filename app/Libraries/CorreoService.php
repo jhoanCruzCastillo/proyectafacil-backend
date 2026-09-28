@@ -70,20 +70,130 @@ class CorreoService
         $this->enviar($correo, $asunto, $cuerpo);
     }
 
-    private function enviar(string $correo, string $asunto, string $cuerpo): void
+    /**
+     * Aviso de que "Llenar toda la ficha" (worker asíncrono, ver LlenadoIAController) terminó — el
+     * cliente pudo cerrar la pestaña o la sesión apenas lo disparó, así que este correo es la única
+     * forma en que se entera de que ya puede volver a revisar los resultados.
+     *
+     * Pedido explícito del usuario (2026-09-27): nada de costo en USD acá — es un detalle técnico
+     * interno (ver `llenado_ia_trabajos.costo_usd`, que se queda solo en BD/logs), el cliente solo
+     * necesita saber QUÉ secciones se llenaron. Tampoco un link genérico al listado de fichas: el
+     * link va directo a ESTA ficha (`/mis-fichas/{ejemploId}`).
+     *
+     * @param  list<string> $seccionesLlenadas Nombres de las secciones con al menos un campo
+     *                                          completado — ya filtradas por el llamador.
+     * @throws \RuntimeException si el correo no se pudo enviar
+     */
+    public function enviarLlenadoIACompletado(string $correo, string $nombre, string $nombreFicha, array $seccionesLlenadas, string $urlFicha): void
     {
+        $asunto = 'Tu ficha terminó de llenarse con IA — Proyecta Fácil';
+
+        // `$seccionesLlenadas` vacío no debería pasar (ver IaEjecutarLlenado::avisar, que junta texto
+        // + tablas), pero si el llamador algún día manda una lista vacía por un caso no contemplado,
+        // esto cae a una frase genérica en vez de un cuadro verde vacío (bug real encontrado en vivo
+        // 2026-09-28: una ficha llenada solo con tablas no aparecía en `secciones`, así que la lista
+        // llegaba vacía y el correo mostraba el cuadro sin nada adentro).
+        $intro = $seccionesLlenadas === []
+            ? 'Se completaron varios campos.'
+            : 'Se completaron campos en estas secciones:';
+
+        $listaTexto = $seccionesLlenadas === []
+            ? ''
+            : "\n\n" . implode("\n", array_map(static fn (string $s): string => "  • {$s}", $seccionesLlenadas));
+        $cuerpo = "Hola {$nombre},\n\n"
+            . "El llenado automático con IA de tu ficha \"{$nombreFicha}\" ya terminó. {$intro}{$listaTexto}\n\n"
+            . "Revísala aquí:\n{$urlFicha}\n";
+
+        $listaHtml = $seccionesLlenadas === [] ? '' : (
+            '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:16px 20px;margin:0 0 24px;">'
+            . implode('', array_map(
+                static fn (string $s): string => '<tr><td style="padding:4px 0;color:#0f172a;font-size:14px;line-height:1.5;">'
+                    . '<span style="color:#16a34a;font-weight:700;margin-right:8px;">&#10003;</span>' . htmlspecialchars($s, ENT_QUOTES) . '</td></tr>',
+                $seccionesLlenadas,
+            ))
+            . '</table>'
+        );
+        $html = $this->plantillaHtml(
+            '¡Tu ficha ya está lista para revisar!',
+            '<p style="margin:0 0 16px;color:#334155;font-size:15px;line-height:1.6;">'
+                . "Hola {$nombre},</p>"
+            . '<p style="margin:0 0 20px;color:#334155;font-size:15px;line-height:1.6;">'
+                . 'El llenado automático con IA de tu ficha <strong>"' . htmlspecialchars($nombreFicha, ENT_QUOTES) . '"</strong> ya terminó. '
+                . htmlspecialchars($intro, ENT_QUOTES) . '</p>'
+            . $listaHtml
+            . '<table role="presentation" cellpadding="0" cellspacing="0"><tr><td style="border-radius:8px;background:#22c55e;">'
+                . '<a href="' . htmlspecialchars($urlFicha, ENT_QUOTES) . '" style="display:inline-block;padding:12px 28px;color:#ffffff;font-size:14px;font-weight:600;text-decoration:none;border-radius:8px;">Revisar mi ficha</a>'
+            . '</td></tr></table>',
+        );
+
+        $this->enviar($correo, $asunto, $cuerpo, $html);
+    }
+
+    /**
+     * Cabecera (logo + wordmark + lema, igual al sidebar de la app) y pie comunes a cualquier correo
+     * HTML — para que un futuro segundo correo con diseño (hoy todos los demás son texto plano) no
+     * tenga que rearmarlos desde cero.
+     */
+    private function plantillaHtml(string $titulo, string $cuerpoHtml): string
+    {
+        // URL hosteada, NO embebido en base64: se probó embebido (ver historial) porque en local
+        // Gmail no puede llegar a `http://localhost:8080/...`, pero el logo salió roto IGUAL en un
+        // envío real — Brevo (el proveedor de correo, ver arriba) descarta/no soporta imágenes
+        // `data:` embebidas en el HTML que reenvía. Una URL pública de verdad es el único camino que
+        // funciona con este proveedor. Esto SOLO se puede ver bien una vez desplegado: `app.baseURL`
+        // tiene que estar seteado en Railway al dominio público real del backend (por defecto es
+        // 'http://localhost:8080/', ver Config\App.php) — si se deja sin setear, el logo sale roto
+        // en producción también, no por Brevo sino porque la URL en sí no es alcanzable.
+        $logoUrl = rtrim(config(\Config\App::class)->baseURL, '/') . '/assets/logo-email.png';
+
+        return <<<HTML
+        <!DOCTYPE html>
+        <html lang="es">
+        <body style="margin:0;padding:32px 16px;background:#f8fafc;font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+            <tr><td align="center">
+              <table role="presentation" width="480" cellpadding="0" cellspacing="0" style="max-width:480px;width:100%;">
+                <tr><td align="center" style="padding-bottom:24px;">
+                  <img src="{$logoUrl}" width="48" height="48" alt="Proyecta Fácil" style="display:block;border-radius:12px;margin-bottom:10px;">
+                  <div style="font-size:20px;font-weight:700;">
+                    <span style="color:#0f172a;">Proyecta</span><span style="color:#22c55e;">Fácil</span>
+                  </div>
+                  <div style="font-size:12px;color:#64748b;margin-top:2px;">Proyectos de Inversión y Asesorías -by ILPIIE</div>
+                </td></tr>
+                <tr><td style="background:#ffffff;border:1px solid #e2e8f0;border-radius:16px;padding:32px;">
+                  <h1 style="margin:0 0 16px;color:#0f172a;font-size:19px;font-weight:700;">{$titulo}</h1>
+                  {$cuerpoHtml}
+                </td></tr>
+                <tr><td align="center" style="padding-top:20px;color:#94a3b8;font-size:12px;">
+                  © Proyecta Fácil — by ILPIIE
+                </td></tr>
+              </table>
+            </td></tr>
+          </table>
+        </body>
+        </html>
+        HTML;
+    }
+
+    protected function enviar(string $correo, string $asunto, string $cuerpo, ?string $html = null): void
+    {
+        $json = [
+            'sender'      => ['name' => $this->fromName, 'email' => $this->fromEmail],
+            'to'          => [['email' => $correo]],
+            'subject'     => $asunto,
+            'textContent' => $cuerpo,
+        ];
+        if ($html !== null) {
+            $json['htmlContent'] = $html;
+        }
+
         $response = $this->http->post('https://api.brevo.com/v3/smtp/email', [
             'headers' => [
                 'api-key'      => $this->apiKey,
                 'Content-Type' => 'application/json',
                 'Accept'       => 'application/json',
             ],
-            'json' => [
-                'sender'      => ['name' => $this->fromName, 'email' => $this->fromEmail],
-                'to'          => [['email' => $correo]],
-                'subject'     => $asunto,
-                'textContent' => $cuerpo,
-            ],
+            'json'        => $json,
             'http_errors' => false,
         ]);
 

@@ -57,6 +57,11 @@ class AsesoriaController extends BaseController
 
         $filas = $builder->orderBy('sa.created_at', 'DESC')->get()->getResultArray();
         $filas = array_map([$this, 'resolverAsistenciaSiCorresponde'], $filas);
+        // Cierra los chats a los que se les acabó el tiempo sin que el asesor le diera a "Finalizar"
+        // (ver resolverChatVencidoSiCorresponde). Va acá, y no en un cron, por el mismo motivo que
+        // la resolución de asistencia de las videollamadas: este listado lo consultan el alumno y el
+        // asesor todo el tiempo.
+        $filas = array_map([$this, 'resolverChatVencidoSiCorresponde'], $filas);
 
         return $this->response->setJSON($this->dtosSolicitudes($filas));
     }
