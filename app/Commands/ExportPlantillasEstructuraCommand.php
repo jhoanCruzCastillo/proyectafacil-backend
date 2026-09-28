@@ -41,7 +41,7 @@ class ExportPlantillasEstructuraCommand extends BaseCommand
         ], $plantillasFilas);
 
         $ejemplosFilas = $db->table('ejemplos e')
-            ->select('e.id, e.nombre, e.subtitulo, e.detalle, e.activo, e.compartida, e.estado, p.codigo as plantilla_codigo, a.contenido_json')
+            ->select('e.id, e.nombre, e.subtitulo, e.detalle, e.activo, e.compartida, e.estado, e.es_referencia_ia, e.fuente_verdad_texto, p.codigo as plantilla_codigo, a.contenido_json')
             ->join('plantillas p', 'p.id = e.plantilla_id')
             ->join('archivos a', 'a.ejemplo_id = e.id', 'left')
             ->where('e.propietario_usuario_id IS NULL', null, false)
@@ -63,6 +63,8 @@ class ExportPlantillasEstructuraCommand extends BaseCommand
                 'activo'          => (bool) $f['activo'],
                 'compartida'      => (bool) $f['compartida'],
                 'estado'          => $f['estado'],
+                'esReferenciaIA'  => (bool) $f['es_referencia_ia'],
+                'fuenteVerdadTexto' => $f['fuente_verdad_texto'],
                 'tipologiasIoarr' => $tipologiasPorEjemplo[(int) $f['id']] ?? [],
                 'contenidoJson'   => $f['contenido_json'] !== null ? json_decode($f['contenido_json']) : null,
             ];
