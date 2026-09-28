@@ -24,6 +24,9 @@ class CandidatosController extends BaseController
 {
     private const ESTADOS = ['registrado', 'en_evaluacion', 'para_entrevista', 'aprobado', 'desaprobado'];
 
+    /** dia_semana (1=lunes..6=sábado, igual que candidato_disponibilidad) → etiqueta del Excel. */
+    private const DIAS_CORTOS = [1 => 'Lun', 2 => 'Mar', 3 => 'Mié', 4 => 'Jue', 5 => 'Vie', 6 => 'Sáb'];
+
     /** Público: recibe el wizard completo de /registro-especialista. */
     public function postular(): ResponseInterface
     {
@@ -526,7 +529,14 @@ class CandidatosController extends BaseController
         } catch (Throwable $e) {
             return $this->response->setStatusCode(400)->setJSON(['error' => 'No se pudo leer el archivo. Verifica que sea un .xlsx válido.']);
         }
-        array_shift($filas); // fila 1 = encabezados
+        $encabezados = array_shift($filas); // fila 1 = encabezados
+
+        // El Excel de "Exportar a Excel" (Nombre, DNI, Correo, … 19 columnas) es una copia de
+        // respaldo de `candidatos`: se reconoce por sus dos primeros encabezados y se restaura como
+        // candidatos, no como asesores. El formato corto de 4 columnas sigue siendo la carga masiva.
+        if ($this->esExcelDeRespaldo(is_array($encabezados) ? $encabezados : [])) {
+            return $this->restaurarCandidatosDesdeExcel($filas);
+        }
 
         $db = db_connect();
         $sectoresPorNombre = [];
@@ -586,7 +596,161 @@ class CandidatosController extends BaseController
             $creados++;
         }
 
-        return $this->response->setJSON(['creados' => $creados, 'omitidos' => $omitidos]);
+        return $this->response->setJSON(['creados' => $creados, 'omitidos' => $omitidos, 'tipo' => 'asesores']);
+    }
+
+    private function esExcelDeRespaldo(array $encabezados): bool
+    {
+        return $this->normalizarClave((string) ($encabezados[0] ?? '')) === 'nombre'
+            && $this->normalizarClave((string) ($encabezados[1] ?? '')) === 'dni';
+    }
+
+    /** '—' es lo que escribe el export para "vacío" — al volver a leerlo es vacío de verdad. */
+    private static function celdaRespaldo(mixed $valor): string
+    {
+        $t = trim((string) ($valor ?? ''));
+
+        return $t === '—' ? '' : $t;
+    }
+
+    /**
+     * Restaura candidatos desde el Excel que genera exportarExcel() (mismo orden de columnas,
+     * EXCEL_ENCABEZADOS). Es una copia de respaldo: los que ya existen (mismo correo o DNI, ya sea
+     * como candidato o como usuario) se omiten sin tocarlos — nunca pisa datos vivos.
+     *
+     * Lo que el Excel no puede traer y por eso NO se restaura: el archivo del CV (el Excel solo
+     * lleva un hipervínculo), la contraseña de postulación (nunca se exporta; se guarda un hash
+     * aleatorio descartado) y las notas internas. Un candidato 'aprobado' vuelve sin cuenta de
+     * usuario — el botón "promover" de la fila la crea.
+     */
+    private function restaurarCandidatosDesdeExcel(array $filas): ResponseInterface
+    {
+        $db = db_connect();
+
+        $catalogoTemas = [];
+        foreach ($db->table('temas_especialidad')->select('id, nombre')->get()->getResultArray() as $t) {
+            $catalogoTemas[(int) $t['id']] = $this->normalizarClave($t['nombre']);
+        }
+        $estadoPorEtiqueta = [];
+        foreach (self::ESTADOS as $e) {
+            $estadoPorEtiqueta[$this->normalizarClave(self::etiquetaEstado($e))] = $e;
+        }
+        $diaPorEtiqueta = array_flip(array_map(fn (string $d) => $this->normalizarClave($d), self::DIAS_CORTOS));
+
+        $creados  = 0;
+        $omitidos = [];
+        $numeroFila = 1;
+        foreach ($filas as $f) {
+            $numeroFila++;
+            $nombre   = self::celdaRespaldo($f[0] ?? '');
+            $dni      = self::celdaRespaldo($f[1] ?? '');
+            $correo   = self::celdaRespaldo($f[2] ?? '');
+            if ($nombre === '' && $dni === '' && $correo === '') {
+                continue; // fila en blanco
+            }
+            if ($nombre === '' || $dni === '' || ! filter_var($correo, FILTER_VALIDATE_EMAIL)) {
+                $omitidos[] = ['fila' => $numeroFila, 'motivo' => 'Falta el nombre o el DNI, o el correo no es válido'];
+                continue;
+            }
+            if ($this->correoExisteEn('usuarios', $correo) || $this->correoExisteEn('candidatos', $correo)) {
+                $omitidos[] = ['fila' => $numeroFila, 'motivo' => "Correo ya registrado ({$correo})"];
+                continue;
+            }
+            if ($db->table('candidatos')->where('dni', $dni)->countAllResults() > 0) {
+                $omitidos[] = ['fila' => $numeroFila, 'motivo' => "DNI ya registrado ({$dni})"];
+                continue;
+            }
+
+            $nivel = self::celdaRespaldo($f[8] ?? '');
+            if (! in_array($nivel, ['Especialista', 'Senior', 'Altamente especializado'], true)) {
+                $omitidos[] = ['fila' => $numeroFila, 'motivo' => "Nivel de especialidad no reconocido ({$nivel})"];
+                continue;
+            }
+            $estado = $estadoPorEtiqueta[$this->normalizarClave(self::celdaRespaldo($f[17] ?? ''))] ?? 'registrado';
+
+            // Separador ";" (el export nuevo). Solo un Excel exportado antes de este cambio —que
+            // unía con ", "— cae al split por coma; con ";" presente, una coma es parte del nombre.
+            $textoActividades = self::celdaRespaldo($f[11] ?? '');
+            $actividades = array_values(array_filter(array_map(
+                'trim',
+                explode(str_contains($textoActividades, ';') ? ';' : ',', $textoActividades),
+            )));
+            $fechaTexto  = self::celdaRespaldo($f[18] ?? '');
+            $creadoEn    = ($fechaTexto !== '' && strtotime($fechaTexto) !== false) ? date('Y-m-d H:i:s', strtotime($fechaTexto)) : date('Y-m-d H:i:s');
+
+            // Temas: se buscan por nombre dentro del texto (no por split) porque un nombre del
+            // catálogo puede llevar comas.
+            $textoTemas = $this->normalizarClave(self::celdaRespaldo($f[9] ?? ''));
+            $temaIds = [];
+            if ($textoTemas !== '') {
+                foreach ($catalogoTemas as $id => $nombreTema) {
+                    if (str_contains($textoTemas, $nombreTema)) {
+                        $temaIds[] = $id;
+                    }
+                }
+            }
+
+            $nulable = static fn (string $v): ?string => $v !== '' ? $v : null;
+            try {
+            $db->transStart();
+            $db->table('candidatos')->insert([
+                'nombre'             => $nombre,
+                'dni'                => $dni,
+                'correo'             => $correo,
+                'telefono'           => self::celdaRespaldo($f[3] ?? ''),
+                'password_hash'      => password_hash(bin2hex(random_bytes(16)), PASSWORD_DEFAULT),
+                'profesion'          => self::celdaRespaldo($f[4] ?? ''),
+                'nivel_academico'    => self::celdaRespaldo($f[5] ?? ''),
+                'colegiatura'        => $nulable(self::celdaRespaldo($f[6] ?? '')),
+                'anios_experiencia'  => self::celdaRespaldo($f[7] ?? ''),
+                'nivel_especialidad' => $nivel,
+                'otros_temas'        => $nulable(self::celdaRespaldo($f[10] ?? '')),
+                'actividades'        => json_encode($actividades, JSON_UNESCAPED_UNICODE),
+                'cv_url'             => '',
+                'cv_nombre_original' => '',
+                'linkedin'           => $nulable(self::celdaRespaldo($f[13] ?? '')),
+                'otras_redes'        => $nulable(self::celdaRespaldo($f[14] ?? '')),
+                'comentarios'        => $nulable(self::celdaRespaldo($f[15] ?? '')),
+                'estado'             => $estado,
+                'created_at'         => $creadoEn,
+                'updated_at'         => date('Y-m-d H:i:s'),
+            ]);
+            $candidatoId = (int) $db->insertID();
+
+            foreach ($temaIds as $temaId) {
+                $db->table('candidato_temas_especialidad')->ignore(true)->insert(['candidato_id' => $candidatoId, 'tema_id' => $temaId]);
+            }
+            // "Lun 08:00; Mié 14:00" → (1, 08:00), (3, 14:00). Un export viejo traía solo un
+            // conteo numérico en esta columna: no coincide con ningún patrón y no se restaura nada.
+            foreach (explode(';', self::celdaRespaldo($f[12] ?? '')) as $bloque) {
+                if (! preg_match('/^\s*(\S+)\s+(\d{1,2}):(\d{2})\s*$/u', $bloque, $m)) {
+                    continue;
+                }
+                $dia = $diaPorEtiqueta[$this->normalizarClave($m[1])] ?? null;
+                if ($dia === null) {
+                    continue;
+                }
+                $db->table('candidato_disponibilidad')->ignore(true)->insert([
+                    'candidato_id' => $candidatoId,
+                    'dia_semana'   => $dia,
+                    'hora_inicio'  => sprintf('%02d:%02d:00', (int) $m[2], (int) $m[3]),
+                ]);
+            }
+            $db->transComplete();
+            } catch (Throwable $e) {
+                $db->transRollback();
+                $omitidos[] = ['fila' => $numeroFila, 'motivo' => 'No se pudo guardar el registro'];
+                continue;
+            }
+
+            if (! $db->transStatus()) {
+                $omitidos[] = ['fila' => $numeroFila, 'motivo' => 'No se pudo guardar el registro'];
+                continue;
+            }
+            $creados++;
+        }
+
+        return $this->response->setJSON(['creados' => $creados, 'omitidos' => $omitidos, 'tipo' => 'candidatos']);
     }
 
     private function normalizarClave(string $texto): string
@@ -719,10 +883,20 @@ class CandidatosController extends BaseController
             foreach ($temas as $t) {
                 $temasPorCandidato[(int) $t['candidato_id']][] = $t['tema_nombre'];
             }
-            $bloques = $db->table('candidato_disponibilidad')->select('candidato_id')->whereIn('candidato_id', $ids)->get()->getResultArray();
+            // Un bloque por celda del calendario ("Lun 08:00") — texto legible Y reimportable: el
+            // Excel sirve de copia de respaldo (ver restaurarCandidatosDesdeExcel), así que ya no
+            // alcanza con el conteo.
+            $bloques = $db->table('candidato_disponibilidad')
+                ->select('candidato_id, dia_semana, hora_inicio')
+                ->whereIn('candidato_id', $ids)
+                ->orderBy('dia_semana')->orderBy('hora_inicio')
+                ->get()->getResultArray();
             foreach ($bloques as $b) {
-                $cid = (int) $b['candidato_id'];
-                $bloquesPorCandidato[$cid] = ($bloquesPorCandidato[$cid] ?? 0) + 1;
+                $etiquetaDia = self::DIAS_CORTOS[(int) $b['dia_semana']] ?? null;
+                if ($etiquetaDia === null) {
+                    continue;
+                }
+                $bloquesPorCandidato[(int) $b['candidato_id']][] = $etiquetaDia . ' ' . substr((string) $b['hora_inicio'], 0, 5);
             }
         }
 
@@ -742,14 +916,16 @@ class CandidatosController extends BaseController
 
         $fila = 2;
         foreach ($filas as $c) {
-            $temas       = implode(', ', $temasPorCandidato[(int) $c['id']] ?? []);
-            $actividades = implode(', ', json_decode((string) $c['actividades'], true) ?? []);
-            $bloques     = $bloquesPorCandidato[(int) $c['id']] ?? 0;
+            // Separador "; " (no ", "): un tema del catálogo se llama "Obras por Impuestos, APP y
+            // PA", y con coma la importación no podría distinguir dónde termina cada tema.
+            $temas       = implode('; ', $temasPorCandidato[(int) $c['id']] ?? []);
+            $actividades = implode('; ', json_decode((string) $c['actividades'], true) ?? []);
+            $bloques     = implode('; ', $bloquesPorCandidato[(int) $c['id']] ?? []);
 
             $sheet->fromArray([
                 $c['nombre'], $c['dni'], $c['correo'], $c['telefono'], $c['profesion'],
                 $c['nivel_academico'], $c['colegiatura'] ?: '—', $c['anios_experiencia'], $c['nivel_especialidad'],
-                $temas ?: '—', $c['otros_temas'] ?: '—', $actividades ?: '—', $bloques,
+                $temas ?: '—', $c['otros_temas'] ?: '—', $actividades ?: '—', $bloques ?: '—',
                 $c['linkedin'] ?: '—', $c['otras_redes'] ?: '—', $c['comentarios'] ?: '—',
                 '', // CV: se completa abajo como hipervínculo real, no como texto plano.
                 self::etiquetaEstado($c['estado']), $c['created_at'],
@@ -787,7 +963,7 @@ class CandidatosController extends BaseController
         }
         // Temas/otros temas/actividades/comentarios pueden ser largos — autosize los dejaría
         // kilométricos, mejor un ancho fijo generoso con wrap (ya activado arriba).
-        foreach (['J', 'K', 'L', 'P'] as $col) {
+        foreach (['J', 'K', 'L', 'M', 'P'] as $col) {
             $sheet->getColumnDimension($col)->setAutoSize(false)->setWidth(40);
         }
 
