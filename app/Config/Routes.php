@@ -13,6 +13,11 @@ $routes->group('api', static function (RouteCollection $routes) {
     $routes->post('auth/registro', 'AuthController::register');
     $routes->get('auth/verificar/(:segment)', 'AuthController::verificar/$1');
 
+    // Estado de mantenimiento (público, sin sesión) — el frontend lo consulta al arrancar la SPA,
+    // antes de saber si hay sesión, para poder redirigir incluso a un visitante sin cuenta. Ver
+    // Config\Mantenimiento / EstadoSistemaController.
+    $routes->get('estado-sistema', 'EstadoSistemaController::index');
+
     // Catálogo de sectores MEF (público) — legacy / otros usos. El paso 2 del registro usa
     // temas-especialidad/publico (lista ILPIIE anidada tema→subtema).
     $routes->get('sectores/publico', 'SectoresController::index');
@@ -99,6 +104,7 @@ $routes->group('api', ['filter' => 'auth'], static function (RouteCollection $ro
 
     $routes->get('usuarios', 'UsuariosController::index');
     $routes->post('usuarios', 'UsuariosController::create');
+    $routes->get('usuarios/plantilla-alumnos', 'UsuariosController::plantillaAlumnosExcel');
     $routes->post('usuarios/importar-alumnos', 'UsuariosController::importarAlumnosExcel');
     $routes->get('cursos', 'CursosController::index');
     $routes->post('cursos', 'CursosController::create');

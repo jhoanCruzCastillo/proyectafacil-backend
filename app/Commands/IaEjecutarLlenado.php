@@ -28,6 +28,15 @@ class IaEjecutarLlenado extends BaseCommand
 
     public function run(array $params)
     {
+        // El llenado abre el Excel real de la plantilla para resolver las listas desplegables que
+        // solo existen en la validación de datos de cada celda (ver
+        // LlenadoIAController::completarOpcionesDesdeExcel). Medido sobre el libro de
+        // FTE-DESARROLLO-PROD (29,8 MB): ~586 MB de pico, por encima del memory_limit de 512M que
+        // trae el CLI por defecto — sin esto el worker moría con un fatal de memoria agotada, que
+        // además NO es capturable por el try/catch de abajo. 1G deja margen para libros mayores;
+        // si aparece uno que tampoco entre, esta es la perilla.
+        ini_set('memory_limit', '1G');
+
         $trabajoId = isset($params[0]) ? (int) $params[0] : null;
         if (! $trabajoId) {
             CLI::error('Uso: ' . $this->usage);
@@ -140,14 +149,21 @@ class IaEjecutarLlenado extends BaseCommand
         ]);
         CLI::write("Trabajo {$trabajoId}: completado — {$camposCompletados} campos, USD " . round($resultado['costoTotalUsd'] ?? 0.0, 4), 'green');
 
-        $this->avisar((int) $trabajo['ejemplo_id'], (int) ($trabajo['usuario_id'] ?? 0), $camposCompletados, $resultado['costoTotalUsd'] ?? 0.0);
+        $this->avisar((int) $trabajo['ejemplo_id'], (int) ($trabajo['usuario_id'] ?? 0), $camposCompletados, $resultado['secciones'] ?? [], $resultado['tablas'] ?? []);
 
         return EXIT_SUCCESS;
     }
 
     /** Notificación in-app + correo — un fallo de cualquiera de los dos no debe tumbar el resultado
-     * ya guardado (mismo criterio que UsuariosController::enviarAccesos). */
-    private function avisar(int $ejemploId, int $usuarioId, int $camposCompletados, float $costoUsd): void
+     * ya guardado (mismo criterio que UsuariosController::enviarAccesos).
+     *
+     * @param  list<array{nombre?: string, llenados?: int}> $secciones Mismo shape que
+     *         ResultadoLlenadoIA.secciones (frontend) — campos de TEXTO por sección.
+     * @param  list<array{error?: string, seccionId?: string, nombreSeccion?: string}> $tablas Mismo
+     *         shape que el `tablas` de procesarResultadosLote() — una sección llenada SOLO con tablas
+     *         (sin ningún campo de texto) nunca aparece en `$secciones`, solo acá.
+     */
+    private function avisar(int $ejemploId, int $usuarioId, int $camposCompletados, array $secciones, array $tablas = []): void
     {
         $db      = db_connect();
         $ejemplo = $db->table('ejemplos')->where('id', $ejemploId)->get()->getRowArray();
@@ -171,12 +187,30 @@ class IaEjecutarLlenado extends BaseCommand
             return;
         }
 
+        // Nada de costo en USD en el correo (detalle técnico interno, ver `costo_usd` en BD) — el
+        // cliente solo necesita saber QUÉ secciones se llenaron, y el link va directo a ESTA ficha.
+        // Dos fuentes, porque una sección llenada SOLO con tablas (sin ningún campo de texto) no
+        // aparece en `$secciones` — encontrado en vivo (2026-09-28): una ficha de puras tablas
+        // (FTE-DESARROLLO-PROD) mandó "13 campos completados" pero la lista de secciones salía
+        // vacía porque solo se miraba `$secciones`.
+        $nombresDeTexto = array_map(
+            static fn (array $s): string => (string) ($s['nombre'] ?? ''),
+            array_filter($secciones, static fn (array $s): bool => (int) ($s['llenados'] ?? 0) > 0),
+        );
+        $nombresDeTablas = array_map(
+            static fn (array $t): string => (string) ($t['nombreSeccion'] ?? ''),
+            array_filter($tablas, static fn (array $t): bool => ! isset($t['error'])),
+        );
+        $seccionesLlenadas = array_values(array_filter(array_unique(array_merge($nombresDeTexto, $nombresDeTablas))));
+        $urlFicha = rtrim(config(\Config\Stripe::class)->frontendBaseUrl, '/') . "/mis-fichas/{$ejemploId}";
+
         try {
             (new CorreoService())->enviarLlenadoIACompletado(
                 $usuario['correo'],
                 (string) $usuario['nombre'],
                 $nombreFicha,
-                "Se completaron {$camposCompletados} campos (costo estimado de la IA: USD " . number_format($costoUsd, 4) . ').',
+                $seccionesLlenadas,
+                $urlFicha,
             );
             CLI::write("Correo enviado a {$usuario['correo']}.", 'green');
         } catch (Throwable $e) {

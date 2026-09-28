@@ -664,6 +664,8 @@ class LlenadoIAController extends BaseController
         }
 
         $columnasConSubcolumnas = $this->columnasConSubcolumnasDe($columnas);
+        $plantillaFila          = $this->plantillaFilaDe($subtipo, $agrupador, $columnas);
+        $puedeCrecerTabla       = $this->puedeCrecer($subtipo, $agrupador, $columnas);
 
         // Reintento automático (encontrado en vivo 2026-09-09): sobre un lote real de 23 tablas, 3
         // fallaron por forma incorrecta (nodo de árbol mal armado, o filas de más) y las 3 pasaron sin
@@ -686,7 +688,7 @@ class LlenadoIAController extends BaseController
             }
 
             $valorPropuesto = $respuesta['valor'];
-            $resultado      = $this->validarFormaTabla($valorActual, $valorPropuesto['valor'] ?? null, $columnasCalculadas, $ultimaColumnaCalculada, $catalogoPorColumna, $columnaIdPorProfundidad, $columnasConSubcolumnas);
+            $resultado      = $this->validarFormaTabla($valorActual, $valorPropuesto['valor'] ?? null, $columnasCalculadas, $ultimaColumnaCalculada, $catalogoPorColumna, $columnaIdPorProfundidad, $columnasConSubcolumnas, $plantillaFila, $puedeCrecerTabla);
             // Para las 3 tablas de UBIGEO: la columna "ubigeo" ya llegó vacía en TODAS las filas (ver
             // limpiarUbigeoCrudoDeValorActual arriba) — cualquier código de 6 dígitos en la propuesta es
             // entonces del modelo mismo, no un dato preexistente. Encontrado en vivo (2026-09-09): pese a
@@ -715,7 +717,7 @@ class LlenadoIAController extends BaseController
             // TODA la tabla por una sola columna que el cliente puede completar a mano en segundos.
             if ($resultado !== null && in_array($identificador, self::TABLAS_UBIGEO, true)) {
                 [$valorLimpio, $advertenciaCodigo] = $this->limpiarCodigosUbigeoCrudos($valorPropuesto['valor'] ?? []);
-                $resultado = $this->validarFormaTabla($valorActual, $valorLimpio, $columnasCalculadas, $ultimaColumnaCalculada, $catalogoPorColumna, $columnaIdPorProfundidad, $columnasConSubcolumnas);
+                $resultado = $this->validarFormaTabla($valorActual, $valorLimpio, $columnasCalculadas, $ultimaColumnaCalculada, $catalogoPorColumna, $columnaIdPorProfundidad, $columnasConSubcolumnas, $plantillaFila, $puedeCrecerTabla);
                 if ($resultado['valido']) {
                     $resultado['advertencias'] = array_merge($resultado['advertencias'], $advertenciaCodigo);
                 }
@@ -941,7 +943,15 @@ class LlenadoIAController extends BaseController
                 $lineas[] = [
                     'customId'  => $customId,
                     'modelo'    => $config->modeloLlenadoActivo(),
-                    'maxTokens' => 8000,
+                    // 32000 y no 8000 por el mismo motivo que las tablas (ver el comentario largo en
+                    // llenarTabla()): es un TOPE, no un objetivo — una seccion chica sigue costando lo
+                    // mismo. 8000 alcanzaba mientras toda ficha repartia sus campos en varias hojas,
+                    // pero el Formato 07-C mete sus 128 campos en UNA sola seccion: encontrado en vivo
+                    // (2026-09-28, trabajo 27) el modelo corto la respuesta con finish_reason "length"
+                    // y se perdieron los ~105 campos simples de golpe — las tablas, que ya tenian el
+                    // techo alto, fueron las unicas que entraron.
+                    'maxTokens' => 32000,
+                    'timeout'   => 420,
                     'sistema'   => $sistema['variable'] !== '' ? "{$sistema['cacheable']}\n\n{$sistema['variable']}" : $sistema['cacheable'],
                     'usuario'   => $usuario,
                 ];
@@ -1035,6 +1045,8 @@ class LlenadoIAController extends BaseController
                         'catalogoPorColumna'      => $catalogoPorColumna,
                         'columnaIdPorProfundidad' => $columnaIdPorProfundidad,
                         'columnasConSubcolumnas'  => $this->columnasConSubcolumnasDe($columnas),
+                        'plantillaFila'           => $this->plantillaFilaDe($subtipo, $agrupador, $columnas),
+                        'puedeCrecer'             => $this->puedeCrecer($subtipo, $agrupador, $columnas),
                     ];
                 }
             }
@@ -1314,15 +1326,24 @@ class LlenadoIAController extends BaseController
         $excluidosTabla = self::CAMPOS_TABLA_EXCLUIDOS[$plantilla['codigo']] ?? [];
         $tablasCascada  = self::TABLAS_CASCADA_FUERA_DE_LOTE[$plantilla['codigo']] ?? [];
 
-        // Solo se descarga/carga el Excel real si esta plantilla de verdad tiene tablas de cascada —
-        // evita el costo de descarga+parseo para el resto de las fichas (ej. FTE-EBR-V03, que no usa
-        // este mecanismo en absoluto).
+        // El Excel real se carga SIEMPRE que la plantilla tenga uno asignado, no solo cuando hay
+        // tablas de cascada. Antes era condicional para ahorrarse el parseo, pero eso dejaba al
+        // modelo sin las listas desplegables de los campos simples, que viven únicamente en la
+        // validación de datos de la celda (ver completarOpcionesDesdeExcel y el caso 1.04.04).
+        //
+        // Costo medido sobre el libro de FTE-DESARROLLO-PROD (29,8 MB): 25,9 s y ~586 MB de pico al
+        // abrirlo, y 0,03 s por celda después. Se paga UNA vez por trabajo, dentro de un worker que
+        // ya tarda minutos y no tiene timeout de gateway — no en cada petición. Si falla (memoria,
+        // tiempo, archivo ilegible) se sigue sin Excel, que es exactamente el comportamiento previo.
         $excelVivo = null;
-        if ($tablasCascada !== [] && ! empty($plantilla['asignado_archivo_id'])) {
+        if (! empty($plantilla['asignado_archivo_id'])) {
             $archivoPlantilla = db_connect()->table('archivos')->where('id', $plantilla['asignado_archivo_id'])->get()->getRowArray();
-            if ($archivoPlantilla !== null && \App\Libraries\S3ObjectStore::esStoredS3($archivoPlantilla['url'])) {
+            if ($archivoPlantilla !== null) {
                 try {
-                    $rutaLocal = (new \App\Libraries\S3ObjectStore())->descargarATemp($archivoPlantilla['url']);
+                    $rutaLocal = $this->descargarExcelPlantillaATemp((string) ($archivoPlantilla['url'] ?? ''));
+                    if ($rutaLocal === null) {
+                        throw new \RuntimeException('URL de Excel no reconocida: ' . mb_substr((string) ($archivoPlantilla['url'] ?? ''), 0, 80));
+                    }
                     $excelVivo = new ExcelVivoService($rutaLocal);
                     // Deja el libro en el mismo estado que tiene la ficha antes de resolver cascadas —
                     // solo campos simples (captura columna/fila directa), no tablas: es lo único que
@@ -1345,7 +1366,7 @@ class LlenadoIAController extends BaseController
                     }
                     @unlink($rutaLocal);
                 } catch (\Throwable $e) {
-                    log_message('warning', '[llenado-ia-async] No se pudo cargar el Excel real para resolver cascadas ({codigo}): {msg}', [
+                    log_message('warning', '[llenado-ia-async] No se pudo cargar el Excel real ({codigo}): {msg} — se sigue sin listas del Excel ni cascadas.', [
                         'codigo' => $plantilla['codigo'], 'msg' => $e->getMessage(),
                     ]);
                     $excelVivo = null;
@@ -1371,7 +1392,14 @@ class LlenadoIAController extends BaseController
 
         foreach ($secciones as $seccion) {
             $seccionId = (string) ($seccion['id'] ?? '');
-            $campos    = $this->camposLlenables($seccion);
+            // Con las opciones del Excel ya resueltas: construirPromptSeccion() las dicta
+            // ("— opciones válidas: …") y `opcionesPorIdentificador` del mapeo hace que
+            // matchearOpcionOpcional() descarte cualquier respuesta fuera de esa lista.
+            $campos = $this->completarOpcionesDesdeExcel(
+                $this->camposLlenables($seccion),
+                (string) ($seccion['hoja'] ?? ''),
+                $excelVivo,
+            );
 
             if ($campos !== []) {
                 $contextoSeccion = $this->contextoDeSeccion($plantillaId, $seccionId);
@@ -1384,7 +1412,15 @@ class LlenadoIAController extends BaseController
                 $lineas[] = [
                     'customId'  => $customId,
                     'modelo'    => $config->modeloLlenadoActivo(),
-                    'maxTokens' => 8000,
+                    // 32000 y no 8000 por el mismo motivo que las tablas (ver el comentario largo en
+                    // llenarTabla()): es un TOPE, no un objetivo — una seccion chica sigue costando lo
+                    // mismo. 8000 alcanzaba mientras toda ficha repartia sus campos en varias hojas,
+                    // pero el Formato 07-C mete sus 128 campos en UNA sola seccion: encontrado en vivo
+                    // (2026-09-28, trabajo 27) el modelo corto la respuesta con finish_reason "length"
+                    // y se perdieron los ~105 campos simples de golpe — las tablas, que ya tenian el
+                    // techo alto, fueron las unicas que entraron.
+                    'maxTokens' => 32000,
+                    'timeout'   => 420,
                     'sistema'   => $sistema['variable'] !== '' ? "{$sistema['cacheable']}\n\n{$sistema['variable']}" : $sistema['cacheable'],
                     'usuario'   => $usuario,
                 ];
@@ -1471,14 +1507,19 @@ class LlenadoIAController extends BaseController
 
                     $mapeo[$customId] = [
                         'tipo' => 'tabla', 'identificador' => $identificador, 'modelo' => $modeloTabla,
-                        // A qué sección pertenece esta tabla: procesarResultadosLote() no lo necesita,
-                        // pero el progreso por sección sí — sin esto, una unidad `tabla__X` que
-                        // aterriza no tiene forma de saber en qué fila del modal sumar.
+                        // A qué sección pertenece esta tabla: procesarResultadosLote() no lo necesita
+                        // para persistir, pero el progreso por sección sí, y el correo de "llenado
+                        // completo" (ver IaEjecutarLlenado::avisar) necesita el NOMBRE para poder
+                        // listar "esta sección se llenó" aunque haya sido solo por tablas (una sección
+                        // sin ningún campo de texto nunca aparece en `secciones`, solo en `tablas`).
                         'seccionId' => $seccionId,
+                        'nombre'    => (string) ($seccion['nombre'] ?? ''),
                         'valorActual' => $valorActual, 'columnasCalculadas' => $columnasCalculadas,
                         'ultimaColumnaCalculada' => $ultimaColumnaCalculada, 'catalogoPorColumna' => $catalogoPorColumna,
                         'columnaIdPorProfundidad' => $columnaIdPorProfundidad,
                         'columnasConSubcolumnas' => $this->columnasConSubcolumnasDe($columnas),
+                        'plantillaFila' => $this->plantillaFilaDe($subtipo, $agrupador, $columnas),
+                        'puedeCrecer' => $this->puedeCrecer($subtipo, $agrupador, $columnas),
                     ];
                 }
             }
@@ -1692,6 +1733,8 @@ class LlenadoIAController extends BaseController
                 $meta['catalogoPorColumna'],
                 $meta['columnaIdPorProfundidad'],
                 $meta['columnasConSubcolumnas'] ?? [],
+                $meta['plantillaFila'] ?? null,
+                (bool) ($meta['puedeCrecer'] ?? false),
             );
             if (! $resultado['valido']) {
                 log_message('warning', '[llenado-ia-lote] tabla {id} rechazada: {motivo}', ['id' => $identificador, 'motivo' => $resultado['motivo']]);
@@ -1708,6 +1751,9 @@ class LlenadoIAController extends BaseController
                 'advertencias'  => $resultado['advertencias'],
                 'fuente'        => mb_substr(trim((string) ($propuesta['valor']['fuente'] ?? '')), 0, 240),
                 'costoUsd'      => round($propuesta['costoUsd'] ?? 0.0, 5),
+                // Ver comentario en el armado de $mapeo (tipo 'tabla') sobre por qué hace falta acá.
+                'seccionId'     => $meta['seccionId'] ?? null,
+                'nombreSeccion' => (string) ($meta['nombre'] ?? ''),
             ];
             if ($persistirTablas) {
                 // Mismo formato que usa el resto de la app para el valor de un campo tabla: JSON
@@ -2316,7 +2362,17 @@ class LlenadoIAController extends BaseController
             $lineas[] = 'Es una tabla de filas agrupadas en bloques con título: "valor" es un array de bloques {"grupo": "<título, no lo cambies>", "filas": [ {mismas claves de columna que arriba}, ... ]}.' .
                 ' No agregues ni quites bloques ni filas dentro de cada bloque.';
         } else {
-            $lineas[] = 'Es una tabla de filas simples: "valor" es un array de objetos, cada uno con EXACTAMENTE las claves de columna listadas arriba. No cambies la cantidad de filas.';
+            // La cantidad de filas la fija el formulario SALVO en las tablas genuinamente dinámicas
+            // (ver puedeCrecer()). Decirle "no cambies la cantidad" a una tabla que sí puede
+            // crecer es lo que hacía que el modelo apretara 4 activos en 2 celdas separadas por ";".
+            $lineas[] = $this->puedeCrecer($subtipo, $agrupador, $columnas)
+                ? 'Es una tabla de filas simples: "valor" es un array de objetos, cada uno con EXACTAMENTE las '
+                    . 'claves de columna listadas arriba. La cantidad de filas la decide la EVIDENCIA, no el molde: '
+                    . 'usa UNA FILA POR CADA elemento que encuentres en la fuente de la verdad — agrega las filas que '
+                    . 'hagan falta si son más que las del molde, y devuelve menos si son menos. NUNCA metas dos '
+                    . 'elementos en la misma celda separados por ";" o por comas, ni dejes elementos fuera por falta '
+                    . 'de filas. Si un dato no corresponde a esta tabla, devuelve un array vacío.'
+                : 'Es una tabla de filas simples: "valor" es un array de objetos, cada uno con EXACTAMENTE las claves de columna listadas arriba. No cambies la cantidad de filas.';
         }
 
         if ($valorReferencia !== null) {
@@ -2346,6 +2402,73 @@ class LlenadoIAController extends BaseController
     }
 
     /**
+     * Plantilla de fila vacía (todas las claves de columna, todas en cadena vacía) de una tabla de
+     * filas simples, o null si esta tabla no es de esa forma.
+     *
+     * Sirve para DOS cosas distintas, y conviene no confundirlas:
+     *   a) como MOLDE DE FORMA, para validar una fila cuyo valor guardado no sirve de referencia;
+     *   b) junto con puedeCrecer(), para permitir que la tabla cambie de número de filas.
+     *
+     * Por qué hace falta: compararForma() exige por defecto la misma cantidad de filas que ya tiene
+     * la tabla, y eso es correcto para las tablas cuyas filas son del formato (Sí/No, "Expediente
+     * técnico / Supervisión / Liquidación", las opciones a..f de un objetivo). Pero hay tablas que
+     * son genuinamente de N filas — los activos de una IOARR, la matriz de involucrados, el
+     * cronograma por actividad — y ahí el tope rígido rechazaba respuestas correctas: encontrado en
+     * vivo (2026-09-28) con la tabla 3.02.01 del Formato 07-C, donde el expediente tiene 4 activos,
+     * el Excel sólo trae 2 filas en blanco y el modelo terminó metiendo los 4 activos apretados en
+     * 2 celdas separadas por ";".
+     *
+     * Deliberadamente fuera de alcance: `jerarquica` (su raíz es un árbol, no una lista de filas) y
+     * las tablas con agrupador (la primera capa es el título de grupo, no una fila).
+     *
+     * @param list<array<string,mixed>> $columnas
+     *
+     * @return array<string,string>|null
+     */
+    private function plantillaFilaDe(string $subtipo, bool $agrupador, array $columnas): ?array
+    {
+        if ($subtipo !== 'filas_dinamicas' || $agrupador || $columnas === []) {
+            return null;
+        }
+
+        $plantilla = [];
+        foreach ($columnas as $col) {
+            $id = (string) ($col['id'] ?? '');
+            if ($id === '') {
+                return null;
+            }
+            $plantilla[$id] = '';
+        }
+
+        return $plantilla;
+    }
+
+    /**
+     * ¿Esta tabla puede cambiar su número de filas?
+     *
+     * El discriminador es la columna CALCULADA. Si alguna columna la calcula el Excel, la identidad
+     * de cada fila la pone el formulario (es la columna que lleva el rótulo, o una fórmula que vive
+     * en esa celda concreta) y crear filas nuevas no tendría con qué llenarla. Si NINGUNA columna es
+     * calculada, todas las celdas son del usuario y las filas son de verdad dinámicas.
+     *
+     * @param list<array<string,mixed>> $columnas
+     */
+    private function puedeCrecer(string $subtipo, bool $agrupador, array $columnas): bool
+    {
+        if ($this->plantillaFilaDe($subtipo, $agrupador, $columnas) === null) {
+            return false;
+        }
+
+        foreach ($columnas as $col) {
+            if (($col['tipo'] ?? '') === 'calculado') {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
      * Compara la forma de la respuesta del modelo contra la tabla actual y sanea/rechaza. No acepta
      * en silencio una forma parcialmente incorrecta: cualquier discrepancia estructural rechaza toda la
      * respuesta con un motivo específico.
@@ -2356,11 +2479,11 @@ class LlenadoIAController extends BaseController
      * @param list<string> $columnasConSubcolumnas ver compararForma().
      * @return array{valido: bool, motivo?: string, valorSaneado?: mixed, advertencias: list<string>}
      */
-    private function validarFormaTabla(mixed $actual, mixed $propuesto, array $columnasCalculadas, bool $ultimaColumnaCalculada, array $catalogoPorColumna = [], array $columnaIdPorProfundidad = [], array $columnasConSubcolumnas = []): array
+    private function validarFormaTabla(mixed $actual, mixed $propuesto, array $columnasCalculadas, bool $ultimaColumnaCalculada, array $catalogoPorColumna = [], array $columnaIdPorProfundidad = [], array $columnasConSubcolumnas = [], ?array $plantillaFila = null, bool $puedeCrecer = false): array
     {
         $advertencias = [];
         try {
-            $saneado = $this->compararForma($actual, $propuesto, $columnasCalculadas, $ultimaColumnaCalculada, 'valor', $advertencias, $catalogoPorColumna, $columnaIdPorProfundidad, 0, $columnasConSubcolumnas);
+            $saneado = $this->compararForma($actual, $propuesto, $columnasCalculadas, $ultimaColumnaCalculada, 'valor', $advertencias, $catalogoPorColumna, $columnaIdPorProfundidad, 0, $columnasConSubcolumnas, $plantillaFila, $puedeCrecer);
         } catch (\RuntimeException $e) {
             return ['valido' => false, 'motivo' => $e->getMessage(), 'advertencias' => []];
         }
@@ -2409,11 +2532,39 @@ class LlenadoIAController extends BaseController
      *   es para columnas 100% calculadas SIEMPRE; esta es para columnas donde la mayoría de filas son
      *   calculadas pero alguna fila específica (forma de texto plano, no de objeto) sigue editable.
      */
-    private function compararForma(mixed $actual, mixed $propuesto, array $columnasCalculadas, bool $ultimaColumnaCalculada, string $ruta, array &$advertencias, array $catalogoPorColumna = [], array $columnaIdPorProfundidad = [], int $profundidad = 0, array $columnasConSubcolumnas = []): mixed
+    private function compararForma(mixed $actual, mixed $propuesto, array $columnasCalculadas, bool $ultimaColumnaCalculada, string $ruta, array &$advertencias, array $catalogoPorColumna = [], array $columnaIdPorProfundidad = [], int $profundidad = 0, array $columnasConSubcolumnas = [], ?array $plantillaFila = null, bool $puedeCrecer = false): mixed
     {
         if (is_array($actual) && array_is_list($actual)) {
             if (! is_array($propuesto) || ! array_is_list($propuesto)) {
                 throw new \RuntimeException("En \"{$ruta}\": se esperaba una lista y la IA devolvió otra cosa.");
+            }
+            // Tabla de filas genuinamente dinámicas (ver puedeCrecer()): la cantidad de filas
+            // la decide la evidencia, no el formulario, así que acá NO se exige que coincida. Cada fila
+            // propuesta se valida igual de estricto, pero contra la PLANTILLA de fila (todas las claves
+            // de columna, todas vacías) en vez de contra la fila N del valor actual — que puede no
+            // existir, o existir degenerada. Solo aplica en la raíz: hacia adentro se sigue exigiendo
+            // la forma exacta, por eso la recursión de abajo pasa null.
+            if ($plantillaFila !== null && $puedeCrecer && $ruta === 'valor') {
+                // Encoger también está permitido, y a propósito NO se protege el contenido que quedaría
+                // fuera. Se intentó (2026-09-28) rechazar la respuesta cuando descartaba filas con texto,
+                // y resultó contraproducente: el molde de varias tablas trae filas de RELLENO del propio
+                // Excel ("Activo 1".."Activo 6" en 6.01.01), que la guarda leía como trabajo del usuario
+                // y hacía rebotar respuestas correctas. Tampoco protegía nada real: como estas tablas no
+                // tienen ninguna columna calculada, el modelo ya podía vaciar cualquier celda sin tocar
+                // el número de filas. Quien cuida el contenido existente es la instrucción del prompt,
+                // no el conteo.
+                $out = [];
+                foreach ($propuesto as $i => $fila) {
+                    $base  = $actual[$i] ?? $plantillaFila;
+                    // Una fila guardada sin claves de columna (`{}`, que en PHP llega como `[]`) no
+                    // sirve de molde y además array_is_list() la toma por lista: se usa la plantilla.
+                    if (! is_array($base) || $base === []) {
+                        $base = $plantillaFila;
+                    }
+                    $out[] = $this->compararForma($base, $fila, $columnasCalculadas, $ultimaColumnaCalculada, "{$ruta}[{$i}]", $advertencias, $catalogoPorColumna, $columnaIdPorProfundidad, $profundidad, $columnasConSubcolumnas, null);
+                }
+
+                return $out;
             }
             if (count($propuesto) !== count($actual)) {
                 throw new \RuntimeException("En \"{$ruta}\": se esperaban " . count($actual) . ' elementos, la IA devolvió ' . count($propuesto) . '.');
@@ -2425,6 +2576,16 @@ class LlenadoIAController extends BaseController
             // contar el nivel dos veces para las hojas de un árbol.
             $out = [];
             foreach ($actual as $i => $item) {
+                // Misma cura que arriba, pero sin tocar el número de filas: una fila guardada como
+                // `{}` llega a PHP como `[]`, que array_is_list() toma por LISTA, así que la fila
+                // siguiente se comparaba contra una lista vacía y toda la tabla se rechazaba con
+                // «se esperaba una lista y la IA devolvió otra cosa». Encontrado en vivo el
+                // 2026-09-28 (trabajo 37) en cinco tablas de saneamiento urbano — 5.01.1, 5.02.1,
+                // 7.02.1, 7.04.1 y 7.04.2 —, todas con columnas calculadas y por eso fuera del
+                // camino de crecimiento.
+                if ($plantillaFila !== null && $ruta === 'valor' && is_array($item) && $item === []) {
+                    $item = $plantillaFila;
+                }
                 $out[] = $this->compararForma($item, $propuesto[$i], $columnasCalculadas, $ultimaColumnaCalculada, "{$ruta}[{$i}]", $advertencias, $catalogoPorColumna, $columnaIdPorProfundidad, $profundidad, $columnasConSubcolumnas);
             }
 
@@ -2697,6 +2858,99 @@ class LlenadoIAController extends BaseController
     }
 
     /** Campos de tipo texto/número/fecha/catálogo/selección de toda la sección (todas sus subsecciones), aplanados. */
+    /**
+     * Descarga a un archivo temporal el Excel de una plantilla, venga de donde venga.
+     *
+     * Hace falta porque el parque de plantillas está repartido entre dos almacenamientos: hoy 15 de
+     * las 18 fichas con Excel asignado viven en Cloudinary (URL http) y solo 3 en S3 (`s3:` interno).
+     * El bloque que carga el Excel para resolver listas y cascadas miraba únicamente
+     * `S3ObjectStore::esStoredS3()`, así que en FTE-PE-SAL —y en 14 fichas más— nunca se cargaba y
+     * los campos con desplegable de Excel volvían a quedar sin `opciones`, que es justo el bug que
+     * completarOpcionesDesdeExcel() existe para tapar. Encontrado al preparar la ficha de Salud.
+     *
+     * Mismo criterio de resolución que ArchivosController::contenido(): S3 primero, HTTP después.
+     *
+     * @return string|null Ruta local del archivo descargado, o null si la URL no es de un tipo conocido
+     */
+    private function descargarExcelPlantillaATemp(string $url): ?string
+    {
+        if ($url === '') {
+            return null;
+        }
+        if (\App\Libraries\S3ObjectStore::esStoredS3($url)) {
+            return (new \App\Libraries\S3ObjectStore())->descargarATemp($url);
+        }
+        if (preg_match('#^https?://#i', $url) !== 1) {
+            return null;
+        }
+
+        $destino  = tempnam(sys_get_temp_dir(), 'pf_xls_');
+        $respuesta = (new \GuzzleHttp\Client(['http_errors' => false, 'timeout' => 600]))
+            ->get($url, ['sink' => $destino]);
+        if ($respuesta->getStatusCode() < 200 || $respuesta->getStatusCode() >= 300) {
+            @unlink($destino);
+
+            throw new \RuntimeException('El almacenamiento respondió ' . $respuesta->getStatusCode() . ' al pedir el Excel de la plantilla.');
+        }
+
+        return $destino;
+    }
+
+    /**
+     * Completa `opciones` de los campos simples cuyo desplegable vive SOLO en el Excel.
+     *
+     * Muchos campos de captura directa no declaran `opciones` en la estructura JSON: su lista sale
+     * de la validación de datos de la celda, que el frontend resuelve con el Excel vivo del
+     * navegador. El llenado del servidor no tiene ese navegador, así que el modelo respondía en
+     * texto libre y nadie lo validaba — `matchearOpcionOpcional()` solo actúa sobre campos que SÍ
+     * traen `opciones`.
+     *
+     * Encontrado en vivo (2026-09-27, FTE-DESARROLLO-PROD 1.04.04 "tipo de proyecto formulado"): la
+     * celda admite AGRICOLA | PECUARIO | FORESTAL y la IA guardó "Proyecto de inversion estandar
+     * (Ficha Tecnica Estandar)". El valor quedó persistido pero invisible —CampoListaInput oculta a
+     * propósito lo que no está en la lista— y de insertarse al Excel habría violado su validación.
+     *
+     * Resolverlo acá y no al volcar la estructura es deliberado: estas listas pueden ser dinámicas
+     * (la de 1.04.04 es `INDIRECT(IF($XFD$55=1,"ADP","ADPF"))`, dos ramas DISJUNTAS), así que una
+     * foto tomada al volcar acierta solo mientras no cambie la celda de la que depende.
+     *
+     * @param  array<string,mixed>[] $campos Campos de UNA sección, tal como los devuelve camposLlenables()
+     * @return array<string,mixed>[] Los mismos campos, con `opciones` añadida donde el Excel la define
+     */
+    private function completarOpcionesDesdeExcel(array $campos, string $hoja, ?ExcelVivoService $excel): array
+    {
+        if ($excel === null || $hoja === '') {
+            return $campos;
+        }
+
+        foreach ($campos as $i => $campo) {
+            // Respeta lo que ya declare la estructura: si el JSON trae opciones, esas mandan.
+            if (is_array($campo['opciones'] ?? null) && $campo['opciones'] !== []) {
+                continue;
+            }
+            $captura = $campo['captura'] ?? null;
+            if (empty($captura['columna']) || empty($captura['fila'])) {
+                continue;
+            }
+            try {
+                $opciones = $excel->opcionesDe($hoja, $captura['columna'] . $captura['fila']);
+            } catch (\Throwable $e) {
+                // Una celda con una validación que no se puede resolver no debe tumbar el llenado
+                // entero: ese campo simplemente sigue sin lista, como antes de este cambio.
+                log_message('warning', '[llenado-ia] No se pudieron leer las opciones de {id} ({hoja}!{ref}): {msg}', [
+                    'id' => $campo['identificador'] ?? '?', 'hoja' => $hoja,
+                    'ref' => $captura['columna'] . $captura['fila'], 'msg' => $e->getMessage(),
+                ]);
+                continue;
+            }
+            if (is_array($opciones) && $opciones !== []) {
+                $campos[$i]['opciones'] = $opciones;
+            }
+        }
+
+        return $campos;
+    }
+
     private function camposLlenables(array $seccion): array
     {
         $campos = [];
@@ -3989,11 +4243,14 @@ class LlenadoIAController extends BaseController
                         ['role' => 'user', 'content' => $s['usuario']],
                     ],
                 ]),
-                // Generoso pero acotado por el set_time_limit(240) de enviarLoteFicha() (con margen) —
-                // mismo criterio que el timeout de 170s de una tabla individual en llenarTabla(), un
-                // poco más alto porque aquí puede haber tablas de 32000 tokens corriendo a la vez que
-                // secciones más livianas.
-                CURLOPT_TIMEOUT    => 200,
+                // Por solicitud y no fijo: las unidades de una misma tanda corren EN PARALELO, así que
+                // darle más tiempo a la unidad de sección no alarga a las demás. 200 s alcanzaba cuando
+                // una sección cabía en 8000 tokens de salida; con el techo en 32000 (ver el comentario
+                // de maxTokens) una hoja grande puede tardar bastante más — encontrado en vivo
+                // (2026-09-28, trabajo 33): la sección única del Formato 07-C, con sus 126 campos, se
+                // pasó de los 200 s y se perdieron de golpe los ~105 campos simples. Los tiempos siguen
+                // acotados por el set_time_limit(900) de enviarLoteFicha() en el camino síncrono.
+                CURLOPT_TIMEOUT    => (int) ($s['timeout'] ?? 200),
                 CURLOPT_HTTPHEADER => [
                     'content-type: application/json',
                     'authorization: Bearer ' . $config->apiKeyActiva(),
