@@ -2145,6 +2145,8 @@ class LlenadoIAController extends BaseController
             'Vas a llenar UNA tabla de la ficha. Respondes SIEMPRE con un único objeto JSON válido (sin markdown, sin texto fuera del JSON): {"valor": <estructura>, "fuente": "<breve descripción de dónde salió la información, ej. nombre del documento y qué parte>"}.',
             'La forma de "valor" debe calzar EXACTAMENTE con la tabla actual que te muestran en el mensaje de usuario: mismas claves en cada fila/objeto, mismo número de filas/bloques/nodos. Nunca agregues ni quites filas, columnas o niveles — solo cambias los valores de las celdas.',
             'Si no hay evidencia en la fuente de la verdad para una celda, déjala como cadena vacía "" — no inventes datos.',
+            // Mismo hallazgo que en construirSistema() (campos individuales) — ver ese comentario.
+            'Excepción: si la celda pide un supuesto metodológico estándar del sector ("marcar con X" una afirmación convencional) o una conclusión/síntesis que se deduce de otras celdas ya llenadas de esta misma tabla o ficha, complétala razonando sobre esa información en vez de dejarla vacía — solo queda vacía cuando de verdad no hay forma de deducirla.',
             '"fuente" es UN solo texto breve para toda la tabla (no por celda) — ej. "perfil_proyecto.pdf, sección de costos de inversión". Si no llenaste ninguna celda con datos reales, deja "fuente" como cadena vacía.',
         ];
         if ($reglas !== '') {
@@ -3189,6 +3191,15 @@ class LlenadoIAController extends BaseController
         $partes[] = 'Usa exactamente los identificadores de campo que te pasan en el mensaje de usuario. No inventes ids.';
         $partes[] = 'Si un campo no tiene evidencia en la fuente de la verdad: estado "no_encontrado" y valor_propuesto null. No inventes datos.';
         $partes[] = 'Si la evidencia es explícita en los documentos (p. ej. "Nivel de gobierno: Gobierno Local"), marca estado "extraido" y copia el valor.';
+        // Encontrado en vivo (2026-09-30, prueba real con FTE-EBR-V03 + PDFs de un proyecto real):
+        // campos de "marcar con X" sobre supuestos estándar del sector y campos de conclusión/síntesis
+        // quedaban "no_encontrado" en bloque — el modelo los trataba igual que un dato factual ausente,
+        // aunque el enum ya soporta "inferido" para justo este caso. Sin esta aclaración, "no inventes
+        // datos" se leía como "no razones", y el modelo optaba por el silencio en vez de deducir.
+        $partes[] = 'Dos casos NO son "no_encontrado", aunque el texto no aparezca literal en los documentos — usa estado "inferido" para ambos: '
+            . '(1) supuestos metodológicos estándar del sector que la ficha pide marcar como válidos por convención (ej. "la población vive en el área de influencia'
+            . '"), a menos que la fuente los contradiga explícitamente; '
+            . '(2) campos de conclusión o síntesis (viabilidad, análisis de sostenibilidad, argumentos, recomendaciones) que se deducen razonando sobre los DEMÁS campos ya extraídos de esta misma ficha, no de una cita textual en los documentos.';
         if ($reglas !== '') {
             $partes[] = "Reglas de llenado automático:\n{$reglas}";
         }
