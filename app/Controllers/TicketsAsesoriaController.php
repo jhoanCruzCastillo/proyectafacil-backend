@@ -178,10 +178,19 @@ class TicketsAsesoriaController extends BaseController
     // ver CerrarVideollamadasVencidasCommand), esto consulta la Meet API en vivo y devuelve TODAS,
     // incluidas las que todavía se están procesando — pedido explícito del usuario para mostrar la
     // lista completa en el panel, no solo la primera.
+    //
+    // A diferencia del `link_grabacion` (que el cron ya guarda compartido), estos links son
+    // crudos de Drive — sin este paso, abrir uno pide autenticarse con una cuenta de la
+    // organización hasta que el cron corra y lo sincronice, minutos/horas después. Se comparte
+    // acá mismo, en cada consulta, para que el link ya esté accesible la primera vez que alguien
+    // lo ve — pedido explícito del usuario (2026-09-30) para que todo video sea público por
+    // default. Compartir de nuevo un archivo ya compartido no falla (Drive lo tolera), así que no
+    // hace falta rastrear cuáles ya se compartieron.
     public function grabaciones($id = null): ResponseInterface
     {
         $id   = (int) $id;
-        $fila = db_connect()->table('solicitudes_asesoria')->select('tipo, link_reunion')->where('id', $id)->get()->getRowArray();
+        $db   = db_connect();
+        $fila = $db->table('solicitudes_asesoria')->select('tipo, link_reunion, cliente_id, docente_id')->where('id', $id)->get()->getRowArray();
 
         if (! $fila || $fila['tipo'] !== 'video' || empty($fila['link_reunion'])) {
             return $this->response->setJSON([]);
@@ -191,11 +200,34 @@ class TicketsAsesoriaController extends BaseController
         }
 
         try {
-            $grabaciones = (new GoogleMeetService())->grabacionesListadas($m[1]);
+            $servicio    = new GoogleMeetService();
+            $grabaciones = $servicio->grabacionesListadas($m[1]);
         } catch (Throwable $e) {
             log_message('error', 'GoogleMeetService::grabacionesListadas falló para la solicitud {id}: {msg}', ['id' => $id, 'msg' => $e->getMessage()]);
 
             return $this->response->setJSON([]);
+        }
+
+        $correos = $db->table('usuarios')
+            ->select('correo')
+            ->whereIn('id', [(int) $fila['cliente_id'], (int) $fila['docente_id']])
+            ->get()->getResultArray();
+        $correos = array_values(array_filter(array_map(static fn (array $u) => $u['correo'] ?? null, $correos)));
+
+        foreach ($grabaciones as $g) {
+            if ($g['fileId'] === null) {
+                continue;
+            }
+
+            try {
+                $servicio->compartirSegunConfig($g['fileId'], $correos);
+            } catch (Throwable $e) {
+                log_message('warning', 'GoogleMeetService::compartirSegunConfig falló para el archivo {fileId} de la solicitud {id}: {msg}', [
+                    'fileId' => $g['fileId'],
+                    'id'     => $id,
+                    'msg'    => $e->getMessage(),
+                ]);
+            }
         }
 
         return $this->response->setJSON(array_map(static fn (array $g) => [
