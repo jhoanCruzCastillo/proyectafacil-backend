@@ -3,7 +3,6 @@
 namespace App\Commands;
 
 use App\Libraries\GoogleMeetService;
-use Config\Google as GoogleConfig;
 use CodeIgniter\CLI\BaseCommand;
 use CodeIgniter\CLI\CLI;
 use Throwable;
@@ -18,7 +17,7 @@ use Throwable;
 //    ambos archivos después de que la llamada termina, así que no alcanza con revisar una sola
 //    vez — cada corrida reintenta las solicitudes que todavía no tienen el link guardado. Cuando
 //    aparece, comparte el archivo de Drive (público o solo cliente/asesor según
-//    google.compartirGrabacionPublica — ver GoogleMeetService::compartirPublico/compartirGrabacion)
+//    google.compartirGrabacionPublica — ver GoogleMeetService::compartirSegunConfig)
 //    y recién ahí guarda el link — así nunca se guarda un link que la app puede mostrar pero la
 //    persona no puede abrir.
 //
@@ -114,19 +113,13 @@ class CerrarVideollamadasVencidasCommand extends BaseCommand
                     continue;
                 }
 
-                // Config temporal mientras no existe la sección "Seguridad" del panel — ver
-                // google.compartirGrabacionPublica.
-                if (config(GoogleConfig::class)->compartirGrabacionPublica) {
-                    $servicio->compartirPublico($archivo['fileId']);
-                } else {
-                    $correos = $db->table('usuarios')
-                        ->select('correo')
-                        ->whereIn('id', [(int) $fila['cliente_id'], (int) $fila['docente_id']])
-                        ->get()->getResultArray();
-                    $correos = array_values(array_filter(array_map(static fn (array $u) => $u['correo'] ?? null, $correos)));
+                $correos = $db->table('usuarios')
+                    ->select('correo')
+                    ->whereIn('id', [(int) $fila['cliente_id'], (int) $fila['docente_id']])
+                    ->get()->getResultArray();
+                $correos = array_values(array_filter(array_map(static fn (array $u) => $u['correo'] ?? null, $correos)));
 
-                    $servicio->compartirGrabacion($archivo['fileId'], $correos);
-                }
+                $servicio->compartirSegunConfig($archivo['fileId'], $correos);
 
                 $db->table('solicitudes_asesoria')->where('id', $fila['id'])->update(array_merge(
                     [$columna => $archivo['url'], 'updated_at' => date('Y-m-d H:i:s')],

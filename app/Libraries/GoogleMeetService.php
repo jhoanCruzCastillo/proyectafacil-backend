@@ -497,6 +497,20 @@ class GoogleMeetService
     }
 
     /**
+     * Punto único de entrada para compartir según `google.compartirGrabacionPublica` — evita que
+     * cada llamador (CerrarVideollamadasVencidasCommand, y la lista en vivo de
+     * TicketsAsesoriaController) repita el mismo if/else.
+     */
+    public function compartirSegunConfig(string $fileId, array $correos): void
+    {
+        if (config(GoogleConfig::class)->compartirGrabacionPublica) {
+            $this->compartirPublico($fileId);
+        } else {
+            $this->compartirGrabacion($fileId, $correos);
+        }
+    }
+
+    /**
      * Red de seguridad para cuando el host se olvida de cortar la llamada (y con ella, la
      * grabación) — corta la conferencia activa del espacio si todavía sigue en curso. No existe un
      * "detener solo la grabación" en la Meet API (el recurso de grabaciones es de solo lectura);

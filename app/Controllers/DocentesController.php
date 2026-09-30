@@ -47,9 +47,22 @@ class DocentesController extends BaseController
             ->orderBy('nombre', 'ASC')
             ->get()->getResultArray();
 
-        $especialidades = $db->table('asesor_especialidades ae')
-            ->select('ae.usuario_id, s.id as sector_id, s.nombre as sector_nombre')
-            ->join('sectores s', 's.id = ae.sector_id')
+        // SOLO `asesor_temas_especialidad` (catálogo ILPIIE) — es lo único que el asesor puede ver y
+        // elegir hoy, desde "Temas de especialidad" (MisEspecialidadesAsesor.vue).
+        //
+        // `asesor_especialidades` (sectores MEF) se sembró como demo en AsesoriasDemoAsesor1Seeder,
+        // pero la pantalla del asesor para elegirlos se quitó del frontend a pedido explícito del
+        // usuario (ver comentario de MisEspecialidadesAsesor.vue: "Ya no se eligen sectores MEF
+        // acá") — `EspecialidadesAsesorController`/`useEspecialidadesAsesorQuery` quedaron
+        // huérfanos, sin ningún componente que los use. Mostrar esos sectores acá (como se hizo en
+        // un primer intento de este mismo arreglo) sacaba a la luz datos desactualizados que ya no
+        // corresponden a lo que el asesor realmente marca ni puede corregir — confirmado en vivo:
+        // Pedro Ríos aparecía con "Salud"/"Vivienda y Saneamiento" sin tenerlos marcados en ningún
+        // lado visible. Sigue alimentando el aviso automático por sector
+        // (SolicitudAsesoriaHelpersTrait::asesoresPorSector), solo que ya no se muestra acá.
+        $especialidades = $db->table('asesor_temas_especialidad ate')
+            ->select('ate.usuario_id, t.id as especialidad_id, t.nombre as especialidad_nombre')
+            ->join('temas_especialidad t', 't.id = ate.tema_id')
             ->get()->getResultArray();
 
         $inicioMes = date('Y-m-01 00:00:00');
@@ -74,7 +87,7 @@ class DocentesController extends BaseController
                 'fotoUrl'               => $d['foto_url'] ?? null,
                 'disponible'            => (bool) $d['disponible'],
                 'estado'                => $d['estado'],
-                'especialidades'        => array_map(static fn (array $e) => ['id' => (string) $e['sector_id'], 'nombre' => $e['sector_nombre']], $propias),
+                'especialidades'        => array_map(static fn (array $e) => ['id' => (string) $e['especialidad_id'], 'nombre' => $e['especialidad_nombre']], $propias),
                 'consultasAtendidasMes' => $consultasPorDocente[(int) $d['id']] ?? 0,
             ];
         }, $docentes));

@@ -8,7 +8,6 @@ use App\Models\PlanModel;
 use App\Models\UsuarioModel;
 use CodeIgniter\HTTP\ResponseInterface;
 use PhpOffice\PhpSpreadsheet\IOFactory;
-use PhpOffice\PhpSpreadsheet\Shared\Date as ExcelDate;
 use PhpOffice\PhpSpreadsheet\Cell\DataType;
 use PhpOffice\PhpSpreadsheet\Cell\DataValidation;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
@@ -31,10 +30,18 @@ class UsuariosController extends BaseController
      * Columnas del Excel de alumnos, EN ORDEN. Una sola fuente para la plantilla que se descarga y
      * para la lista que el modal muestra, así no pueden desincronizarse.
      */
-    private const COLUMNAS_ALUMNOS = ['Nombre', 'Correo', 'Teléfono', 'Vigencia hasta', 'Curso', 'Beneficio'];
+    private const COLUMNAS_ALUMNOS = ['Nombre', 'Correo', 'Teléfono', 'Vigencia', 'Curso', 'Beneficio'];
 
-    /** Hoja oculta que alimenta los desplegables de Curso y Beneficio de la plantilla. */
+    /** Hoja oculta que alimenta los desplegables de Curso, Beneficio y Vigencia de la plantilla. */
     private const HOJA_LISTAS = 'Listas';
+
+    /**
+     * "Vigencia como alumno" ya no se captura como una fecha de corte a mano: se elige una duración
+     * fija desde este catálogo y se calcula sumándola a la fecha de registro real del usuario
+     * (`created_at`) — así nunca queda desincronizada de cuándo se creó de verdad la cuenta. Pedido
+     * explícito del usuario (2026-09-29), reemplaza el campo de fecha libre que había antes.
+     */
+    private const ETIQUETAS_VIGENCIA = ['1 mes' => 1, '3 meses' => 3, '6 meses' => 6, '1 año' => 12];
 
     public function index(): ResponseInterface
     {
@@ -59,11 +66,22 @@ class UsuariosController extends BaseController
 
         $passwordProvista = trim((string) ($dto['password'] ?? ''));
         $passwordTemporal = $passwordProvista === '' ? $this->generarPasswordTemporal() : null;
+        $passwordFinal    = $passwordTemporal ?? $passwordProvista;
 
         // soloProvistos: true — omitir del INSERT las columnas ausentes del payload en vez de
         // forzar NULL, para que la BD aplique sus DEFAULT (tema='sistema', estado='activo').
         $fila = $this->fromDto($dto, soloProvistos: true);
-        $fila['password_hash'] = password_hash($passwordTemporal ?? $passwordProvista, PASSWORD_DEFAULT);
+        $fila['password_hash'] = password_hash($passwordFinal, PASSWORD_DEFAULT);
+
+        $esAlumno = ($dto['origen'] ?? null) === 'alumno';
+        if ($esAlumno) {
+            // Misma marca de tiempo que usará `$model->insert()` para `created_at` (useTimestamps):
+            // no se puede leer esa columna recién insertada porque `fromDto()` nunca la incluye (no
+            // está en $allowedFields, la pone el propio Model) — un desfase de milisegundos entre
+            // esta línea y el insert es irrelevante para una vigencia contada en meses.
+            $fila['vigencia_alumno_hasta'] = $this->fechaVigenciaDesde(date('Y-m-d H:i:s'), $this->mesesVigenciaValidados($dto['vigenciaMeses'] ?? null));
+        }
+
         $id = $model->insert($fila, true);
 
         if (array_key_exists('permisos', $dto)) {
@@ -73,6 +91,19 @@ class UsuariosController extends BaseController
         $resultado = $this->toDto($model->find($id));
         if ($passwordTemporal !== null) {
             $resultado['password'] = $passwordTemporal;
+        }
+
+        // Alumno con correo: se le manda de una las credenciales, sin esperar a que el admin haga
+        // clic en "Notificar por correo" (UsuarioCreadoPanel.vue) — pedido explícito del usuario
+        // (2026-09-29). Un fallo de envío no tumba la creación, igual que en enviarAccesos().
+        $resultado['correoEnviado'] = false;
+        if ($esAlumno && ! empty($resultado['correo'])) {
+            try {
+                (new CorreoService())->enviarAccesos($resultado['correo'], $resultado['nombre'], $resultado['usuario'], $passwordFinal);
+                $resultado['correoEnviado'] = true;
+            } catch (Throwable $e) {
+                log_message('error', '[usuarios] No se pudo enviar accesos automáticos a {correo}: {msg}', ['correo' => $resultado['correo'], 'msg' => $e->getMessage()]);
+            }
         }
 
         return $this->response->setJSON($resultado);
@@ -90,6 +121,16 @@ class UsuariosController extends BaseController
         $cambios = $this->fromDto($dto, soloProvistos: true);
         if (array_key_exists('password', $dto) && trim((string) $dto['password']) !== '') {
             $cambios['password_hash'] = password_hash((string) $dto['password'], PASSWORD_DEFAULT);
+        }
+
+        // Igual que en create(): la vigencia es una duración desde la fecha de REGISTRO real, no
+        // desde hoy — si no fuera así, cada vez que el admin reabre el modal y reguarda sin querer
+        // cambiar nada, la vigencia se correría hacia adelante en vez de quedarse fija.
+        if (array_key_exists('vigenciaMeses', $dto)) {
+            $origenFinal = array_key_exists('origen', $dto) ? $dto['origen'] : ($actual['origen'] ?? null);
+            $cambios['vigencia_alumno_hasta'] = $origenFinal === 'alumno'
+                ? $this->fechaVigenciaDesde($actual['created_at'], $this->mesesVigenciaValidados($dto['vigenciaMeses']))
+                : null;
         }
 
         // El admin cambió el Origen a mano (no un ajuste automático) — se registra quién y cuándo,
@@ -280,12 +321,17 @@ class UsuariosController extends BaseController
 
     /**
      * Admin: carga masiva de clientes-alumnos desde un Excel — mismo criterio que
-     * CandidatosController::importarExcel (crea `usuarios` directo, contraseña aleatoria
-     * descartada, "Enviar accesos" queda para después). Filas con un correo ya registrado se
-     * omiten (no se actualiza al usuario existente) y se reportan en la respuesta. "Vigencia
-     * hasta" es la misma fecha opcional que pide el modal "Crea un nuevo acceso al panel" cuando
-     * Origen=Alumno (columna `vigencia_alumno_hasta`) — se lee la celda directamente (no vía
-     * toArray) para no depender de cómo Excel formatea la fecha para mostrarla.
+     * CandidatosController::importarExcel. Valida cada fila (nombre/correo, curso, beneficio,
+     * vigencia) y SOLO registra las nuevas: una fila con un correo ya registrado se omite (no se
+     * actualiza al usuario existente) y se reporta en la respuesta, nunca se crea un duplicado.
+     *
+     * "Vigencia" ya no es una fecha libre — es la misma duración por catálogo que el modal "Crea un
+     * nuevo acceso al panel" (ETIQUETAS_VIGENCIA), sumada a la fecha de registro real de cada
+     * alumno (columna `vigencia_alumno_hasta` calculada, ver fechaVigenciaDesde()).
+     *
+     * Cada alumno creado recibe de una sus credenciales por correo (mismo criterio que create()) —
+     * ya no queda pendiente de que el admin las envíe a mano fila por fila. Un fallo de envío puntual
+     * NO omite la fila (el alumno ya quedó creado) — se reporta aparte, en `avisos`.
      *
      * "Curso" y "Beneficio" van POR FILA en el propio Excel (columnas E y F), elegidos de las listas
      * desplegables que trae la plantilla descargable — así un mismo archivo puede repartir alumnos
@@ -310,10 +356,14 @@ class UsuariosController extends BaseController
 
         $db = db_connect();
 
-        // Diccionarios nombre-normalizado => valor, para resolver las columnas Curso y Beneficio sin
-        // pegarle a la BD una vez por fila.
+        // Diccionarios nombre-normalizado => valor, para resolver las columnas Curso, Beneficio y
+        // Vigencia sin pegarle a la BD una vez por fila.
         $cursosPorNombre     = $this->cursosPorNombreNormalizado();
         $beneficiosPorNombre = $this->beneficiosPorNombreNormalizado();
+        $mesesPorEtiqueta    = [];
+        foreach (self::ETIQUETAS_VIGENCIA as $etiqueta => $meses) {
+            $mesesPorEtiqueta[$this->claveDeNombre($etiqueta)] = $meses;
+        }
 
         try {
             $sheet = IOFactory::load($file->getTempName())->getActiveSheet();
@@ -325,6 +375,7 @@ class UsuariosController extends BaseController
 
         $creados  = 0;
         $omitidos = [];
+        $avisos   = [];
         $numeroFila = 1;
         foreach ($filas as $f) {
             $numeroFila++;
@@ -344,10 +395,15 @@ class UsuariosController extends BaseController
                 continue;
             }
 
-            [$vigencia, $vigenciaValida] = $this->fechaDeCelda($sheet, 'D' . $numeroFila);
-            if (! $vigenciaValida) {
-                $omitidos[] = ['fila' => $numeroFila, 'motivo' => 'La fecha de "Vigencia hasta" no es válida (usa AAAA-MM-DD)'];
-                continue;
+            $textoVigencia = trim((string) ($f[3] ?? ''));
+            $mesesVigencia = null;
+            if ($textoVigencia !== '') {
+                $clave = $this->claveDeNombre($textoVigencia);
+                if (! array_key_exists($clave, $mesesPorEtiqueta)) {
+                    $omitidos[] = ['fila' => $numeroFila, 'motivo' => "La vigencia \"{$textoVigencia}\" no es válida (usa 1 mes, 3 meses, 6 meses o 1 año, o déjala vacía)"];
+                    continue;
+                }
+                $mesesVigencia = $mesesPorEtiqueta[$clave];
             }
 
             // Curso y Beneficio: vacío es válido (el alumno queda sin curso / sin plan), pero un
@@ -374,33 +430,45 @@ class UsuariosController extends BaseController
                 }
             }
 
-            $ahora = date('Y-m-d H:i:s');
+            $ahora    = date('Y-m-d H:i:s');
+            $login    = $this->loginDisponibleDesde($correo, $nombre);
+            $password = $this->generarPasswordTemporal();
             $db->table('usuarios')->insert([
                 'nombre'                => $nombre,
-                'usuario'               => $this->loginDisponibleDesde($correo, $nombre),
-                'password_hash'         => password_hash(bin2hex(random_bytes(16)), PASSWORD_DEFAULT),
+                'usuario'               => $login,
+                'password_hash'         => password_hash($password, PASSWORD_DEFAULT),
                 'rol'                   => 'cliente',
                 'origen'                => 'alumno',
                 'estado'                => 'activo',
                 'correo'                => $correo,
                 'telefono'              => $telefono !== '' ? $telefono : null,
                 'curso_id'              => $cursoId,
-                'vigencia_alumno_hasta' => $vigencia,
+                'vigencia_alumno_hasta' => $this->fechaVigenciaDesde($ahora, $mesesVigencia),
                 'created_at'            => $ahora,
                 'updated_at'            => $ahora,
             ]);
+            $usuarioId = (int) $db->insertID();
             $creados++;
 
             // Recién creado y sin `cuenta_cliente_id`: su cuenta es él mismo (ver idCuentaDe()).
             // El slug salió del diccionario de planes existentes, así que asignarPlan() no debería
             // fallar; si lo hace igual, el alumno YA está creado — se reporta para que el admin
             // sepa que a ese le falta el beneficio, en vez de dejarlo pasar en silencio.
-            if ($planSlug !== '' && $this->asignarPlan((int) $db->insertID(), $planSlug) !== null) {
+            if ($planSlug !== '' && $this->asignarPlan($usuarioId, $planSlug) !== null) {
                 $omitidos[] = ['fila' => $numeroFila, 'motivo' => "El alumno se creó, pero no se pudo asignar el beneficio \"{$textoBeneficio}\": hazlo a mano."];
+            }
+
+            // El alumno YA está creado en este punto — un fallo de correo se reporta aparte
+            // (`avisos`), nunca como fila omitida.
+            try {
+                (new CorreoService())->enviarAccesos($correo, $nombre, $login, $password);
+            } catch (Throwable $e) {
+                log_message('error', '[usuarios] No se pudo enviar accesos automáticos a {correo}: {msg}', ['correo' => $correo, 'msg' => $e->getMessage()]);
+                $avisos[] = ['fila' => $numeroFila, 'motivo' => 'El alumno se creó, pero no se pudo enviar el correo con sus credenciales. Usa "Enviar accesos" desde su perfil.'];
             }
         }
 
-        return $this->response->setJSON(['creados' => $creados, 'omitidos' => $omitidos]);
+        return $this->response->setJSON(['creados' => $creados, 'omitidos' => $omitidos, 'avisos' => $avisos]);
     }
 
     /**
@@ -408,8 +476,7 @@ class UsuariosController extends BaseController
      *
      * Se genera en el servidor, y no en el frontend, para que el archivo que el administrador baja
      * y el que importarAlumnosExcel() espera no puedan desincronizarse: las dos cosas salen de la
-     * misma constante de columnas. La fila de ejemplo va con "Vigencia hasta" como TEXTO en formato
-     * AAAA-MM-DD, que es el que la importación acepta sin ambigüedad de locale.
+     * misma constante de columnas (y, para Vigencia, del mismo catálogo ETIQUETAS_VIGENCIA).
      */
     public function plantillaAlumnosExcel(): ResponseInterface
     {
@@ -427,26 +494,26 @@ class UsuariosController extends BaseController
         $hoja->fromArray(self::COLUMNAS_ALUMNOS, null, 'A1');
         $hoja->getStyle('A1:F1')->getFont()->setBold(true);
 
+        $etiquetasVigencia = array_keys(self::ETIQUETAS_VIGENCIA);
         $ejemplos = [
-            ['Rosa Delgado Ríos', 'rosa.delgado@example.com', '987654321', '2026-12-31', $cursos[0] ?? '', $beneficios[0] ?? ''],
+            ['Rosa Delgado Ríos', 'rosa.delgado@example.com', '987654321', $etiquetasVigencia[0], $cursos[0] ?? '', $beneficios[0] ?? ''],
             ['Mateo Vargas Luna', 'mateo.vargas@example.com', '', '', '', ''],
         ];
         foreach ($ejemplos as $i => $ejemplo) {
             $fila = $i + 2;
             $hoja->setCellValue("A{$fila}", $ejemplo[0]);
             $hoja->setCellValue("B{$fila}", $ejemplo[1]);
-            // Teléfono y fecha van como TEXTO EXPLÍCITO. Si se dejara que PhpSpreadsheet infiera el
-            // tipo, "987654321" se guardaría como número (y un teléfono con "+51" o con cero inicial
-            // se rompería al editarlo) y "2026-12-31" se volvería un serial que cada Excel muestra
-            // según su locale — justo el formato ambiguo que la importación no acepta.
+            // Teléfono como TEXTO EXPLÍCITO. Si se dejara que PhpSpreadsheet infiera el tipo,
+            // "987654321" se guardaría como número, y un teléfono con "+51" o con cero inicial se
+            // rompería al editarlo.
             $hoja->setCellValueExplicit("C{$fila}", $ejemplo[2], DataType::TYPE_STRING);
             $hoja->setCellValueExplicit("D{$fila}", $ejemplo[3], DataType::TYPE_STRING);
             $hoja->setCellValueExplicit("E{$fila}", $ejemplo[4], DataType::TYPE_STRING);
             $hoja->setCellValueExplicit("F{$fila}", $ejemplo[5], DataType::TYPE_STRING);
         }
-        $hoja->getStyle('C2:D3')->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_TEXT);
+        $hoja->getStyle('C2:C3')->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_TEXT);
 
-        $this->agregarListasDesplegables($libro, $hoja, $cursos, $beneficios);
+        $this->agregarListasDesplegables($libro, $hoja, $cursos, $beneficios, $etiquetasVigencia);
 
         foreach (range('A', 'F') as $columna) {
             $hoja->getColumnDimension($columna)->setAutoSize(true);
@@ -543,39 +610,46 @@ class UsuariosController extends BaseController
     }
 
     /**
-     * Cuelga las listas desplegables de Curso y Beneficio en la plantilla.
+     * Cuelga las listas desplegables de Vigencia, Curso y Beneficio en la plantilla.
      *
      * Las opciones NO van embebidas en la fórmula de validación (`'"a,b,c"'`): ese formato inline
      * de Excel se corta a 255 caracteres y parte los valores que contienen comas —y un nombre de
      * curso como "Invierte.pe, nivel avanzado" rompería la lista entera—. Por eso van en una hoja
      * auxiliar OCULTA y la validación apunta a ese rango.
      */
-    private function agregarListasDesplegables(Spreadsheet $libro, Worksheet $hoja, array $cursos, array $beneficios): void
+    private function agregarListasDesplegables(Spreadsheet $libro, Worksheet $hoja, array $cursos, array $beneficios, array $etiquetasVigencia): void
     {
-        if ($cursos === [] && $beneficios === []) {
+        if ($cursos === [] && $beneficios === [] && $etiquetasVigencia === []) {
             return;
         }
 
         $listas = $libro->createSheet();
         $listas->setTitle(self::HOJA_LISTAS);
+        foreach ($etiquetasVigencia as $i => $etiqueta) {
+            $listas->setCellValueExplicit('A' . ($i + 1), $etiqueta, DataType::TYPE_STRING);
+        }
         foreach ($cursos as $i => $curso) {
-            $listas->setCellValueExplicit('A' . ($i + 1), $curso, DataType::TYPE_STRING);
+            $listas->setCellValueExplicit('B' . ($i + 1), $curso, DataType::TYPE_STRING);
         }
         foreach ($beneficios as $i => $beneficio) {
-            $listas->setCellValueExplicit('B' . ($i + 1), $beneficio, DataType::TYPE_STRING);
+            $listas->setCellValueExplicit('C' . ($i + 1), $beneficio, DataType::TYPE_STRING);
         }
         $listas->setSheetState(Worksheet::SHEETSTATE_HIDDEN);
 
         // Hasta la fila 500: es el desplegable en las filas que el admin va a llenar. Pegarlo solo a
         // las 2 de ejemplo obligaría a copiar formato hacia abajo para cada alumno nuevo.
         $rangos = [];
+        if ($etiquetasVigencia !== []) {
+            $rangos['D'] = sprintf("'%s'!\$A\$1:\$A\$%d", self::HOJA_LISTAS, count($etiquetasVigencia));
+        }
         if ($cursos !== []) {
-            $rangos['E'] = sprintf("'%s'!\$A\$1:\$A\$%d", self::HOJA_LISTAS, count($cursos));
+            $rangos['E'] = sprintf("'%s'!\$B\$1:\$B\$%d", self::HOJA_LISTAS, count($cursos));
         }
         if ($beneficios !== []) {
-            $rangos['F'] = sprintf("'%s'!\$B\$1:\$B\$%d", self::HOJA_LISTAS, count($beneficios));
+            $rangos['F'] = sprintf("'%s'!\$C\$1:\$C\$%d", self::HOJA_LISTAS, count($beneficios));
         }
 
+        $etiquetasColumna = ['D' => 'Vigencia', 'E' => 'Curso', 'F' => 'Beneficio'];
         foreach ($rangos as $columna => $formula) {
             // Suelta, NO vía getCell("E2")->getDataValidation(): esa forma engancha la validación a
             // E2 además del rango, y el archivo termina con la regla declarada dos veces sobre la
@@ -591,39 +665,12 @@ class UsuariosController extends BaseController
             $validacion->setShowDropDown(true);
             $validacion->setErrorTitle('Valor no válido');
             $validacion->setError('Elige una de las opciones de la lista, o deja la celda vacía.');
-            $validacion->setPromptTitle($columna === 'E' ? 'Curso' : 'Beneficio');
+            $validacion->setPromptTitle($etiquetasColumna[$columna]);
             $validacion->setPrompt('Opcional. Elige de la lista.');
             $validacion->setFormula1($formula);
 
             $hoja->setDataValidation("{$columna}2:{$columna}500", $validacion);
         }
-    }
-
-    /**
-     * Lee una celda de fecha admitiendo tanto una celda con formato de fecha real de Excel como
-     * texto plano "AAAA-MM-DD" — celda vacía es válida (sin vigencia). Devuelve
-     * [fecha ('Y-m-d') | null, esVálida].
-     *
-     * @return array{0: string|null, 1: bool}
-     */
-    private function fechaDeCelda(Worksheet $sheet, string $referencia): array
-    {
-        $celda = $sheet->getCell($referencia);
-        $valor = $celda->getValue();
-        if ($valor === null || trim((string) $valor) === '') {
-            return [null, true];
-        }
-
-        if (is_numeric($valor) && ExcelDate::isDateTime($celda)) {
-            $fecha = ExcelDate::excelToDateTimeObject($valor);
-
-            return [$fecha->format('Y-m-d'), true];
-        }
-
-        $texto = trim((string) $valor);
-        $fecha = \DateTime::createFromFormat('Y-m-d', $texto);
-
-        return $fecha && $fecha->format('Y-m-d') === $texto ? [$texto, true] : [null, false];
     }
 
     private function correoYaRegistrado(string $correo): bool
@@ -871,6 +918,30 @@ class UsuariosController extends BaseController
         ];
     }
 
+    /** Valores válidos de "vigenciaMeses" son las etiquetas de ETIQUETAS_VIGENCIA (1/3/6/12) — null
+     * o cualquier otra cosa es "sin vigencia" (acceso indefinido), nunca un error 400: viene de un
+     * <select> controlado en el frontend, así que un valor fuera de catálogo solo puede pasar por un
+     * payload manual, y ahí degradar a "sin vigencia" es más seguro que reventar la creación. */
+    private function mesesVigenciaValidados(mixed $valor): ?int
+    {
+        if ($valor === null || $valor === '') {
+            return null;
+        }
+        $meses = (int) $valor;
+
+        return in_array($meses, self::ETIQUETAS_VIGENCIA, true) ? $meses : null;
+    }
+
+    /** @return string|null 'Y-m-d', o null si $meses es null (sin vigencia / acceso indefinido). */
+    private function fechaVigenciaDesde(string $fechaBase, ?int $meses): ?string
+    {
+        if ($meses === null) {
+            return null;
+        }
+
+        return (new \DateTime($fechaBase))->modify("+{$meses} months")->format('Y-m-d');
+    }
+
     private function generarPasswordTemporal(): string
     {
         $alfabeto = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
@@ -900,7 +971,10 @@ class UsuariosController extends BaseController
             'cursoId'         => 'curso_id',
             'correo'          => 'correo',
             'fotoUrl'         => 'foto_url',
-            'vigenciaAlumnoHasta' => 'vigencia_alumno_hasta',
+            // 'vigenciaAlumnoHasta' NO se mapea acá a propósito: ya no se acepta una fecha libre
+            // desde el cliente, se deriva de 'vigenciaMeses' (ver create()/update()) — dejarla acá
+            // permitiría a un cliente viejo o a un payload manual seguir escribiendo una fecha
+            // arbitraria, sin pasar por el cálculo real.
             'chatAnchoPx'     => 'chat_ancho_px',
             'chatAltoPx'      => 'chat_alto_px',
             'telefono'        => 'telefono',
